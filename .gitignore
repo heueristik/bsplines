@@ -1,0 +1,10 @@
+# directories
+target/
+.idea
+
+# files
+.DS_Store
+**/*.rs.bk
+
+#/target
+/Cargo.lock
