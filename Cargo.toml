@@ -1,6 +1,6 @@
 [package]
 name = "bsplines"
-version = "0.0.1-alpha.0"
+version = "0.0.1-alpha.1"
 authors = [
     "Michael A. Heuer <decentralised.systems@gmail.com>",
 ]
@@ -15,7 +15,7 @@ categories = [
 homepage = "https://github.com/michael-a-heuer/bsplines"
 repository = "https://github.com/michael-a-heuer/bsplines"
 readme = "README.md"
-documentation = "https://crates.io/crates/bsplines"
+documentation = "https://docs.rs/bsplines"
 
 edition = "2021"
 license = "Apache-2.0"
@@ -55,6 +55,7 @@ num-traits = "0.2.17"
 doc-images = []
 
 [package.metadata.docs.rs]
+features = ["doc-images"]
 rustdoc-args = [
     "--html-in-header", "./src/docs-header.html",
 ]
