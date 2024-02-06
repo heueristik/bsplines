@@ -55,7 +55,9 @@ num-traits = "0.2.17"
 doc-images = []
 
 [package.metadata.docs.rs]
-features = ["doc-images"]
 rustdoc-args = [
+    "--package", "bsplines",
+    "--no-deps",
+    "--features", "doc-images",
     "--html-in-header", "./src/docs-header.html",
 ]
