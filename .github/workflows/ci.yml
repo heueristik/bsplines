@@ -45,9 +45,9 @@ jobs:
       - run: "cargo clippy -- -D warnings"
 
   docs:
-    name: "Documentation"
+    name: "Docs"
     runs-on: "ubuntu-latest"
     steps:
       - uses: "actions/checkout@v3"
       - uses: "dtolnay/rust-toolchain@stable"
-      - run: "cargo doc --verbose"
+      - run: "cargo doc --package bsplines --features doc-images --no-deps"
