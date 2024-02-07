@@ -1,0 +1,7 @@
+[build]
+rustdocflags = ["--html-in-header", "./src/docs-header.html"]
+rustdoc-args = [
+    "--package", "bsplines",
+    "--no-deps",
+    "--features", "doc-images",
+]

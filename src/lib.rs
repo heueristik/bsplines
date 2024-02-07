@@ -7,8 +7,8 @@ doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulat
 //! [nalgebra].
 //!
 //! ## Features
-//! - Create `$x$`-dimensional (`$x = 1, 2, 3,\dots, N$`) curves of arbitrary polynomial degree `$p$`.
-//! - Efficient curve evaluation for all available derivatives `$k = 0, 1, \dots, p$`.
+//! - Create `N`-dimensional (`x = 1, 2, 3,...`) curves of arbitrary polynomial degree `p`.
+//! - Efficient [curve evaluation][curve::Curve] for all available derivatives `k = 0, 1,... , p`.
 //! - Built with [nalgebra](https://crates.io/crates/nalgebra) to store point data in contiguous arrays
 //! - Multiple methods for
 //!   - [curve generation][curve::generation]
@@ -22,22 +22,22 @@ doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulat
 //!
 //! ## Mathematical Definition
 //!
-//! B-splines are parametric functions composed of piecewise polynomials with a polynomial degree `$p>0$`.
-//! These piecewise polynomials are joined so that the parametric function is `$(p-1)$` times continuously
+//! B-splines are parametric functions composed of piecewise polynomials with a polynomial degree `p > 0`.
+//! These piecewise polynomials are joined so that the parametric function is `p-1` times continuously
 //! differentiable. The overall functions are parametrized over finite domains with the co-domain being an
-//! `$N$`-dimensional vector space. They can describe curves, but also surfaces.
+//! `N`-dimensional vector space. They can describe curves, but also surfaces.
 //!
 //! A B-spline curve can be defined by
 //! ```math
 //! \mathcal{C}(u) = \sum_{i=0}^{n} \mathcal{N}_{i,p}^{\boldsymbol{U}} (u)\, \boldsymbol{P}_i
 //! ```
 //! with
-//! `$u$`, a parameter on the curve, usually limited to `$u\in \left[0,1\right]$`.
-//! `$n$` the number of polynomial spline segments
-//! `$p$`, the spline degree
-//! `$\boldsymbol{U}$`, the knot vector
-//! `$\mathcal{N}$`, the `$n+1$` spline basis functions of degree `p`
-//! `$\boldsymbol{P}$`, the `$n+1$` control points that can be of arbitrary dimension
+//! `u`, a parameter on the curve, usually limited to `u ∈ [0,1]`.
+//! `n` the number of polynomial spline segments
+//! `p`, the spline degree
+//! `U`, the knot vector
+//! `N`, the `n + 1` spline basis functions of degree `p`
+//! `P`, the `n + 1` control points that can be of arbitrary dimension
 //!
 //! These characteristics lead to many desirable properties.
 //! The piecewise definition makes B-spline functions versatile allowing to interpolate or approximate

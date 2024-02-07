@@ -67,11 +67,12 @@ impl Curve {
     /// use bsplines::curve::knots;
     /// use bsplines::curve::points::ControlPoints;
     ///
-    /// // Create a coordinate matrix containing with four 2D points.
+    /// // Create a coordinate matrix containing with five 3D points.
     /// let points = ControlPoints::new(dmatrix![
     /// // 1    2    3    4    5
     ///  -2.0,-2.0,-1.0, 0.5, 1.5; // x
     ///  -1.0, 0.0, 1.0, 1.0, 2.0; // y
+    ///   0.0, 0.5, 1.5,-0.5,-1.0; // z
     /// ]);
     /// let degree = 2;
     /// let knots = knots::methods::uniform(degree, points.segments()).unwrap();
@@ -152,8 +153,8 @@ impl Curve {
     ///
     /// The end of another curve is attached to the beginning of this curve,
     /// while maintaining continuity of all derivatives
-    /// This affects the first and last `$p$` control points of the two curves, respectively,
-    /// and removes `$p$` control points in total.
+    /// This affects the first and last `p` control points of the two curves, respectively,
+    /// and removes `p` control points in total.
     ///
     /// # Examples
     ///
@@ -187,7 +188,7 @@ impl Curve {
         self
     }
 
-    /// Prepends another curve with maximally `$p-1$` constraints.
+    /// Prepends another curve with maximally `p-1` constraints.
     pub fn prepend_constrained(
         &mut self,
         constraints_self: Constraints,
@@ -208,8 +209,8 @@ impl Curve {
     ///
     /// The end of this curve is attached to the beginning of the other curve,
     /// while maintaining continuity of all derivatives
-    /// This affects the first and last `$p$` control points of the two curves, respectively,
-    /// and removes `$p$` control points in total.
+    /// This affects the first and last `p` control points of the two curves, respectively,
+    /// and removes `p` control points in total.
     ///
     /// # Examples
     ///
@@ -244,7 +245,7 @@ impl Curve {
         self
     }
 
-    /// Appends another curve with maximally `$p-1$` constraints.
+    /// Appends another curve with maximally `p-1` constraints.
     pub fn append_constrained(
         &mut self,
         constraints_self: Constraints,
@@ -261,28 +262,28 @@ impl Curve {
         self
     }
 
-    /// Splits a curve into two at parameter `$u$`.
+    /// Splits a curve into two at parameter `u`.
     ///
     /// # Arguments
-    /// * `u` - The parameter`$u$` that must lie in the interval `$(0,1)$`.
+    /// * `u` - The parameter`u` that must lie in the interval `(0,1)`.
     pub fn split(&self, u: f64) -> Result<(Self, Self), SplitError> {
         split(self, u)
     }
 
-    /// Inserts a knot into the curve at parameter `$u$`.
+    /// Inserts a knot into the curve at parameter `u`.
     ///
     /// # Arguments
-    /// * `u` - The parameter`$u$` that must lie in the interval `$(0,1)$`.
+    /// * `u` - The parameter`u` that must lie in the interval `(0,1)`.
     pub fn insert(&mut self, u: f64) -> Result<&mut Self, InsertError> {
         self.insert_times(u, 1)?;
         Ok(self)
     }
 
-    /// Inserts a knot `x` times into the curve at parameter `$u$`.
+    /// Inserts a knot `x` times into the curve at parameter `u`.
     ///
     /// # Arguments
-    /// * `u` - The parameter`$u$` that must lie in the interval `$(0,1)$`.
-    /// * `x` - The number of insertions of parameter `$u$`.
+    /// * `u` - The parameter`u` that must lie in the interval `(0,1)`.
+    /// * `x` - The number of insertions of parameter `u`.
     pub fn insert_times(&mut self, u: f64, x: usize) -> Result<&mut Self, InsertError> {
         for _ in 0..x {
             insert(self, u)?;
@@ -295,7 +296,7 @@ impl Curve {
         self.points.derive(&self.knots);
     }
 
-    /// Returns the curve describing the `$k$`-th derivative of the current one.
+    /// Returns the curve describing the `k`-th derivative of the current one.
     /// # Arguments
     ///
     /// * `k` - The derivative

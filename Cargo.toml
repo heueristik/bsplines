@@ -1,7 +1,7 @@
 [package]
 name = "bsplines"
-version = "0.0.1-alpha.2"
 license = "Apache-2.0"
+version = "0.0.1-alpha.3"
 authors = [
     "Michael A. Heuer <decentralised.systems@gmail.com>",
 ]
@@ -20,15 +20,12 @@ homepage = "https://github.com/michael-a-heuer/bsplines"
 repository = "https://github.com/michael-a-heuer/bsplines"
 documentation = "https://docs.rs/bsplines"
 
-
 [package.metadata.docs.rs]
 features = ["doc-images"]
 
 [features]
 doc-images = []
 
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "bsplines"
 path = "src/lib.rs"
@@ -47,7 +44,7 @@ enum_glob_use = "deny"
 type_complexity = "allow"
 
 [dependencies]
-embed-doc-image = { version = "0.1.4" }
+embed-doc-image = "0.1.4"
 nalgebra = "0.32.3"
 thiserror = "1.0.56"
 
@@ -58,6 +55,3 @@ approx = "0.5.1"
 plotters = "0.3.5"
 plotters-arrows = "0.1.0"
 num-traits = "0.2.17"
-
-
-
