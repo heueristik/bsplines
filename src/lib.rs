@@ -2,8 +2,8 @@
 //#![warn(missing_doc_code_examples)]
 #![cfg_attr(feature = "doc-images",
 cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg"),
-doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulation/split-after.svg")))]
+doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve-deriv.tex.svg"),
+doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulation/insert-before.svg")))]
 //! `bsplines` is a Rust library for vectorized, N-dimensional B-spline curves and their derivatives based on
 //! [nalgebra].
 //!
@@ -27,27 +27,31 @@ doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulat
 //! These piecewise polynomials are joined so that the parametric function is `p-1` times continuously
 //! differentiable. The overall functions are parametrized over finite domains with the co-domain being an
 //! `N`-dimensional vector space. They can describe curves, but also surfaces.
+//! Their characteristics lead to many desirable properties.
 //!
-//! A B-spline curve can be defined by
-//! ![The mathematical definition of a B-spline curve.][eq-curve]
-//! with
-//! `u`, a parameter on the curve, usually limited to `u ∈ [0,1]`.
-//! `n` the number of polynomial spline segments
-//! `p`, the spline degree
-//! `U`, the knot vector
-//! `N`, the `n + 1` spline basis functions of degree `p`
-//! `P`, the `n + 1` control points that can be of arbitrary dimension
-//!
-//! These characteristics lead to many desirable properties.
 //! The piecewise definition makes B-spline functions versatile allowing to interpolate or approximate
 //! complex-shaped and high-dimensional data, while maintaining a low polynomial degree. Because of the polynomial
 //! nature, all possible derivatives are accessible.
 //!
-//! ![A 2D B-Spline curve.][split-after]
+//! A B-spline curve `C` can be defined by
+//!
+//! ![The mathematical definition of a B-spline curve.][eq-curve]
+//!
+//! with
+//! the derivative order `k`,
+//! the parameter `u ∈ [0,1]` defining a point on the curve,
+//! the number of polynomial spline segments `n`,
+//! the spline degree `p`,
+//! the `k`-th derivative knot vector `U^(k)`,
+//! the `n+1` spline basis function `N_{i,p}` of degree `p` defined by the knot vector `U^(k)`, and
+//! the `n+1` control points `P_i` that can be of arbitrary dimension.
+//!
+//! ![A 2D B-Spline curve.][img-curve]
 //!
 //! Still, evaluations or spatial manipulations can be executed fast because only local polynomial segments must be
-//! considered and the associated numerical procedures are stable. Lastly, polynomials represent a memory-efficient way
-//! of storing spatial information as few polynomial coefficients suffice to describe complex shapes.
+//! considered and the associated numerical procedures are stable.
+//! Lastly, polynomials represent a memory-efficient way of storing spatial information
+//! as few polynomial coefficients suffice to describe complex shapes.
 
 //! ## Literature:
 //! |            |                                                                                                                                                                    |
