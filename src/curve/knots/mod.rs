@@ -80,7 +80,7 @@ impl Knots {
     }
 
     /// # Arguments
-    /// * `k` - The `$k$`-th derivative knot vector.
+    /// * `k` - The `k`-th derivative knot vector.
     pub fn vector_derivative(&self, derivative: usize) -> &VecD {
         &self.Uk[derivative]
     }
@@ -177,8 +177,8 @@ impl Knots {
     }
 
     /// Returns the index `i` of the knot on the domain interval
-    /// `$[u_{p-k}^{(k)},u_{n+1-k}^{(k)})$`,
-    /// being less or equal than `u`.
+    /// `[u_{p-k}^{(k)}, u_{n+1-k}^{(k)})`,
+    /// being less than or equal to `u`.
     fn find_index(&self, u: f64, k: usize) -> Option<usize> {
         let Uk = self.vector_derivative(k);
         let pk = self.degree() - k;
@@ -206,7 +206,7 @@ impl Knots {
     }
 
     /// Returns the index `i` of the knot on the domain interval
-    /// `$[u_{p-k}^{(k)},u_{n+1-k}^{(k)}]$`,
+    /// `[u_{p-k}^{(k)}, u_{n+1-k}^{(k)}]`,
     /// being lower, equal, or higher than `u`.
     pub fn find_idx(&self, u: f64, k: usize, comparator: DomainKnotComparatorType) -> usize {
         let Uk = self.vector_derivative(k);

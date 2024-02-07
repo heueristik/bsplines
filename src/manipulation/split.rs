@@ -4,12 +4,12 @@ doc = ::embed_doc_image::embed_image!("split-before", "doc-images/plots/manipula
 doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulation/split-after.svg")))]
 //! Splits a curve into two independent ones.
 //!
-//! | A curve before splitting. | The two independent curves after splitting at `$u=1/2$`. |
+//! | A curve before splitting. | The two independent curves after splitting at `u = 1/2`. |
 //! |:-------------------------:|:--------------------------------------------------------:|
 //! | ![][split-before]         | ![][split-after]                                         |
 //!
-//! The splitting is conducted by adding the respective knot `$p+1$`-times, which allows for splitting the knot vector.
-//! The knot vector can then be re-normalized on the interval `$[0,1]$`.
+//! The splitting is conducted by adding the respective knot `p+1`-times, which allows for splitting the knot vector.
+//! The knot vector can then be re-normalized on the interval `[0,1]`.
 
 use thiserror::Error;
 

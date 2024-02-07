@@ -4,7 +4,7 @@ doc = ::embed_doc_image::embed_image!("insert-before", "doc-images/plots/manipul
 doc = ::embed_doc_image::embed_image!("insert-after", "doc-images/plots/manipulation/insert-after.svg")))]
 //! Inserts an additional knot into the curve.
 //!
-//! | A curve before knot insertion. | The curve after knot insertion at `$u=4/5$`. |
+//! | A curve before knot insertion. | The curve after knot insertion at `u=4/5`. |
 //! |:------------------------------:|:--------------------------------------------:|
 //! | ![][insert-before]             | ![][insert-after]                            |
 
@@ -31,7 +31,7 @@ pub enum InsertError {
 }
 
 /// Knot insertion algorithm by Boehm
-/// `u` the knot to be inserted. The value must be in `$u\in(0, 1)$`
+/// `u` the knot to be inserted. The value must be in `u ∈ (0, 1)`
 pub fn insert(c: &mut Curve, u: f64) -> Result<(), InsertError> {
     if u <= 0.0 || u >= 1.0 {
         return Err(InsertError::OutOfBounds { u, lower_bound: 0.0, upper_bound: 1.0 });
