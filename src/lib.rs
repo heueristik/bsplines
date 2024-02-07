@@ -2,12 +2,13 @@
 //#![warn(missing_doc_code_examples)]
 #![cfg_attr(feature = "doc-images",
 cfg_attr(all(),
+doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg"),
 doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulation/split-after.svg")))]
 //! `bsplines` is a Rust library for vectorized, N-dimensional B-spline curves and their derivatives based on
 //! [nalgebra].
 //!
 //! ## Features
-//! - Create `N`-dimensional (`x = 1, 2, 3,...`) curves of arbitrary polynomial degree `p`.
+//! - Create `N`-dimensional (`N = 1, 2, 3,...`) curves of arbitrary polynomial degree `p`.
 //! - Efficient [curve evaluation][curve::Curve] for all available derivatives `k = 0, 1,... , p`.
 //! - Built with [nalgebra](https://crates.io/crates/nalgebra) to store point data in contiguous arrays
 //! - Multiple methods for
@@ -28,9 +29,7 @@ doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulat
 //! `N`-dimensional vector space. They can describe curves, but also surfaces.
 //!
 //! A B-spline curve can be defined by
-//! ```math
-//! \mathcal{C}(u) = \sum_{i=0}^{n} \mathcal{N}_{i,p}^{\boldsymbol{U}} (u)\, \boldsymbol{P}_i
-//! ```
+//! ![The mathematical definition of a B-spline curve.][eq-curve]
 //! with
 //! `u`, a parameter on the curve, usually limited to `u ∈ [0,1]`.
 //! `n` the number of polynomial spline segments
