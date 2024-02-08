@@ -1,0 +1,13 @@
+\input{_preamble}
+\begin{document}
+    \myeqs{
+        \boldsymbol{P}_i^{(k)}=
+        \begin{cases}
+            \boldsymbol{P}_{i}^{(0)} & k=0 \\[2mm]
+            \left.\begin{cases}
+                      \boldsymbol{0} & u_{i+p+1}^{{(0)}} = u_{i+k}^{{(0)}}\\[2mm]
+                      \frac{p-k+1}{u_{i+p+1}^{{(0)}} - u_{i+k}^{{(0)}}} \left( \boldsymbol{P}_{i+1}^{(k-1)} - \boldsymbol{P}_{i}^{(k-1)} \right) & \text{else}%u_{i+p+1} \neq u_{i+k}\\[2mm]
+            \end{cases}\right|& k>0 \\
+        \end{cases}
+    }
+\end{document}

@@ -5,6 +5,10 @@ target/
 # files
 .DS_Store
 **/*.rs.bk
+*.aux
+*.log
+*.gz
+*.pdf
 
 #/target
 /Cargo.lock

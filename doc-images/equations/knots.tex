@@ -1,0 +1,16 @@
+\input{_preamble}
+\begin{document}
+    \myeqs{
+        \boldsymbol{U}^{(k)}
+        =\left\{u_i^{(k)}\right\}
+        \equiv\overunderbraces{
+            &&\br{5}{\text{domain}\vphantom{p}}
+        }{
+            \left\{\vphantom{u^{(k)}}\right.
+            &u_{0}^{(k)},\dots,&u_{p-k}^{(k)}&,
+            &u_{p-k+1}^{(k)}, \dots,u_{n-k}^{(k)}
+            &,&u_{n+1-k}^{(k)}&,\dots,u_{n+p+1-2k}^{(k)}& \left.\vphantom{u^{(k)}}\right\}}
+        {&\br{2}{p-k+1}&&\br{1}{n-p}&&\br{2}{1+p-k}},\quad
+        u_{i}^{(k)}\leq u_{i+1}^{(k)},
+    }
+\end{document}

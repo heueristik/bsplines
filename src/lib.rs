@@ -2,9 +2,11 @@
 //#![warn(missing_doc_code_examples)]
 #![cfg_attr(feature = "doc-images",
 cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve-deriv.tex.svg"),
+doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg"),
+doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.svg"),
+doc = ::embed_doc_image::embed_image!("eq-control-points", "doc-images/equations/control-points.svg"),
 doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulation/insert-before.svg")))]
-//! `bsplines` is a Rust library for vectorized, N-dimensional B-spline curves and their derivatives based on
+//! **bsplines** is a library for vectorized, N-dimensional B-spline curves and their derivatives based on
 //! [nalgebra].
 //!
 //! ## Features
@@ -21,7 +23,7 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //!     - [splitting][manipulation::split]
 //!     - [merging][manipulation::split]
 //!
-//! ## Mathematical Definition
+//! ## What are B-Splines?
 //!
 //! B-splines are parametric functions composed of piecewise polynomials with a polynomial degree `p > 0`.
 //! These piecewise polynomials are joined so that the parametric function is `p-1` times continuously
@@ -32,19 +34,6 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //! The piecewise definition makes B-spline functions versatile allowing to interpolate or approximate
 //! complex-shaped and high-dimensional data, while maintaining a low polynomial degree. Because of the polynomial
 //! nature, all possible derivatives are accessible.
-//!
-//! A B-spline curve `C` can be defined by
-//!
-//! ![The mathematical definition of a B-spline curve.][eq-curve]
-//!
-//! with
-//! the derivative order `k`,
-//! the parameter `u ∈ [0,1]` defining a point on the curve,
-//! the number of polynomial spline segments `n`,
-//! the spline degree `p`,
-//! the `k`-th derivative knot vector `U^(k)`,
-//! the `n+1` spline basis function `N_{i,p}` of degree `p` defined by the knot vector `U^(k)`, and
-//! the `n+1` control points `P_i` that can be of arbitrary dimension.
 //!
 //! ![A 2D B-Spline curve.][img-curve]
 //!
