@@ -1,0 +1,17 @@
+\documentclass[tikz]{standalone}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{oubraces}
+\usepackage[customcolors]{hf-tikz}
+\definecolor{docsrscolor}{HTML}{f5f5f5}
+
+\newcommand{\myeqs}[1]{
+    \Huge
+    \begin{tikzpicture}
+        \node[
+            fill=docsrscolor,
+            rounded corners=8mm,
+            inner sep=8mm
+        ]{$#1$};
+    \end{tikzpicture}
+}

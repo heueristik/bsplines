@@ -1,4 +1,4 @@
-//! Curve parameters can be generated with different methods:
+//! Implements different parameter generation methods.
 //!
 //! - Equally spaced parameters
 //! - Centripetal method

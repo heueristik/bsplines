@@ -1,3 +1,16 @@
+#![cfg_attr(feature = "doc-images",
+cfg_attr(all(),
+doc = ::embed_doc_image::embed_image!("eq-control-points", "doc-images/equations/control-points.svg")))]
+//! Implements the control points constituting the control polygon of the curve.
+//!
+//! The control points of the `k`-th derivative B-spline curve can be derived
+//! from the zeroth order control points
+//!
+//! ![The control points][eq-control-points]
+//!
+//! Control points are generated and manipulated as part of different curve generation
+//! and curve manipulation methods.
+
 use std::ops::MulAssign;
 
 use crate::{
@@ -142,8 +155,8 @@ impl ControlPoints {
             return VecD::zeros(self.dimension());
         }
 
-        (p - k_max + 1) as f64 / (U0[i + p + 1] - U0[i + k_max]) *
-            (self.derive_single_point(i + 1, k_max - 1, knots) - self.derive_single_point(i, k_max - 1, knots))
+        (p - k_max + 1) as f64 / (U0[i + p + 1] - U0[i + k_max])
+            * (self.derive_single_point(i + 1, k_max - 1, knots) - self.derive_single_point(i, k_max - 1, knots))
     }
 
     pub fn reverse(&mut self) -> &mut Self {

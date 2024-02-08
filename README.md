@@ -1,4 +1,4 @@
-# Bsplines
+# `bsplines` Rust Library
 
 [![Crates.io](https://img.shields.io/crates/v/bsplines)](https://crates.io/crates/bsplines)
 [![Docs.rs](https://docs.rs/bsplines/badge.svg)](https://docs.rs/bsplines)

@@ -21,10 +21,11 @@ use std::ops::{AddAssign, DivAssign, SubAssign};
 use nalgebra::SVD;
 use thiserror::Error;
 
+use crate::curve::basis::basis;
 use crate::{
     curve,
     curve::{
-        knots::{evaluate, is_clamped, is_normed, reversed, Knots},
+        knots::{is_clamped, is_normed, reversed, Knots},
         points::{ControlPoints, Points},
         Curve, CurveError,
     },
@@ -185,7 +186,7 @@ fn calculateKV(a: &Curve) -> MatD {
             let mut sum = 0.;
 
             for a in m - p..=m - k {
-                sum += prefactor(p, a, i, k, S, &Vk[0]) * evaluate(a, p - k, m - k, &Vk[k], Vk[0][m + 1], 0);
+                sum += prefactor(p, a, i, k, S, &Vk[0]) * basis(&Vk[k], a, p - k, 0, m - k, Vk[0][m + 1]);
             }
             KV[(k, i - (m + 1 - p))] = sum;
         }
@@ -206,7 +207,7 @@ fn calculateKW(b: &Curve) -> MatD {
             let mut sum = 0.;
 
             for b in 0..=p - k {
-                sum += prefactor(p, b, j, k, T, &Wk[0]) * evaluate(b, p - k, o - k, &Wk[k], Wk[0][p], 0);
+                sum += prefactor(p, b, j, k, T, &Wk[0]) * basis(&Wk[k], b, p - k, 0, o - k, Wk[0][p]);
             }
             KW[(k, j)] = sum;
         }
@@ -229,7 +230,7 @@ fn calculateIV(a: &Curve) -> MatD {
             let mut sum = 0.;
 
             for a in m - p..=m - k {
-                sum += prefactor(p, a, i, k, S, &Vk[0]) * evaluate(a, p - k, m - k, &Vk[k], Vk[0][m + 1], 0);
+                sum += prefactor(p, a, i, k, S, &Vk[0]) * basis(&Vk[k], a, p - k, 0, m - k, Vk[0][m + 1]);
             }
             IV[(i - (m + 1 - p), k)] = sum;
         }
@@ -252,7 +253,7 @@ fn calculateJW(b: &Curve) -> MatD {
             let mut sum = 0.;
 
             for b in 0..=p - k {
-                sum += prefactor(p, b, j, k, T, &Wk[0]) * evaluate(b, p - k, o - k, &Wk[k], Wk[0][p], 0);
+                sum += prefactor(p, b, j, k, T, &Wk[0]) * basis(&Wk[k], b, p - k, 0, o - k, Wk[0][p]);
             }
             JW[(j, k)] = sum;
         }
@@ -273,7 +274,7 @@ fn calculateGV(a: &ConstrainedCurve) -> MatD {
 
     for g in 0..=mg {
         for i in m - p + 1..=m {
-            GV[(g, i - (m - p + 1))] = evaluate(i, p, m, Vk0, a.constraints.params[g], 0);
+            GV[(g, i - (m - p + 1))] = basis(Vk0, i, p, 0, m, a.constraints.params[g]);
         }
     }
     GV
@@ -289,7 +290,7 @@ fn calculateHW(b: &ConstrainedCurve) -> MatD {
 
     for h in 0..=oh {
         for i in 0..=p - 1 {
-            HW[(h, i)] = evaluate(i, p, o, Wk0, b.constraints.params[h], 0);
+            HW[(h, i)] = basis(Wk0, i, p, 0, o, b.constraints.params[h]);
         }
     }
 
@@ -315,7 +316,7 @@ fn calculateIpV(a: &ConstrainedCurve) -> MatD {
 
     for i in m - p + 1..=m {
         for g in 0..=mg {
-            IpV[(i - (m + 1 - p), g)] = evaluate(i, p, m, Vk0, a.constraints.params[g], 0);
+            IpV[(i - (m + 1 - p), g)] = basis(Vk0, i, p, 0, m, a.constraints.params[g]);
         }
     }
     IpV *= -0.5;
@@ -333,7 +334,7 @@ fn calculateJppW(b: &ConstrainedCurve) -> MatD {
 
     for j in 0..=p_ - 1 {
         for h in 0..=oh_ {
-            JppW[(j, h)] = evaluate(j, p_, o_, Wk0, b.constraints.params[h], 0);
+            JppW[(j, h)] = basis(Wk0, j, p_, 0, o_, b.constraints.params[h]);
         }
     }
     JppW *= -0.5;
@@ -362,8 +363,7 @@ fn calculateKconst(a: &Curve, b: &Curve) -> MatD {
         for i in m - p..=m {
             for a in m - p..=m - k {
                 // TODO use point getter instead of .column(i)
-                sum +=
-                    prefactor(p, a, i, k, S, &Vk[0]) * evaluate(a, p - k, m - k, &Vk[k], Vk[0][m + 1], 0) * S.column(i);
+                sum += prefactor(p, a, i, k, S, &Vk[0]) * basis(&Vk[k], a, p - k, 0, m - k, Vk[0][m + 1]) * S.column(i);
             }
         }
 
@@ -371,7 +371,7 @@ fn calculateKconst(a: &Curve, b: &Curve) -> MatD {
             for b in 0..=p - k {
                 //sumB += -prefactor(p, b, j, k, &T, &Wk[0]) * evaluate(b, p - k, o - k, &Wk[k], Wk[0][p]) * T.row(j);
                 // TODO use point getter instead of .column(j)
-                sum -= prefactor(p, b, j, k, T, &Wk[0]) * evaluate(b, p - k, o - k, &Wk[k], Wk[0][p], 0) * T.column(j);
+                sum -= prefactor(p, b, j, k, T, &Wk[0]) * basis(&Wk[k], b, p - k, 0, o - k, Wk[0][p]) * T.column(j);
             }
         }
         Kconst.column_mut(k).sub_assign(&sum);
@@ -581,8 +581,8 @@ fn prefactor(p: usize, i: usize, i0: usize, k: usize, P0: &MatD, U0: &VecD) -> f
         } else if U0[i + p + 1] == U0[i + k] {
             0.
         } else {
-            (p + 1 - k) as f64 / (U0[i + p + 1] - U0[i + k]) *
-                (prefactor(p, i + 1, i0, k - 1, P0, U0) - prefactor(p, i, i0, k - 1, P0, U0))
+            (p + 1 - k) as f64 / (U0[i + p + 1] - U0[i + k])
+                * (prefactor(p, i + 1, i0, k - 1, P0, U0) - prefactor(p, i, i0, k - 1, P0, U0))
         }
     } else {
         0.

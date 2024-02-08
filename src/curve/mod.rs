@@ -1,3 +1,23 @@
+//#![warn(missing_docs)]
+//#![warn(missing_doc_code_examples)]
+#![cfg_attr(feature = "doc-images",
+cfg_attr(all(),
+doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg")))]
+//! Implements the B-spline curve.
+//!
+//! A B-spline curve can be defined by
+//!
+//! ![B-spline curve][eq-curve]
+//!
+//! with the
+//! - parameter `u ∈ [0,1]` defining a point on the curve,
+//! - derivative order `k`,
+//! - number of polynomial spline segments `n`,
+//! - spline degree `p`,
+//! - `k`-th derivative [knot vector][knots] `U`,
+//! - `n+1-k` [spline basis function][basis] `N` of degree `p` defined by the [knot vector][knots] `U`, and
+//! - `n+1-k`, `N`-dimensional [control points][points] `P`.
+
 use embed_doc_image::embed_doc_image;
 use thiserror::Error;
 
@@ -14,6 +34,7 @@ use crate::{
     types::VecD,
 };
 
+pub mod basis;
 pub mod generation;
 pub mod knots;
 pub mod parameters;
