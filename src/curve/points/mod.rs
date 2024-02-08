@@ -155,8 +155,8 @@ impl ControlPoints {
             return VecD::zeros(self.dimension());
         }
 
-        (p - k_max + 1) as f64 / (U0[i + p + 1] - U0[i + k_max])
-            * (self.derive_single_point(i + 1, k_max - 1, knots) - self.derive_single_point(i, k_max - 1, knots))
+        (p - k_max + 1) as f64 / (U0[i + p + 1] - U0[i + k_max]) *
+            (self.derive_single_point(i + 1, k_max - 1, knots) - self.derive_single_point(i, k_max - 1, knots))
     }
 
     pub fn reverse(&mut self) -> &mut Self {

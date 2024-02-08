@@ -21,10 +21,10 @@ use std::ops::{AddAssign, DivAssign, SubAssign};
 use nalgebra::SVD;
 use thiserror::Error;
 
-use crate::curve::basis::basis;
 use crate::{
     curve,
     curve::{
+        basis::basis,
         knots::{is_clamped, is_normed, reversed, Knots},
         points::{ControlPoints, Points},
         Curve, CurveError,
@@ -581,8 +581,8 @@ fn prefactor(p: usize, i: usize, i0: usize, k: usize, P0: &MatD, U0: &VecD) -> f
         } else if U0[i + p + 1] == U0[i + k] {
             0.
         } else {
-            (p + 1 - k) as f64 / (U0[i + p + 1] - U0[i + k])
-                * (prefactor(p, i + 1, i0, k - 1, P0, U0) - prefactor(p, i, i0, k - 1, P0, U0))
+            (p + 1 - k) as f64 / (U0[i + p + 1] - U0[i + k]) *
+                (prefactor(p, i + 1, i0, k - 1, P0, U0) - prefactor(p, i, i0, k - 1, P0, U0))
         }
     } else {
         0.

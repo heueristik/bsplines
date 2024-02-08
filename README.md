@@ -13,3 +13,4 @@ on [nalgebra](https://docs.rs/nalgebra/latest/nalgebra/).
 - [ ] Use `thiserror`
 - [ ] Refactor visibility and folder structure
 - [ ] Refactor method selection and settings structs
+- [ ] Add benchmarks and improve performance

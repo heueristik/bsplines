@@ -18,9 +18,8 @@ use std::ops::MulAssign;
 
 use thiserror::Error;
 
-use crate::curve::basis;
 use crate::{
-    curve::{parameters, parameters::Parameters, CurveError},
+    curve::{basis, parameters, parameters::Parameters, CurveError},
     types::{KnotVectorDerivatives, VecD, VecDView, VecHelpers},
 };
 
