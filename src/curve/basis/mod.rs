@@ -3,7 +3,7 @@ cfg_attr(all(),
 doc = ::embed_doc_image::embed_image!("eq-basis-function", "doc-images/equations/basis-function.svg"),
 doc = ::embed_doc_image::embed_image!("eq-basis-prefactor", "doc-images/equations/basis-prefactor.svg"),
 doc = ::embed_doc_image::embed_image!("eq-basis-function-zero", "doc-images/equations/basis-function-zero.svg")))]
-//! Evaluates the basis spline functions using the Cox-de Boor-Mansfield recurrence relation
+//! Implements the basis spline functions using the Cox-de Boor-Mansfield recurrence relation
 //!
 //! ![The Cox-de Boor-Mansfield recurrence relation][eq-basis-function]
 //!

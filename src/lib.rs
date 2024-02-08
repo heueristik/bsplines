@@ -25,12 +25,13 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //!
 //! ## What are B-Splines?
 //!
-//! B-splines are parametric functions composed of piecewise polynomials with a polynomial degree `p > 0`.
-//! These piecewise polynomials are joined so that the parametric function is `p-1` times continuously
-//! differentiable. The overall functions are parametrized over finite domains with the co-domain being an
-//! `N`-dimensional vector space. They can describe curves, but also surfaces.
-//! Their characteristics lead to many desirable properties.
-//!
+//! B-splines are parametric functions composed of piecewise, polynomial [basis functions][curve::basis] of degree `p > 0`.
+//! These piecewise polynomials are joined so that the parametric function is `p-1` times continuously differentiable.
+//! The overall functions are parametrized over finite domains with a so-called [knot vector][curve::knots]
+//! with the co-domain being an `N`-dimensional vector space, that is defined by [control points][curve::points].
+//! They can describe [curves][curve], but also surfaces.
+
+//! These characteristics lead to many desirable properties.
 //! The piecewise definition makes B-spline functions versatile allowing to interpolate or approximate
 //! complex-shaped and high-dimensional data, while maintaining a low polynomial degree. Because of the polynomial
 //! nature, all possible derivatives are accessible.
