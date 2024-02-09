@@ -135,7 +135,7 @@ pub fn generate_2d_plot(filename: &str, splines: Vec<(&Curve, RGBAColor)>, limit
     let mut path = String::from(PLOTS_DIR);
     path.push_str(filename);
     let area = SVGBackend::new(&path, IMG_SIZE).into_drawing_area();
-    area.fill(&RGBAColor(255, 255, 255, 0.85)).unwrap();
+    area.fill(&RGBAColor(255, 255, 255, 0.81)).unwrap(); // Matches the font color in docs.rs dark mode
 
     let mut chart_builder = ChartBuilder::on(&area);
     chart_builder.margin(10).set_left_and_bottom_label_area_size(20);
