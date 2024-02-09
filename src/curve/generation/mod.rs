@@ -17,7 +17,7 @@ doc = ::embed_doc_image::embed_image!("fit-loose-half-penalized", "doc-images/pl
 //!   - unpenalized/penalized
 //!
 //!
-//! | Raw Data | Manual Control Polygon | Interpolation |F
+//! | Raw Data | Manual Control Polygon | Interpolation |
 //! |:------------------------------|:--------------------------|:--------------------------|
 //! | ![][points]             | ![][manual]                            | ![][interpolation] |
 //! | Scattered, 2-dimensional data points<br>(`N = 18`).<br><br>   | Curve of degree `p = 2` with `n = N-1`<br>segments and control points generated<br>directly from the data points. | Curve of degree `p = 2` and `n = N-1`<br>segments interpolating the data points.<br><br> |
