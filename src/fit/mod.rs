@@ -45,8 +45,8 @@ impl<'a> FitBuilder<'a> {
 
     /// Sets the number of polygon segments `n` of the fitted curve.
     /// It defaults to the polyline segments of the data.
-    pub fn polygon_segments(mut self, n: usize) -> Self {
-        self.polygon_segments = Some(n);
+    pub fn polygon_segments(mut self, polygon_segments: usize) -> Self {
+        self.polygon_segments = Some(polygon_segments);
         self
     }
 
@@ -70,13 +70,13 @@ impl<'a> FitBuilder<'a> {
 
     /// Performs the fit.
     pub fn build(self) -> Result<Curve> {
-        let n = self.polygon_segments.unwrap_or_else(|| self.data.polyline_segments());
-        let params = parameters::generate(self.data, ParameterMethod::EquallySpaced);
-        let knots = knots::generate(self.degree, n, &params, KnotMethod::Uniform)?;
+        let polygon_segments = self.polygon_segments.unwrap_or_else(|| self.data.polyline_segments());
+        let parameters = parameters::generate(self.data, ParameterMethod::EquallySpaced);
+        let knots = knots::generate(self.degree, polygon_segments, &parameters, KnotMethod::Uniform)?;
 
         let points = match self.ends {
-            Ends::Fixed => fixed::fit(&knots, self.data, &params, self.penalization)?,
-            Ends::Loose => loose::fit(&knots, self.data, &params, self.penalization)?,
+            Ends::Fixed => fixed::fit(&knots, self.data, &parameters, self.penalization)?,
+            Ends::Loose => loose::fit(&knots, self.data, &parameters, self.penalization)?,
         };
         Curve::new(knots, ControlPoints::new_with_capacity(points, self.degree + 1))
     }
@@ -85,23 +85,27 @@ impl<'a> FitBuilder<'a> {
 fn input_checks(
     knots: &Knots,
     points: &DataPoints,
-    params: &Parameters,
+    parameters: &Parameters,
     penalization: &Option<Penalization>,
 ) -> Result<()> {
     match (
         knots.polygon_segments(),
         points.polyline_segments(),
-        params.polyline_segments(),
+        parameters.polyline_segments(),
         knots.degree(),
         penalization,
     ) {
-        (n, m, _, _, _) if n > m => Err(Error::TooFewPolylineSegments { polygon_segments: n, polyline_segments: m }),
-        (_, m, mp, _, _) if m != mp => {
-            Err(Error::ParameterSegmentsMismatch { polyline_segments: m, parameter_segments: mp })
+        (polygon_segments, polyline_segments, _, _, _) if polygon_segments > polyline_segments => {
+            Err(Error::TooFewPolylineSegments { polygon_segments, polyline_segments })
         }
-        (n, _, _, p, _) if n < p => Err(Error::TooFewPolygonSegments { degree: p, polygon_segments: n }),
-        (n, _, _, _, Some(pen)) if n - 1 < pen.kappa => {
-            Err(Error::KappaTooLarge { kappa: pen.kappa, polygon_segments: n })
+        (_, polyline_segments, parameter_segments, _, _) if polyline_segments != parameter_segments => {
+            Err(Error::ParameterSegmentsMismatch { polyline_segments, parameter_segments })
+        }
+        (polygon_segments, _, _, degree, _) if polygon_segments < degree => {
+            Err(Error::TooFewPolygonSegments { degree, polygon_segments })
+        }
+        (polygon_segments, _, _, _, Some(penalization)) if polygon_segments - 1 < penalization.kappa => {
+            Err(Error::KappaTooLarge { kappa: penalization.kappa, polygon_segments })
         }
         _ => Ok(()),
     }
@@ -109,11 +113,11 @@ fn input_checks(
 
 pub(crate) fn compute_svd(
     knots: &Knots,
-    n_mat: &MatD,
+    basis_matrix: &MatD,
     penalization: &Option<Penalization>,
     calculate_finite_difference_matrix: Box<dyn FnOnce(usize, &Knots) -> MatD>,
 ) -> Result<SVD<f64, Dyn, Dyn>> {
-    let mut mat = n_mat.transpose() * n_mat;
+    let mut normal_matrix = basis_matrix.transpose() * basis_matrix;
 
     if let Some(penalization) = penalization {
         let lambda = penalization.lambda;
@@ -124,12 +128,12 @@ pub(crate) fn compute_svd(
             if !is_uniform(knots)? {
                 return Err(Error::NonUniformKnots);
             }
-            let delta_mat = calculate_finite_difference_matrix(penalization.kappa, knots);
-            mat += lambda * (delta_mat.transpose() * delta_mat);
+            let difference_matrix = calculate_finite_difference_matrix(penalization.kappa, knots);
+            normal_matrix += lambda * (difference_matrix.transpose() * difference_matrix);
         }
     }
 
-    Ok(SVD::new(mat, true, true))
+    Ok(SVD::new(normal_matrix, true, true))
 }
 
 /// Returns one entry of the finite-difference operator matrix of order `kappa` — see `Eilers1996`.
@@ -144,22 +148,22 @@ fn difference_operator(i: usize, j: usize, kappa: usize) -> isize {
             }
             0
         }
-        k if k > 1 => difference_operator(i + 1, j, k - 1) - difference_operator(i, j, k - 1),
+        kappa if kappa > 1 => difference_operator(i + 1, j, kappa - 1) - difference_operator(i, j, kappa - 1),
         _ => 0,
     }
 }
 
 #[cfg(test)]
-pub(crate) fn test_data_points(npoints: usize) -> DataPoints {
-    let inc = 5.0 / npoints as f64;
-    let shift = (npoints - 1) as f64 * inc / 2.0;
-    DataPoints::new(nalgebra::DMatrix::from_fn(2, npoints, |r, c| {
-        if r == 0 {
+pub(crate) fn test_data_points(count: usize) -> DataPoints {
+    let spacing = 5.0 / count as f64;
+    let offset = (count - 1) as f64 * spacing / 2.0;
+    DataPoints::new(nalgebra::DMatrix::from_fn(2, count, |row, column| {
+        if row == 0 {
             // x coordinates
-            c as f64 * inc - shift
+            column as f64 * spacing - offset
         } else {
             // y coordinates
-            if c % 2 == 0 { 0.5 } else { -0.5 }
+            if column % 2 == 0 { 0.5 } else { -0.5 }
         }
     }))
 }

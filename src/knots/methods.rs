@@ -22,21 +22,18 @@ fn input_check(degree: usize, polygon_segments: usize) -> Result<()> {
 /// ## Note
 /// Use this method only if the control points are evenly distributed.
 pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
-    let p = degree;
-    let n = polygon_segments;
+    input_check(degree, polygon_segments)?;
 
-    input_check(p, n)?;
+    let internal_knot_count = polygon_segments - degree;
 
-    let internal_knot_count = n - p;
-
-    let mut knots = VecD::zeros(p + n + 2);
+    let mut knots = VecD::zeros(degree + polygon_segments + 2);
 
     for i in 1..=internal_knot_count {
         knots[degree + i] = i as f64 / (internal_knot_count + 1) as f64
     }
 
     // Set the tail clamp to one.
-    for i in n + 1..knots.len() {
+    for i in polygon_segments + 1..knots.len() {
         knots[i] = 1.;
     }
 
@@ -49,29 +46,25 @@ pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
 ///
 /// with the knots u, the parameters ū, the degree p, and the number of polygon segments n.
 pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots> {
-    let p = degree;
-    let n = polygon_segments;
+    input_check(degree, polygon_segments)?;
 
-    input_check(p, n)?;
-
-    let internal_knot_count = n - p;
+    let internal_knot_count = polygon_segments - degree;
 
     let u_bar = parameters.vector();
 
-    let mut knots = VecD::zeros(p + n + 2);
+    let mut knots = VecD::zeros(degree + polygon_segments + 2);
 
     for j in 1..=internal_knot_count {
         let mut parameter_sum = 0.;
 
-        let lim = j + p - 1;
-        for i in j..=lim {
+        for i in j..j + degree {
             parameter_sum += u_bar[i];
         }
-        knots[p + j] = parameter_sum / p as f64;
+        knots[degree + j] = parameter_sum / degree as f64;
     }
 
     // Set the tail clamp to one.
-    for j in n + 1..knots.len() {
+    for j in polygon_segments + 1..knots.len() {
         knots[j] = 1.;
     }
 
@@ -92,31 +85,28 @@ pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters
 /// According to de Boor, this ensures that the coefficient matrix is positive definite and
 /// well-conditioned, which is important for the least-squares fitting and interpolation of data points.
 pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots> {
-    let p = degree;
-    let n = polygon_segments;
-
-    input_check(p, n)?;
+    input_check(degree, polygon_segments)?;
 
     let u_bar = parameters.vector();
 
-    let internal_knot_count = n - p;
+    let internal_knot_count = polygon_segments - degree;
     let internal_knot_spans = internal_knot_count + 1;
 
-    let d = (n + 1) as f64 / (internal_knot_spans) as f64;
+    let span_width = (polygon_segments + 1) as f64 / internal_knot_spans as f64;
 
-    let mut knots = VecD::zeros(p + n + 2);
+    let mut knots = VecD::zeros(degree + polygon_segments + 2);
 
     for j in 1..=internal_knot_count {
-        let jd = j as f64 * d;
+        let position = j as f64 * span_width;
 
-        let i = jd as usize;
-        let alpha = jd - i as f64;
+        let i = position as usize;
+        let alpha = position - i as f64;
 
         knots[degree + j] = (1f64 - alpha) * u_bar[i - 1] + alpha * u_bar[i];
     }
 
     // Set the tail clamp to one.
-    for j in n + 1..knots.len() {
+    for j in polygon_segments + 1..knots.len() {
         knots[j] = 1.;
     }
 
@@ -209,17 +199,17 @@ mod tests {
         fn degree_0_errors() {
             let degree = 0;
             let polygon_segments = degree + 1;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
 
-            assert!(averaging(degree, polygon_segments, &params).is_err());
+            assert!(averaging(degree, polygon_segments, &parameters).is_err());
         }
 
         #[test]
         fn degree_1() {
             let polygon_segments = 4;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
             assert_eq!(
-                averaging(1, polygon_segments, &params).unwrap().derivatives[0],
+                averaging(1, polygon_segments, &parameters).unwrap().derivatives[0],
                 dvector![0., 0., 0.25, 0.5, 0.75, 1., 1.]
             );
         }
@@ -227,9 +217,9 @@ mod tests {
         #[test]
         fn degree_2() {
             let polygon_segments = 4;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
             assert_eq!(
-                averaging(2, polygon_segments, &params).unwrap().derivatives[0],
+                averaging(2, polygon_segments, &parameters).unwrap().derivatives[0],
                 dvector![0., 0., 0., 0.375, 0.625, 1., 1., 1.]
             );
         }
@@ -237,9 +227,9 @@ mod tests {
         #[test]
         fn degree_3() {
             let polygon_segments = 4;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
             assert_eq!(
-                averaging(3, polygon_segments, &params).unwrap().derivatives[0],
+                averaging(3, polygon_segments, &parameters).unwrap().derivatives[0],
                 dvector![0., 0., 0., 0., 0.5, 1., 1., 1., 1.]
             );
         }
@@ -247,12 +237,12 @@ mod tests {
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree(degree: usize) {
             let polygon_segments = degree;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];
             let tail = vec![1.0; degree + 1];
             assert_eq!(
-                averaging(degree, polygon_segments, &params).unwrap().derivatives[0],
+                averaging(degree, polygon_segments, &parameters).unwrap().derivatives[0],
                 VecD::from_vec([head, tail].concat())
             );
         }
@@ -260,14 +250,14 @@ mod tests {
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree_plus_1(degree: usize) {
             let polygon_segments = degree + 1;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];
             let internal = vec![0.5];
             let tail = vec![1.0; degree + 1];
 
             assert_eq!(
-                averaging(degree, polygon_segments, &params).unwrap().derivatives[0],
+                averaging(degree, polygon_segments, &parameters).unwrap().derivatives[0],
                 VecD::from_vec([head, internal, tail].concat())
             );
         }
@@ -284,17 +274,17 @@ mod tests {
         fn degree_0_errors() {
             let degree = 0;
             let polygon_segments = degree + 1;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
 
-            assert!(de_boor(degree, polygon_segments, &params).is_err());
+            assert!(de_boor(degree, polygon_segments, &parameters).is_err());
         }
 
         #[test]
         fn degree_1() {
             let polygon_segments = 4;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
             assert_eq!(
-                de_boor(1, polygon_segments, &params).unwrap().derivatives[0],
+                de_boor(1, polygon_segments, &parameters).unwrap().derivatives[0],
                 dvector![0., 0., 0.0625, 0.375, 0.6875, 1., 1.]
             );
         }
@@ -302,9 +292,9 @@ mod tests {
         #[test]
         fn degree_2() {
             let polygon_segments = 4;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
             assert_relative_eq!(
-                de_boor(2, polygon_segments, &params).unwrap().derivatives[0],
+                de_boor(2, polygon_segments, &parameters).unwrap().derivatives[0],
                 dvector![0., 0., 0., 1. / 6., 1. / 3. + 0.25, 1., 1., 1.],
                 epsilon = f64::EPSILON.sqrt()
             );
@@ -313,9 +303,9 @@ mod tests {
         #[test]
         fn degree_3() {
             let polygon_segments = 4;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
             assert_eq!(
-                de_boor(3, polygon_segments, &params).unwrap().derivatives[0],
+                de_boor(3, polygon_segments, &parameters).unwrap().derivatives[0],
                 dvector![0., 0., 0., 0., 0.375, 1., 1., 1., 1.]
             );
         }
@@ -323,12 +313,12 @@ mod tests {
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree(degree: usize) {
             let polygon_segments = degree;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];
             let tail = vec![1.0; degree + 1];
             assert_eq!(
-                de_boor(degree, polygon_segments, &params).unwrap().derivatives[0],
+                de_boor(degree, polygon_segments, &parameters).unwrap().derivatives[0],
                 VecD::from_vec([head, tail].concat())
             );
         }
@@ -336,14 +326,14 @@ mod tests {
         #[rstest(degree, internal_knot, case(1, 1. / 4.), case(2, 2. / 6.), case(3, 3. / 8.))]
         fn segments_eq_degree_plus_1(degree: usize, internal_knot: f64) {
             let polygon_segments = degree + 1;
-            let params = equally_spaced(polygon_segments);
+            let parameters = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];
             let internal = vec![internal_knot];
             let tail = vec![1.0; degree + 1];
 
             assert_eq!(
-                de_boor(degree, polygon_segments, &params).unwrap().derivatives[0],
+                de_boor(degree, polygon_segments, &parameters).unwrap().derivatives[0],
                 VecD::from_vec([head, internal, tail].concat())
             );
         }
