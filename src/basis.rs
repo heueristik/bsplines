@@ -18,14 +18,11 @@ doc = ::embed_doc_image::embed_image!("eq-basis-function-zero", "doc-images/equa
 
 use crate::types::VecD;
 
-/// Evaluates the `i`-th basis spline function of degree `p`
+/// Evaluates the `i`-th basis function of degree `p` at the parameter `u`
+/// by the Cox-de Boor-Mansfield recurrence — see the [module documentation][self].
 ///
-/// ## Arguments
-///
-/// - `i` the index with `i ∈ {0, 1, ..., n}`
-/// - `p` the spline degree
-/// - `k` the derivative order
-/// - `U` the knot vector
+/// The derivative order `k` and the number of polygon segments `n` close the
+/// last interval, so the last basis function covers `u = 1`.
 pub fn basis(knots: &VecD, i: usize, p: usize, k: usize, n: usize, u: f64) -> f64 {
     if p == 0 {
         if (knots[i] <= u && u < knots[i + 1]) || (i == n - k && u == knots[n + 1 - k]) {
@@ -48,8 +45,8 @@ pub fn basis(knots: &VecD, i: usize, p: usize, k: usize, n: usize, u: f64) -> f6
         let g = i + 1;
         let h = p - 1;
 
-        // The following equation is numerically more stable than
-        // `(1.0 - ((u - knots[g]) / (knots[g + h + 1] - knots[g]))) * self.evaluate(k, g, h, u)`
+        // This form is numerically more stable than the algebraically equal
+        // `(1.0 - (u - knots[g]) / (knots[g + h + 1] - knots[g])) * basis(knots, g, h, k, n, u)`.
         (knots[g + p] - u) / (knots[g + h + 1] - knots[g]) * basis(knots, g, h, k, n, u)
     };
 
@@ -69,7 +66,6 @@ mod tests {
         let p = 3;
         let knots = Knots::new(p, dvector![0., 0., 0., 0., 1. / 3., 2. / 3., 1., 1., 1., 1.]);
 
-        // Basis function i = 0
         let mut i = 0;
         assert_eq!(knots.evaluate(k, i, p, 0.0), 1.0);
         assert_eq!(knots.evaluate(k, i, p, 1. / 6.), 1. / 8.);
@@ -131,7 +127,6 @@ mod tests {
         let p = 4;
         let knots = Knots::new(p, dvector![0., 0., 0., 0., 0., 1. / 3., 2. / 3., 1., 1., 1., 1., 1.]);
 
-        // Basis function i = 0
         let mut i = 0;
         assert_eq!(knots.evaluate(k, i, p, 0.0), 1.0);
         assert_eq!(knots.evaluate(k, i, p, 1. / 6.), 1. / 8.);

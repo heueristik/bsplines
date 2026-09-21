@@ -17,8 +17,9 @@ use crate::{
     types::MatD,
 };
 
-/// Knot insertion algorithm by Boehm
-/// `u` the knot to be inserted. The value must be in `u ∈ (0, 1)`
+/// Inserts the knot `u` into the curve by Boehm's algorithm, keeping the curve shape unchanged.
+/// The parameter must lie in the domain interior (0, 1), and the multiplicity of `u`
+/// must not already exceed the degree.
 pub fn insert(c: &mut Curve, u: f64) -> Result<()> {
     if u <= 0.0 || u >= 1.0 {
         return Err(Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
@@ -38,11 +39,9 @@ pub fn insert(c: &mut Curve, u: f64) -> Result<()> {
 
     let l = c.knots.find_span(u, 0);
 
-    // Insert u into the knot vector
     let new_knots = old_knots.clone().insert_row(l + 1, u);
 
-    // Compute the new control points.
-    // Only the control points `l-p+1` to `l` change.
+    // Only the control points `l - p + 1` to `l` change.
     let control_point_count = c.points.count();
 
     let mut new_points = MatD::zeros(dim, control_point_count + 1);

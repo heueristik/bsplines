@@ -97,8 +97,7 @@ pub fn split_and_normalize(c: &Curve, u: f64, normalize_knot_vectors: (bool, boo
         };
 
         let right = {
-            let mut right_knots = VecD::zeros(knots.len() + 1 - (l + 1)); // length of knots - the elements that occur before the
-            // split idx
+            let mut right_knots = VecD::zeros(knots.len() + 1 - (l + 1));
             right_knots[0] = u;
             right_knots.tail_mut(knots.len() - (l + 1)).copy_from(&knots.tail(knots.len() - (l + 1)));
 

@@ -10,6 +10,7 @@ use crate::{
 pub fn interpolate(knots: &Knots, points: &DataPoints, params: &Parameters) -> MatD {
     let p = knots.degree();
     let m = points.polyline_segments();
+    // Interpolation uses one control point per data point.
     let n = m;
 
     let u_bar = params.vector();

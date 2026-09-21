@@ -204,7 +204,7 @@ impl Curve {
 
         assert_eq!(
             kmax_knots, kmax_points,
-            "The available derivatives of the knots and control points do not match up {} != {}.",
+            "the available derivatives of the knots and control points differ: {} != {}",
             kmax_knots, kmax_points
         );
 
@@ -220,8 +220,8 @@ impl Curve {
 
     /// Prepends another curve.
     ///
-    /// The end of another curve is attached to the beginning of this curve,
-    /// while maintaining continuity of all derivatives
+    /// The end of the other curve is attached to the beginning of this curve,
+    /// while maintaining continuity of all derivatives.
     /// This affects the first and last `p` control points of the two curves, respectively,
     /// and removes `p` control points in total.
     ///
@@ -264,7 +264,7 @@ impl Curve {
     /// Appends another curve.
     ///
     /// The end of this curve is attached to the beginning of the other curve,
-    /// while maintaining continuity of all derivatives
+    /// while maintaining continuity of all derivatives.
     /// This affects the first and last `p` control points of the two curves, respectively,
     /// and removes `p` control points in total.
     ///
@@ -304,28 +304,22 @@ impl Curve {
         Ok(self)
     }
 
-    /// Splits a curve into two at parameter `u`.
-    ///
-    /// # Arguments
-    /// * `u` - The parameter`u` that must lie in the interval `(0,1)`.
+    /// Splits the curve into two independent curves at the parameter `u`,
+    /// normalizing both knot vectors to the domain [0, 1].
+    /// The parameter must lie in the domain interior (0, 1).
     pub fn split(&self, u: f64) -> Result<(Self, Self)> {
         split(self, u)
     }
 
-    /// Inserts a knot into the curve at parameter `u`.
-    ///
-    /// # Arguments
-    /// * `u` - The parameter`u` that must lie in the interval `(0,1)`.
+    /// Inserts a knot at the parameter `u` without changing the curve shape.
+    /// The parameter must lie in the domain interior (0, 1).
     pub fn insert(&mut self, u: f64) -> Result<&mut Self> {
         self.insert_times(u, 1)?;
         Ok(self)
     }
 
-    /// Inserts a knot `x` times into the curve at parameter `u`.
-    ///
-    /// # Arguments
-    /// * `u` - The parameter`u` that must lie in the interval `(0,1)`.
-    /// * `x` - The number of insertions of parameter `u`.
+    /// Inserts a knot at the parameter `u` the given number of times.
+    /// The parameter must lie in the domain interior (0, 1).
     pub fn insert_times(&mut self, u: f64, x: usize) -> Result<&mut Self> {
         for _ in 0..x {
             insert(self, u)?;
@@ -338,10 +332,7 @@ impl Curve {
         self.points.derive(&self.knots);
     }
 
-    /// Returns the curve describing the `k`-th derivative of the current one.
-    /// # Arguments
-    ///
-    /// * `k` - The derivative
+    /// Returns the curve describing the `k`-th derivative of this curve.
     pub fn derivative_curve(&self, k: usize) -> Self {
         let knots = Knots::new(self.degree() - k, self.knots.vector_derivative(k).clone());
         let points = ControlPoints::new(self.points.matrix_derivative(k).clone());

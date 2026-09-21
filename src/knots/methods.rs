@@ -70,6 +70,7 @@ pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters
         knots[p + j] = parameter_sum / p as f64;
     }
 
+    // Set the tail clamp to one.
     for j in n + 1..knots.len() {
         knots[j] = 1.;
     }
@@ -101,17 +102,14 @@ pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) 
     let internal_knot_count = n - p;
     let internal_knot_spans = internal_knot_count + 1;
 
-    let d = (n + 1) as f64 / (internal_knot_spans) as f64; // eq. 9.68 in `Piegl1997`
+    let d = (n + 1) as f64 / (internal_knot_spans) as f64;
 
     let mut knots = VecD::zeros(p + n + 2);
 
     for j in 1..=internal_knot_count {
         let jd = j as f64 * d;
 
-        // Floor `j * d` into an non-negative integer
         let i = jd as usize;
-
-        // Calculate the remainder
         let alpha = jd - i as f64;
 
         knots[degree + j] = (1f64 - alpha) * u_bar[i - 1] + alpha * u_bar[i];
@@ -141,8 +139,7 @@ mod tests {
         #[test]
         fn degree_0_errors() {
             let degree = 0;
-            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
-
+            let polygon_segments = degree + 1;
             assert!(uniform(degree, polygon_segments).is_err());
         }
 
@@ -163,8 +160,7 @@ mod tests {
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree(degree: usize) {
-            let polygon_segments = degree; // data points and control points counts are chosen to be identical here
-
+            let polygon_segments = degree;
             let head = vec![0.0; degree + 1];
             let tail = vec![1.0; degree + 1];
 
@@ -176,8 +172,7 @@ mod tests {
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree_plus_1(degree: usize) {
-            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
-
+            let polygon_segments = degree + 1;
             let head = vec![0.0; degree + 1];
             let internal = vec![0.5];
             let tail = vec![1.0; degree + 1];
@@ -213,7 +208,7 @@ mod tests {
         #[test]
         fn degree_0_errors() {
             let degree = 0;
-            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree + 1;
             let params = equally_spaced(polygon_segments);
 
             assert!(averaging(degree, polygon_segments, &params).is_err());
@@ -221,7 +216,7 @@ mod tests {
 
         #[test]
         fn degree_1() {
-            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let polygon_segments = 4;
             let params = equally_spaced(polygon_segments);
             assert_eq!(
                 averaging(1, polygon_segments, &params).unwrap().derivatives[0],
@@ -231,7 +226,7 @@ mod tests {
 
         #[test]
         fn degree_2() {
-            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let polygon_segments = 4;
             let params = equally_spaced(polygon_segments);
             assert_eq!(
                 averaging(2, polygon_segments, &params).unwrap().derivatives[0],
@@ -241,7 +236,7 @@ mod tests {
 
         #[test]
         fn degree_3() {
-            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let polygon_segments = 4;
             let params = equally_spaced(polygon_segments);
             assert_eq!(
                 averaging(3, polygon_segments, &params).unwrap().derivatives[0],
@@ -251,7 +246,7 @@ mod tests {
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree(degree: usize) {
-            let polygon_segments = degree; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree;
             let params = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];
@@ -264,7 +259,7 @@ mod tests {
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree_plus_1(degree: usize) {
-            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree + 1;
             let params = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];
@@ -288,7 +283,7 @@ mod tests {
         #[test]
         fn degree_0_errors() {
             let degree = 0;
-            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree + 1;
             let params = equally_spaced(polygon_segments);
 
             assert!(de_boor(degree, polygon_segments, &params).is_err());
@@ -296,7 +291,7 @@ mod tests {
 
         #[test]
         fn degree_1() {
-            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let polygon_segments = 4;
             let params = equally_spaced(polygon_segments);
             assert_eq!(
                 de_boor(1, polygon_segments, &params).unwrap().derivatives[0],
@@ -306,7 +301,7 @@ mod tests {
 
         #[test]
         fn degree_2() {
-            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let polygon_segments = 4;
             let params = equally_spaced(polygon_segments);
             assert_relative_eq!(
                 de_boor(2, polygon_segments, &params).unwrap().derivatives[0],
@@ -317,7 +312,7 @@ mod tests {
 
         #[test]
         fn degree_3() {
-            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let polygon_segments = 4;
             let params = equally_spaced(polygon_segments);
             assert_eq!(
                 de_boor(3, polygon_segments, &params).unwrap().derivatives[0],
@@ -327,7 +322,7 @@ mod tests {
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree(degree: usize) {
-            let polygon_segments = degree; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree;
             let params = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];
@@ -340,7 +335,7 @@ mod tests {
 
         #[rstest(degree, internal_knot, case(1, 1. / 4.), case(2, 2. / 6.), case(3, 3. / 8.))]
         fn segments_eq_degree_plus_1(degree: usize, internal_knot: f64) {
-            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree + 1;
             let params = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];

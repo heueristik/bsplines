@@ -20,7 +20,7 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //!     - [knot insertion][manipulation::insert]
 //!     - [reversing][manipulation::reverse]
 //!     - [splitting][manipulation::split]
-//!     - [merging][manipulation::split]
+//!     - [merging][manipulation::merge]
 //!
 //! ## Example
 //! ```
