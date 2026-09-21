@@ -31,7 +31,7 @@ pub fn fit(
     let m = points.polyline_segments();
     let mut control_points = MatD::zeros(points.dimension(), n + 1);
 
-    // Set the first and last control point to the original data points
+    // Fix the first and last control point to the end data points.
     control_points.column_mut(0).copy_from(&points.get(0));
     control_points.column_mut(n).copy_from(&points.get(m));
 

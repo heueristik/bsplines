@@ -132,7 +132,7 @@ pub(crate) fn compute_svd(
     Ok(SVD::new(mat, true, true))
 }
 
-// finite difference matrix penalizing BSplines
+/// Returns one entry of the finite-difference operator matrix of order `kappa` — see `Eilers1996`.
 fn difference_operator(i: usize, j: usize, kappa: usize) -> isize {
     match kappa {
         1 => {
@@ -155,10 +155,10 @@ pub(crate) fn test_data_points(npoints: usize) -> DataPoints {
     let shift = (npoints - 1) as f64 * inc / 2.0;
     DataPoints::new(nalgebra::DMatrix::from_fn(2, npoints, |r, c| {
         if r == 0 {
-            // x coords
+            // x coordinates
             c as f64 * inc - shift
         } else {
-            // y coord
+            // y coordinates
             if c % 2 == 0 { 0.5 } else { -0.5 }
         }
     }))

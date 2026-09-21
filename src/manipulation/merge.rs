@@ -107,11 +107,9 @@ pub(crate) fn merge_with_constraints(a: &ConstrainedCurve, b: &ConstrainedCurve)
     let shifts = solve_linear_equation_system(a, b);
     let (s_shifted, t_shifted) = generate_shifted_control_point_vectors_of_spline1and2(a.curve, b.curve, &shifts);
 
-    // adjust and merge knot vectors
     let (v_adjusted, w_reversed, w_adjusted) = adjust_knots_of_both_splines(a.curve, b.curve);
     let merged_knots = create_merged_knot_vector(a.curve, b.curve, &v_adjusted, &w_adjusted);
 
-    // adjust control points
     let (s_adjusted, t_adjusted) = adjust_shifted_control_points_of_both_splines(
         a.curve,
         &s_shifted,
@@ -121,12 +119,12 @@ pub(crate) fn merge_with_constraints(a: &ConstrainedCurve, b: &ConstrainedCurve)
         &w_adjusted,
     );
 
-    // do actual merge
     let merged_points = generate_control_point_vector_of_merged_spline(a.curve, b.curve, &s_adjusted, &t_adjusted);
 
     Curve::new(Knots::new(p_a, merged_knots), ControlPoints::new(merged_points))
 }
 
+// The names of the block matrices (kv, kw, iv, jw, gv, hw, ipv, jppw) follow the notation in `Tai2003`.
 fn construct_n_mat(a: &ConstrainedCurve, b: &ConstrainedCurve) -> MatD {
     let p = a.curve.degree();
 
@@ -144,7 +142,6 @@ fn construct_n_mat(a: &ConstrainedCurve, b: &ConstrainedCurve) -> MatD {
     n_mat.view_mut((0, 2 * p), (p, p)).copy_from(&calculate_iv(a.curve));
     n_mat.view_mut((p, 2 * p), (p, p)).copy_from(&calculate_jw(b.curve));
 
-    // calculate block matrices for the constraints
     if n_constraints_a > 0 {
         n_mat.view_mut((3 * p, 0), (n_constraints_a, p)).copy_from(&calculate_gv(a));
         n_mat.view_mut((0, 3 * p), (p, n_constraints_a)).copy_from(&calculate_ipv(a));
@@ -398,10 +395,8 @@ fn adjust_knots_of_both_splines(a: &Curve, b: &Curve) -> (VecD, VecD, VecD) {
     let v0 = a.knots.vector();
     let w0 = b.knots.vector();
 
-    // Adjust left knots
     let v_adjusted = adjust_knots(p, v0, m, w0);
 
-    // Adjust right knots
     let v_reversed = reversed(v0);
     let w_reversed = reversed(w0);
     let w_adjusted_reversed = adjust_knots(p, &w_reversed, o, &v_reversed);
@@ -424,13 +419,12 @@ fn create_merged_knot_vector(a: &Curve, b: &Curve, v_adjusted: &VecD, w_adjusted
     let m = a.polygon_segments();
     let o = b.polygon_segments();
 
-    // construct the knot vector of the merged spline
     let mut merged_knots = VecD::zeros(m + 2 + o + 1);
 
     merged_knots.head_mut(m + 2).copy_from(&v_adjusted.head(m + 2));
     merged_knots.tail_mut(o + 1).copy_from(&w_adjusted.tail(o + 1));
 
-    // rescale the knot vector of the merged spline (u in [0,2]) to [0,1] by dividing through the last element
+    // The concatenated knot vector spans [0, 2]. Normalize it to [0, 1].
     merged_knots.div_assign(merged_knots[m + o + 2]);
 
     merged_knots
@@ -503,17 +497,12 @@ fn adjust_shifted_control_points_of_both_splines(
 
     let v0 = a.knots.vector();
 
-    // obtain adjusted, shifted control points of the second spline
     let s_adjusted = adjust_shifted_control_points(s_shifted, v0, v_adjusted, p, n, dim);
 
-    // reverse control points of the second spline
+    // The right curve is adjusted in its reversed orientation and then reversed back.
     let t_shifted_reversed = points::reversed(t_shifted);
-
-    // obtain adjusted, shifted control points of the reversed second spline
     let t_adjusted_reversed =
         adjust_shifted_control_points(&t_shifted_reversed, w_reversed, w_adjusted_reversed, p, n, dim);
-
-    // obtain adjusted, shifted control points of the second spline
     let t_adjusted = points::reversed(&t_adjusted_reversed);
 
     (s_adjusted, t_adjusted)
@@ -541,12 +530,8 @@ fn kronecker_delta(i: usize, j: usize) -> bool {
     i == j
 }
 
-/// `p` degree
-/// `i` index
-/// `i0` 0th order index
-/// `k` derivative order
-/// `u0` 0th order knot vector
-/// `p0` 0th order control point matrix
+/// Returns the factor that ties control point `i` of the `k`-th derivative curve
+/// to the zero-order control point `i0` — see `Tai2003`.
 fn prefactor(p: usize, i: usize, i0: usize, k: usize, p0: &MatD, u0: &VecD) -> f64 {
     let n = p0.ncols() - 1;
 

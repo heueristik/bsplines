@@ -191,13 +191,12 @@ impl ControlPoints {
     }
 
     /// Reverses the order of the points of all derivative orders.
-    /// Odd derivatives change their sign upon reversal.
+    /// The odd derivative matrices also change their sign.
     pub fn reverse(&mut self) -> &mut Self {
         for k in 0..=self.max_derivative {
             let matrix = self.matrix_derivative_mut(k);
             reverse(matrix);
 
-            // Odd derivatives change their sign upon reversal
             if k % 2 == 1 {
                 matrix.mul_assign(-1.0);
             }
@@ -259,5 +258,4 @@ mod tests {
             ]]
         );
     }
-
 }

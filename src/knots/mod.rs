@@ -184,8 +184,6 @@ impl Knots {
 
         self.derivatives.truncate(1);
         for k in 1..=p {
-            // obtain the `k`-th derivative knot vector from the previous `k-1`-th derivative knot vector segment
-            // by dropping the first and last segment
             let segment_of_previous_order_knot_vector =
                 self.derivatives[k - 1].segment(1, self.len(k - 1) - 2).clone_owned();
 
