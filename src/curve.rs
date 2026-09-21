@@ -151,10 +151,12 @@ impl Curve {
         &self.points
     }
 
+    /// Returns the degree p of the curve.
     pub fn degree(&self) -> usize {
         self.knots.degree()
     }
 
+    /// Returns the number of segments n of the control polygon.
     pub fn polygon_segments(&self) -> usize {
         self.points.polygon_segments()
     }
@@ -164,10 +166,21 @@ impl Curve {
         self.points.dimension()
     }
 
+    /// Evaluates the curve at the parameter `u`.
     pub fn evaluate(&self, u: f64) -> Result<VecD> {
         self.evaluate_derivative(u, 0)
     }
 
+    /// Evaluates the `k`-th derivative of the curve at the parameter `u`:
+    ///
+    /// C⁽ᵏ⁾(u) = Σᵢ Nᵢ,ₚ₋ₖ(u) · Pᵢ⁽ᵏ⁾
+    ///
+    /// with the basis functions N of degree p − k on the derivative knot vector
+    /// and the control points P of the derivative curve, summed over the local
+    /// polynomial segment.
+    ///
+    /// Derivative orders beyond the degree return the zero vector,
+    /// since all higher derivatives of a polynomial of degree p vanish.
     pub fn evaluate_derivative(&self, u: f64, k: usize) -> Result<VecD> {
         if !(0.0..=1.0).contains(&u) {
             return Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 });
@@ -188,6 +201,7 @@ impl Curve {
         Ok(value)
     }
 
+    /// Returns the highest derivative order for which knots and control points are available.
     pub fn max_derivative(&self) -> usize {
         let kmax_knots = self.knots.max_derivative();
         let kmax_points = self.points.max_derivative();

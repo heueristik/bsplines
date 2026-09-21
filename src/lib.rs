@@ -1,5 +1,4 @@
-//#![warn(missing_docs)]
-//#![warn(missing_doc_code_examples)]
+#![warn(missing_docs)]
 #![cfg_attr(feature = "doc-images",
 cfg_attr(all(),
 doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg"),
@@ -22,6 +21,29 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //!     - [reversing][manipulation::reverse]
 //!     - [splitting][manipulation::split]
 //!     - [merging][manipulation::split]
+//!
+//! ## Example
+//! ```
+//! use bsplines::{Curve, points::DataPoints};
+//! use nalgebra::dmatrix;
+//!
+//! # fn main() -> bsplines::Result<()> {
+//! // Five 2D data points, one column per point.
+//! let data = DataPoints::new(dmatrix![
+//!     -2.0,-1.0, 0.0, 1.0, 2.0; // x
+//!      0.5,-0.5, 1.5,-1.5, 0.5; // y
+//! ]);
+//!
+//! // Interpolate the data with a cubic curve and evaluate it.
+//! let curve = Curve::interpolate(&data, 3)?;
+//! let point = curve.evaluate(0.5)?;
+//! let velocity = curve.evaluate_derivative(0.5, 1)?;
+//!
+//! // Or approximate it with a penalized least-squares fit.
+//! let fitted = Curve::fit(&data, 3).loose_ends().penalized(0.5, 2).build()?;
+//! # Ok(())
+//! # }
+//! ```
 //!
 //! ## What are B-Splines?
 //!

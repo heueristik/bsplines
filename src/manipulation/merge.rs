@@ -30,26 +30,31 @@ use crate::{
     types::{MatD, VecD, VecHelpers},
 };
 
+/// The parameters at which points on a curve stay fixed during a merge.
 pub struct Constraints {
+    /// The constrained parameter values.
     pub params: Vec<f64>,
 }
 
 impl Constraints {
+    /// Returns the number of constrained points.
     pub fn count(&self) -> usize {
         self.params.len()
     }
 
+    /// Returns the number of segments between the constrained points — one less than their count.
     pub fn polyline_segments(&self) -> usize {
         self.count() - 1
     }
 }
 
+/// A curve paired with the constraints that hold during a merge.
 pub struct ConstrainedCurve<'a> {
     pub(crate) curve: &'a Curve,
     pub(crate) constraints: Constraints,
 }
 
-// Keeps the start of spline 1 fixed
+/// Merges two curves, keeping the start of the left curve fixed.
 pub fn merge_from(a: &Curve, b: &Curve) -> Result<Curve> {
     merge_with_constraints(
         &ConstrainedCurve { curve: a, constraints: Constraints { params: vec![1.] } },
@@ -57,7 +62,7 @@ pub fn merge_from(a: &Curve, b: &Curve) -> Result<Curve> {
     )
 }
 
-// Keeps the end of spline 2 fixed
+/// Merges two curves, keeping the end of the right curve fixed.
 pub fn merge_to(a: &Curve, b: &Curve) -> Result<Curve> {
     merge_with_constraints(
         &ConstrainedCurve { curve: a, constraints: Constraints { params: vec![] } },
@@ -65,6 +70,8 @@ pub fn merge_to(a: &Curve, b: &Curve) -> Result<Curve> {
     )
 }
 
+/// Merges two curves into one, attaching the end of the left curve to the start
+/// of the right one while maintaining continuity of all derivatives — see `Tai2003`.
 pub fn merge(a: &Curve, b: &Curve) -> Result<Curve> {
     merge_with_constraints(
         &ConstrainedCurve { curve: a, constraints: Constraints { params: vec![] } },
