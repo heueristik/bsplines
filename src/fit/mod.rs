@@ -1,12 +1,10 @@
 use nalgebra::{Dyn, SVD};
 
 use crate::{
-    curve::{
-        knots::{Knots, is_uniform},
-        parameters::Parameters,
-        points::DataPoints,
-    },
     error::{Error, Result},
+    knots::{Knots, is_uniform},
+    parameters::Parameters,
+    points::DataPoints,
     types::MatD,
 };
 

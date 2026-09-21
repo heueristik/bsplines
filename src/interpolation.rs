@@ -1,11 +1,9 @@
 use nalgebra::SVD;
 
 use crate::{
-    curve::{
-        knots::Knots,
-        parameters::Parameters,
-        points::{DataPoints, Points},
-    },
+    knots::Knots,
+    parameters::Parameters,
+    points::{DataPoints, Points},
     types::MatD,
 };
 
@@ -33,7 +31,7 @@ mod tests {
     use approx::assert_relative_eq;
     use nalgebra::dmatrix;
 
-    use crate::curve::{knots, knots::Method::Averaging, parameters, parameters::Method::ChordLength};
+    use crate::{knots, knots::KnotMethod::Averaging, parameters, parameters::ParameterMethod::ChordLength};
 
     use super::*;
 
@@ -47,7 +45,7 @@ mod tests {
         let params = parameters::generate(&points, ChordLength);
         let knots = knots::generate(1, points.polyline_segments(), &params, Averaging).unwrap();
 
-        assert_eq!(interpolate(&knots, &points, &params), points.matrix);
+        assert_eq!(interpolate(&knots, &points, &params), *points.matrix());
     }
 
     #[test]

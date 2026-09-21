@@ -4,22 +4,18 @@ use nalgebra::{dmatrix, dvector};
 use plotters::{prelude::*, style::full_palette::TEAL};
 
 use bsplines::{
-    curve::{
-        Curve,
-        generation::{
-            Generation::{Interpolation, LeastSquaresFit, Manual},
-            generate,
-        },
-        knots::Generation::Uniform,
-        points::{
-            ControlPoints, DataPoints, Points,
-            methods::fit::{Method::LooseEnds, Penalization},
-        },
+    Curve,
+    fit::{Method::LooseEnds, Penalization},
+    generation::{
+        Generation::{Interpolation, LeastSquaresFit, Manual},
+        generate,
     },
+    knots::KnotGeneration::Uniform,
     manipulation::{
         merge::{merge, merge_from, merge_to},
         split::split_and_normalize,
     },
+    points::{ControlPoints, DataPoints, Points},
 };
 
 use crate::visualization::Limits;

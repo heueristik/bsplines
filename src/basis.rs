@@ -61,7 +61,7 @@ mod tests {
     use approx::assert_relative_eq;
     use nalgebra::dvector;
 
-    use crate::curve::knots::Knots;
+    use crate::knots::Knots;
 
     #[test]
     fn basis_func_degree3() {

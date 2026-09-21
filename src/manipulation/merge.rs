@@ -21,14 +21,12 @@ use std::ops::{AddAssign, DivAssign, SubAssign};
 use nalgebra::SVD;
 
 use crate::{
-    curve,
-    curve::{
-        Curve,
-        basis::basis,
-        knots::{Knots, is_clamped, is_normalized, reversed},
-        points::{ControlPoints, Points},
-    },
+    Curve,
+    basis::basis,
     error::{Error, Result},
+    knots::{Knots, is_clamped, is_normalized, reversed},
+    points,
+    points::{ControlPoints, Points},
     types::{MatD, VecD, VecHelpers},
 };
 
@@ -513,14 +511,14 @@ fn adjust_shifted_control_points_of_both_splines(
     let s_adjusted = adjust_shifted_control_points(s_shifted, v0, v_adjusted, p, n, dim);
 
     // reverse control points of the second spline
-    let t_shifted_reversed = curve::points::reversed(t_shifted);
+    let t_shifted_reversed = points::reversed(t_shifted);
 
     // obtain adjusted, shifted control points of the reversed second spline
     let t_adjusted_reversed =
         adjust_shifted_control_points(&t_shifted_reversed, w_reversed, w_adjusted_reversed, p, n, dim);
 
     // obtain adjusted, shifted control points of the second spline
-    let t_adjusted = curve::points::reversed(&t_adjusted_reversed);
+    let t_adjusted = points::reversed(&t_adjusted_reversed);
 
     (s_adjusted, t_adjusted)
 }
@@ -574,10 +572,10 @@ fn prefactor(p: usize, i: usize, i0: usize, k: usize, p0: &MatD, u0: &VecD) -> f
 mod tests {
     use nalgebra::{dmatrix, dvector};
 
-    use crate::curve::{
+    use crate::{
         Curve,
         generation::{Generation::Manual, generate},
-        knots::Generation::Uniform,
+        knots::KnotGeneration::Uniform,
     };
 
     use super::*;
@@ -601,7 +599,7 @@ mod tests {
 
         use approx::assert_relative_eq;
 
-        use crate::curve::points;
+        use crate::points;
 
         use super::*;
 

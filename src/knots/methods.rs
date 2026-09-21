@@ -1,6 +1,7 @@
 use crate::{
-    curve::{knots::Knots, parameters::Parameters},
     error::{Error, Result},
+    knots::Knots,
+    parameters::Parameters,
     types::VecD,
 };
 
@@ -116,7 +117,7 @@ pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) 
 mod tests {
     use nalgebra::dvector;
 
-    use crate::curve::parameters::methods::equally_spaced;
+    use crate::parameters::methods::equally_spaced;
 
     use super::*;
 
@@ -212,7 +213,7 @@ mod tests {
     mod averaging {
         use rstest::rstest;
 
-        use crate::curve::knots::methods::averaging;
+        use crate::knots::methods::averaging;
 
         use super::*;
 
