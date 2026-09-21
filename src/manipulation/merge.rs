@@ -24,10 +24,10 @@ use thiserror::Error;
 use crate::{
     curve,
     curve::{
-        basis::basis,
-        knots::{is_clamped, is_normed, reversed, Knots},
-        points::{ControlPoints, Points},
         Curve, CurveError,
+        basis::basis,
+        knots::{Knots, is_clamped, is_normed, reversed},
+        points::{ControlPoints, Points},
     },
     manipulation::merge::MergeError::CurveGenerationFailure,
     types::{MatD, VecD, VecHelpers},
@@ -573,11 +573,7 @@ fn prefactor(p: usize, i: usize, i0: usize, k: usize, P0: &MatD, U0: &VecD) -> f
 
     if i <= n - k {
         if k == 0 {
-            if kronecker_delta(i, i0) {
-                1.
-            } else {
-                0.
-            }
+            if kronecker_delta(i, i0) { 1. } else { 0. }
         } else if U0[i + p + 1] == U0[i + k] {
             0.
         } else {
@@ -594,9 +590,9 @@ mod tests {
     use nalgebra::{dmatrix, dvector};
 
     use crate::curve::{
-        generation::{generate, Generation::Manual},
-        knots::Generation::Uniform,
         Curve,
+        generation::{Generation::Manual, generate},
+        knots::Generation::Uniform,
     };
 
     use super::*;

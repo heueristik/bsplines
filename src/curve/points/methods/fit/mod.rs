@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use crate::{
     curve::{
-        knots::{is_uniform, Knots},
+        knots::{Knots, is_uniform},
         parameters::Parameters,
         points::DataPoints,
     },
@@ -23,9 +23,7 @@ pub enum FitError {
     #[error("The penalization parameter `lambda = {lambda}` cannot be negative.")]
     NegativeLambda { lambda: f64 },
 
-    #[error(
-        "The number of data point segments m = {m} must be greater than the requested polynomial segments n = {n}"
-    )]
+    #[error("The number of data point segments m = {m} must be greater than the requested polynomial segments n = {n}")]
     RequestedPolynomialSegmentAndDataSegementMismatch { n: usize, m: usize },
 
     #[error(
@@ -33,7 +31,9 @@ pub enum FitError {
     )]
     RequestedPolynomialSegmentAndSplineDegreeMismatch { n: usize, p: usize },
 
-    #[error("The requested number of polynomial segments n = {n} must be larger than penalization offset kappa kappa = {kappa}")]
+    #[error(
+        "The requested number of polynomial segments n = {n} must be larger than penalization offset kappa kappa = {kappa}"
+    )]
     RequestedPolynomialSegmentAndPenalizationKappaMismatch { n: usize, kappa: usize },
 
     #[error("The number of data point segments m = {m} must be equal to the number of parameter segments mp = {mp}.")]
@@ -119,11 +119,7 @@ fn test_data_points(npoints: usize) -> DataPoints {
             c as f64 * inc - shift
         } else {
             // y coord
-            if c % 2 == 0 {
-                0.5
-            } else {
-                -0.5
-            }
+            if c % 2 == 0 { 0.5 } else { -0.5 }
         }
     }))
 }

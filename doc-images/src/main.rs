@@ -5,16 +5,16 @@ use plotters::{prelude::*, style::full_palette::TEAL};
 
 use bsplines::{
     curve::{
+        Curve,
         generation::{
-            generate,
             Generation::{Interpolation, LeastSquaresFit, Manual},
+            generate,
         },
         knots::Generation::Uniform,
         points::{
-            methods::fit::{Method::LooseEnds, Penalization},
             ControlPoints, DataPoints, Points,
+            methods::fit::{Method::LooseEnds, Penalization},
         },
-        Curve,
     },
     manipulation::{
         merge::{merge, merge_from, merge_to},

@@ -13,7 +13,7 @@ use std::ops::AddAssign;
 use thiserror::Error;
 
 use crate::{
-    curve::{knots::DomainKnotComparatorType, points::Points, Curve},
+    curve::{Curve, knots::DomainKnotComparatorType, points::Points},
     types::MatD,
 };
 
@@ -84,7 +84,7 @@ mod tests {
     use nalgebra::{dmatrix, dvector};
 
     use crate::curve::{
-        generation::{generate, Generation::Manual},
+        generation::{Generation::Manual, generate},
         knots::Generation::Uniform,
         points::ControlPoints,
     };

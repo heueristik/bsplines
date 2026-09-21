@@ -3,8 +3,8 @@ use crate::{
         knots::Knots,
         parameters::Parameters,
         points::{
-            methods::fit::{compute_svd, difference_operator, input_checks, FitError, Penalization},
             DataPoints, Points,
+            methods::fit::{FitError, Penalization, compute_svd, difference_operator, input_checks},
         },
     },
     types::MatD,
@@ -65,12 +65,11 @@ mod tests {
     use nalgebra::{dmatrix, dvector};
 
     use crate::curve::{
-        knots,
+        Curve, knots,
         knots::Method::{Averaging, Uniform},
         parameters,
         parameters::Method::{ChordLength, EquallySpaced},
-        points::{methods::fit::test_data_points, ControlPoints},
-        Curve,
+        points::{ControlPoints, methods::fit::test_data_points},
     };
 
     use super::*;

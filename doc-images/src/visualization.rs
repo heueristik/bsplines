@@ -2,8 +2,8 @@ use plotters::{backend::SVGBackend, chart::ChartContext, coord::types::RangedCoo
 use plotters_arrows::TriangleArrow;
 
 use bsplines::curve::{
-    points::{ControlPoints, DataPoints, Points},
     Curve,
+    points::{ControlPoints, DataPoints, Points},
 };
 
 use crate::PLOTS_DIR;

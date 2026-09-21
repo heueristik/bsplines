@@ -26,12 +26,11 @@ doc = ::embed_doc_image::embed_image!("fit-loose-half-penalized", "doc-images/pl
 //! | Curve of degree `p = 2` with `n = N-1`<br>segments approximating the data points.<br> | Curve of degree `p = 2` with `n= N/3`<br>segments approximating the data points.<br> | Curve of degree `p = 2` with `n= N/3`<br>segments approximating the data<br> points penalized with `λ = 1`, `κ = 2`. |
 
 use crate::curve::{
-    knots, parameters,
+    Curve, CurveError, knots, parameters,
     points::{
-        methods::{fit, fit::Penalization, interpolation},
         ControlPoints, DataPoints, Points,
+        methods::{fit, fit::Penalization, interpolation},
     },
-    Curve, CurveError,
 };
 
 #[derive()]
@@ -106,7 +105,7 @@ pub fn generate(generation: Generation) -> Result<Curve, CurveError> {
         Generation::Interpolation { degree, points } => {
             // TODO allow other methods + uniform
             let params = parameters::generate(points, parameters::Method::EquallySpaced); // TODO Piegl: ChordLength +
-                                                                                          // DeBoor
+            // DeBoor
             let knots = knots::generate(degree, points.segments(), &params, knots::Method::Uniform)?;
             let points = ControlPoints::new_with_capacity(
                 interpolation::interpolate(&knots, points, &params),

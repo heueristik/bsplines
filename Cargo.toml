@@ -5,7 +5,8 @@ version = "0.0.1-alpha.9"
 authors = [
     "Michael A. Heuer <decentralised.systems@gmail.com>",
 ]
-edition = "2021"
+edition = "2024"
+rust-version = "1.85"
 description = "N-dimensional B-spline curves and their derivatives built on top of nalgebra"
 keywords = ["b-spline", "spline", "curve", "derivatives", "nalgebra"]
 categories = [

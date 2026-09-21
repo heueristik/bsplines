@@ -24,12 +24,12 @@ use thiserror::Error;
 use crate::{
     curve::{
         knots::Knots,
-        points::{methods::fit::FitError, ControlPoints, Points},
+        points::{ControlPoints, Points, methods::fit::FitError},
     },
     manipulation::{
-        insert::{insert, InsertError},
-        merge::{merge, merge_with_constraints, ConstrainedCurve, Constraints},
-        split::{split, SplitError},
+        insert::{InsertError, insert},
+        merge::{ConstrainedCurve, Constraints, merge, merge_with_constraints},
+        split::{SplitError, split},
     },
     types::VecD,
 };
@@ -338,8 +338,8 @@ mod tests {
 
     use crate::curve::{
         generation::{
-            generate,
             Generation::{Interpolation, Manual},
+            generate,
         },
         knots::Generation::Uniform,
     };

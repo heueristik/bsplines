@@ -15,9 +15,9 @@ use thiserror::Error;
 
 use crate::{
     curve::{
-        knots::{normalize, DomainKnotComparatorType, Knots},
-        points::{ControlPoints, Points},
         Curve, CurveError,
+        knots::{DomainKnotComparatorType, Knots, normalize},
+        points::{ControlPoints, Points},
     },
     manipulation::insert::insert,
     types::{MatD, VecD, VecHelpers},
@@ -113,7 +113,7 @@ pub fn split_and_normalize(
 
         let right = {
             let mut U_right = VecD::zeros(U.len() + 1 - (l + 1)); // length of U - the elements that occur before the
-                                                                  // split idx
+            // split idx
             U_right[0] = u;
             U_right.tail_mut(U.len() - (l + 1)).copy_from(&U.tail(U.len() - (l + 1)));
 
@@ -136,7 +136,7 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::curve::{
-        generation::{generate, Generation::Manual},
+        generation::{Generation::Manual, generate},
         knots::Generation::Uniform,
     };
 

@@ -1,5 +1,5 @@
 use crate::{
-    curve::{knots::Knots, parameters::Parameters, CurveError},
+    curve::{CurveError, knots::Knots, parameters::Parameters},
     types::VecD,
 };
 
