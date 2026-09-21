@@ -20,15 +20,15 @@ pub fn fit(
 ) -> Result<MatD, FitError> {
     input_checks(knots, points, params, &penalization)?;
 
-    let Q = generate_qvectors(knots, points, params);
-    let Qmat = calculate_constant_terms_matrix(knots, points, params, &Q);
-    let Nmat = calculate_coefficient_matrix(knots, points, params);
+    let q = generate_qvectors(knots, points, params);
+    let q_mat = calculate_constant_terms_matrix(knots, points, params, &q);
+    let n_mat = calculate_coefficient_matrix(knots, points, params);
 
-    let svd = compute_svd(knots, &Nmat, &penalization, Box::new(calculate_finite_difference_matrix))?;
-    let internal_control_points = svd.solve(&Qmat.transpose(), f64::EPSILON.sqrt()).unwrap().transpose();
+    let svd = compute_svd(knots, &n_mat, &penalization, Box::new(calculate_finite_difference_matrix))?;
+    let internal_control_points = svd.solve(&q_mat.transpose(), f64::EPSILON.sqrt()).unwrap().transpose();
 
-    let n = knots.segments();
-    let m = points.segments();
+    let n = knots.polygon_segments();
+    let m = points.polyline_segments();
     let mut control_points = MatD::zeros(points.dimension(), n + 1);
 
     // Set the first and last control point to the original data points
@@ -45,74 +45,69 @@ pub fn fit(
 
 fn generate_qvectors(knots: &Knots, points: &DataPoints, params: &Parameters) -> MatD {
     let p = knots.degree();
-    let n = knots.segments();
-    let m = points.segments();
+    let n = knots.polygon_segments();
+    let m = points.polyline_segments();
     let dim = points.dimension();
 
-    let mut Q = MatD::zeros(dim, m + 1);
+    let mut q = MatD::zeros(dim, m + 1);
 
-    let U_bar = params.vector();
+    let u_bar = params.vector();
 
     for g in 1..=m - 1 {
-        Q.column_mut(g).copy_from(&points.get(g));
-        let u = U_bar[g];
+        q.column_mut(g).copy_from(&points.get(g));
+        let u = u_bar[g];
 
-        Q.column_mut(g).sub_assign(knots.evaluate(0, 0, p, u) * points.get(0));
-        Q.column_mut(g).sub_assign(knots.evaluate(0, n, p, u) * points.get(m));
+        q.column_mut(g).sub_assign(knots.evaluate(0, 0, p, u) * points.get(0));
+        q.column_mut(g).sub_assign(knots.evaluate(0, n, p, u) * points.get(m));
     }
 
-    Q
+    q
 }
 
-fn calculate_constant_terms_matrix(knots: &Knots, points: &DataPoints, params: &Parameters, Q: &MatD) -> MatD {
+fn calculate_constant_terms_matrix(knots: &Knots, points: &DataPoints, params: &Parameters, q: &MatD) -> MatD {
     let p = knots.degree();
-    let n = knots.segments(); //settings.intended_control_points_count - 1;
-    let m = points.segments();
+    let n = knots.polygon_segments(); //settings.intended_control_points_count - 1;
+    let m = points.polyline_segments();
     let dim = points.dimension();
 
-    let U_bar = params.vector();
+    let u_bar = params.vector();
 
-    let mut Qmat = MatD::zeros(dim, n - 1);
+    let mut q_mat = MatD::zeros(dim, n - 1);
 
     let mut accum = VecD::zeros(dim);
     for i in 1..=n - 1 {
         accum *= 0.0;
 
         for g in 1..=m - 1 {
-            let u = U_bar[g];
-            accum += knots.evaluate(0, i, p, u) * Q.column(g);
+            let u = u_bar[g];
+            accum += knots.evaluate(0, i, p, u) * q.column(g);
         }
-        Qmat.column_mut(i - 1).copy_from(&accum);
+        q_mat.column_mut(i - 1).copy_from(&accum);
     }
 
-    Qmat
+    q_mat
 }
 
 fn calculate_coefficient_matrix(knots: &Knots, points: &DataPoints, params: &Parameters) -> MatD {
     let p = knots.degree();
-    let n = knots.segments();
-    let m = points.segments();
+    let n = knots.polygon_segments();
+    let m = points.polyline_segments();
 
-    let U_bar = params.vector();
+    let u_bar = params.vector();
 
-    let mut Nmat = MatD::zeros(m - 1, n - 1);
+    let mut n_mat = MatD::zeros(m - 1, n - 1);
     for g in 1..=m - 1 {
-        let u = U_bar[g];
+        let u = u_bar[g];
         for i in 1..=n - 1 {
-            Nmat[(g - 1, i - 1)] = knots.evaluate(0, i, p, u);
+            n_mat[(g - 1, i - 1)] = knots.evaluate(0, i, p, u);
         }
     }
-    Nmat
+    n_mat
 }
 
 fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> MatD {
-    let n = knots.segments(); //settings.intended_control_points_count - 1;
-    assert!(
-        kappa <= n - 2,
-        "The parameter kappa = {} must be greater than the number of spline segments n - 2 = {}",
-        kappa,
-        n - 2
-    );
+    let n = knots.polygon_segments(); //settings.intended_control_points_count - 1;
+    assert!(kappa <= n - 2, "the difference order kappa = {} must not exceed n - 2 = {}", kappa, n - 2);
 
     let mut delta_mat = MatD::zeros(n - 1 - kappa, n - 1);
 
@@ -172,7 +167,7 @@ mod tests {
         ]);
 
         let params = parameters::generate(&points, EquallySpaced);
-        let knots = knots::generate(1, points.segments(), &params, Uniform).unwrap();
+        let knots = knots::generate(1, points.polyline_segments(), &params, Uniform).unwrap();
         assert_eq!(
             crate::curve::points::methods::fit::loose::fit(&knots, &points, &params, None).unwrap(),
             *points.matrix()
@@ -187,7 +182,7 @@ mod tests {
         ]);
 
         let params = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(1, points.segments(), &params, Averaging).unwrap();
+        let knots = knots::generate(1, points.polyline_segments(), &params, Averaging).unwrap();
         assert_relative_eq!(
             fit(&knots, &points, &params, Some(Penalization { lambda: 0.5, kappa: 2 })).unwrap(),
             points.matrix(),
@@ -200,7 +195,7 @@ mod tests {
         let p = 1;
         let data_points = test_data_points(10);
 
-        let n = data_points.segments();
+        let n = data_points.polyline_segments();
         let params = parameters::generate(&data_points, EquallySpaced);
         let knots = knots::generate(p, n, &params, Uniform).unwrap();
 
@@ -217,7 +212,7 @@ mod tests {
         let data_points = test_data_points(10);
 
         let params = parameters::generate(&data_points, EquallySpaced);
-        let knots = knots::generate(p, data_points.segments(), &params, Uniform).unwrap();
+        let knots = knots::generate(p, data_points.polyline_segments(), &params, Uniform).unwrap();
         let points = fit(&knots, &data_points, &params, Some(Penalization { lambda: 1.0, kappa: 2 })).unwrap();
         let c = Curve::new(knots, ControlPoints::new(points)).unwrap();
 

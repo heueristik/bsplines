@@ -20,16 +20,17 @@ use thiserror::Error;
 
 use crate::{
     curve::{CurveError, basis, parameters, parameters::Parameters},
-    types::{KnotVectorDerivatives, VecD, VecDView, VecHelpers},
+    types::{VecD, VecDView, VecHelpers},
 };
 
 pub mod methods;
 
 #[derive(Debug, Clone)]
 pub struct Knots {
-    pub(crate) Uk: KnotVectorDerivatives,
-    pub(crate) p: usize,
-    pub(crate) k_max: usize,
+    /// The knot vectors of the curve and of its derivatives, indexed by derivative order.
+    pub(crate) derivatives: Vec<VecD>,
+    pub(crate) degree: usize,
+    pub(crate) max_derivative: usize,
 }
 
 pub enum DomainKnotComparatorType {
@@ -60,67 +61,68 @@ pub enum KnotError {
     //InvalidMultiplicity { u: f64, multiplicity: usize },
 }
 
-pub fn generate(degree: usize, segments: usize, params: &Parameters, method: Method) -> Result<Knots, CurveError> {
+pub fn generate(
+    degree: usize,
+    polygon_segments: usize,
+    params: &Parameters,
+    method: Method,
+) -> Result<Knots, CurveError> {
     match method {
-        Method::Uniform => methods::uniform(degree, segments),
-        Method::DeBoor => methods::de_boor(degree, segments, params),
-        Method::Averaging => methods::averaging(degree, segments, params),
+        Method::Uniform => methods::uniform(degree, polygon_segments),
+        Method::DeBoor => methods::de_boor(degree, polygon_segments, params),
+        Method::Averaging => methods::averaging(degree, polygon_segments, params),
     }
 }
 
 impl Knots {
     // generates params automatically, if none are provided.
     pub fn new(degree: usize, knots: VecD) -> Self {
-        let mut Uk: Vec<VecD> = Vec::with_capacity(degree + 1);
-        Uk.push(knots);
+        let mut derivatives: Vec<VecD> = Vec::with_capacity(degree + 1);
+        derivatives.push(knots);
 
         // TODO Add multiplicity check
 
-        let mut knots = Knots { Uk, p: degree, k_max: 0 };
+        let mut knots = Knots { derivatives, degree, max_derivative: 0 };
         knots.derive();
         knots
     }
 
     pub fn vector(&self) -> &VecD {
-        &self.Uk[0]
+        &self.derivatives[0]
     }
 
     pub fn vector_mut(&mut self) -> &mut VecD {
-        &mut self.Uk[0]
+        &mut self.derivatives[0]
     }
 
     /// # Arguments
     /// * `k` - The `k`-th derivative knot vector.
     pub fn vector_derivative(&self, derivative: usize) -> &VecD {
-        &self.Uk[derivative]
+        &self.derivatives[derivative]
     }
 
     pub fn vector_derivative_mut(&mut self, derivative: usize) -> &mut VecD {
-        &mut self.Uk[derivative]
+        &mut self.derivatives[derivative]
     }
 
     pub fn degree(&self) -> usize {
-        self.p
+        self.degree
     }
 
-    pub fn segments(&self) -> usize {
-        self.segments_derivative(0)
-    }
-
-    pub fn segments_derivative(&self, k: usize) -> usize {
-        self.Uk[k].len() - (self.p + 2 - 2 * k)
+    pub fn polygon_segments(&self) -> usize {
+        self.derivatives[0].len() - (self.degree + 2)
     }
 
     pub fn len(&self, k: usize) -> usize {
-        self.Uk[k].len()
+        self.derivatives[k].len()
     }
 
     pub fn internal_count(&self) -> usize {
-        self.segments() - self.p
+        self.polygon_segments() - self.degree
     }
 
     pub fn internal(&self) -> VecDView<'_> {
-        self.Uk[0].segment(self.p + 1, self.internal_count())
+        self.derivatives[0].segment(self.degree + 1, self.internal_count())
     }
 
     pub fn internal_knot(&self, i: usize) -> f64 {
@@ -128,7 +130,7 @@ impl Knots {
     }
 
     pub fn domain_count(&self) -> usize {
-        self.segments() - self.p + 2
+        self.polygon_segments() - self.degree + 2
     }
 
     pub fn domain(&self) -> VecDView<'_> {
@@ -136,7 +138,7 @@ impl Knots {
     }
 
     pub fn domain_derivative(&self, k: usize) -> VecDView<'_> {
-        self.Uk[k].segment(self.p - k, self.domain_count())
+        self.derivatives[k].segment(self.degree - k, self.domain_count())
     }
 
     pub fn domain_knot(&self, i: usize) -> f64 {
@@ -148,115 +150,87 @@ impl Knots {
     }
 
     pub(crate) fn reverse(&mut self) -> &mut Self {
-        for knots in self.Uk.iter_mut() {
+        for knots in self.derivatives.iter_mut() {
             reverse(knots);
         }
         self
     }
 
     pub fn normalize(&mut self) -> &mut Self {
-        for knots in self.Uk.iter_mut() {
+        for knots in self.derivatives.iter_mut() {
             normalize(knots);
         }
         self
     }
 
     pub fn rescale(&mut self, old_lim: (f64, f64), new_lim: (f64, f64)) {
-        for knots in self.Uk.iter_mut() {
+        for knots in self.derivatives.iter_mut() {
             rescale(knots, old_lim, new_lim);
         }
     }
 
     pub fn max_derivative(&self) -> usize {
-        self.k_max
+        self.max_derivative
     }
 
     pub fn derive(&mut self) {
-        let p = self.p;
+        let p = self.degree;
 
-        self.Uk.truncate(1);
+        self.derivatives.truncate(1);
         for k in 1..=p {
             // obtain the `k`-th derivative knot vector from the previous `k-1`-th derivative knot vector segment
             // by dropping the first and last segment
-            let segment_of_previous_order_knot_vector = self.Uk[k - 1].segment(1, self.len(k - 1) - 2).clone_owned();
+            let segment_of_previous_order_knot_vector =
+                self.derivatives[k - 1].segment(1, self.len(k - 1) - 2).clone_owned();
 
-            self.Uk.push(segment_of_previous_order_knot_vector);
+            self.derivatives.push(segment_of_previous_order_knot_vector);
         }
-        self.k_max = p;
-    }
-
-    /// Returns the index `i` of the knot on the domain interval
-    /// `[u_{p-k}^{(k)}, u_{n+1-k}^{(k)})`,
-    /// being less than or equal to `u`.
-    fn find_index(&self, u: f64, k: usize) -> Option<usize> {
-        let Uk = self.vector_derivative(k);
-        let pk = self.degree() - k;
-
-        let first = pk;
-
-        if u < Uk[first] {
-            return None;
-        }
-
-        let last = Uk.len() - pk - 1;
-        let mut low = first;
-        let mut high = last;
-
-        while low < high {
-            let mid = high - (high - low) / 2;
-
-            if Uk[mid] > u {
-                high = mid - 1;
-            } else {
-                low = mid;
-            }
-        }
-        Some(high)
+        self.max_derivative = p;
     }
 
     /// Returns the index `i` of the knot on the domain interval
     /// `[u_{p-k}^{(k)}, u_{n+1-k}^{(k)}]`,
     /// being lower, equal, or higher than `u`.
     pub fn find_idx(&self, u: f64, k: usize, comparator: DomainKnotComparatorType) -> usize {
-        let Uk = self.vector_derivative(k);
+        let knots = self.vector_derivative(k);
         let pk = self.degree() - k;
         match comparator {
             DomainKnotComparatorType::Left => {
-                let lim = self.segments() + 1 - k;
+                let lim = self.polygon_segments() + 1 - k;
                 let mut i = pk;
 
-                while u > Uk[i + 1] && i + 1 < lim {
+                while u > knots[i + 1] && i + 1 < lim {
                     i += 1;
                 }
                 i
             }
             DomainKnotComparatorType::LeftOrEqual => {
-                let lim = self.segments() + 1 - k;
+                let lim = self.polygon_segments() + 1 - k;
                 let mut i = pk;
 
-                while u >= Uk[i + 1] && i + 1 < lim {
+                while u >= knots[i + 1] && i + 1 < lim {
                     i += 1;
-                    if Uk[i + 1] == Uk[i] {
+                    if knots[i + 1] == knots[i] {
                         break;
                     }
                 }
                 i
             }
             DomainKnotComparatorType::RightOrEqual => {
-                let mut i = Uk.len() - 1 - pk;
+                let mut i = knots.len() - 1 - pk;
 
-                while u <= Uk[i - 1] && i > pk {
+                while u <= knots[i - 1] && i > pk {
                     i -= 1;
-                    if Uk[i - 1] == Uk[i] {
+                    if knots[i - 1] == knots[i] {
                         break;
                     }
                 }
                 i
             }
             DomainKnotComparatorType::Right => {
-                let mut i = Uk.len() - 1 - pk;
+                let mut i = knots.len() - 1 - pk;
 
-                while u < Uk[i - 1] && i - 1 > pk {
+                while u < knots[i - 1] && i - 1 > pk {
                     i -= 1;
                 }
                 i
@@ -266,39 +240,35 @@ impl Knots {
 
     /// `p` the degree of this basis function of the kth degree spline - not of the 0th degree spline
     pub fn evaluate(&self, k: usize, i: usize, p: usize, u: f64) -> f64 {
-        let Uk = &self.Uk[k];
-        let n = self.segments();
+        let knots = &self.derivatives[k];
+        let n = self.polygon_segments();
         let pk = p - k;
 
-        basis::basis(Uk, i, pk, k, n, u)
+        basis::basis(knots, i, pk, k, n, u)
     }
 }
 
-fn is_valid(knots: Knots) -> bool {
-    knots.segments() == knots.len(0) - (knots.degree() + 2)
-}
-
 pub fn is_clamped(knots: &Knots) -> bool {
-    let U0 = knots.vector();
-    let clamp_size = knots.p + 1;
+    let u0 = knots.vector();
+    let clamp_size = knots.degree + 1;
 
-    let is_head_clamped = U0.iter().take(clamp_size).all(|&u| u == 0.0);
-    let is_tail_clamped = U0.iter().rev().take(clamp_size).all(|&u| u == 1.0);
+    let is_head_clamped = u0.iter().take(clamp_size).all(|&u| u == 0.0);
+    let is_tail_clamped = u0.iter().rev().take(clamp_size).all(|&u| u == 1.0);
 
     is_head_clamped && is_tail_clamped
 }
 
-pub fn is_normed(knots: &Knots) -> bool {
-    let U0 = knots.vector();
+pub fn is_normalized(knots: &Knots) -> bool {
+    let u0 = knots.vector();
 
-    let is_min_zero = U0.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
-    let is_max_unity = U0.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
+    let is_min_zero = u0.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
+    let is_max_unity = u0.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
 
     is_min_zero && is_max_unity
 }
 
 pub fn is_sorted(knots: &Knots) -> bool {
-    let mut it = knots.Uk[0].iter();
+    let mut it = knots.derivatives[0].iter();
     match it.next() {
         None => true,
         Some(first) => it
@@ -312,12 +282,12 @@ pub fn is_sorted(knots: &Knots) -> bool {
 }
 
 pub fn is_uniform(knots: &Knots) -> Result<bool, CurveError> {
-    let U0 = knots.vector();
+    let u0 = knots.vector();
 
-    let expected = methods::uniform(knots.degree(), knots.segments())?;
+    let expected = methods::uniform(knots.degree(), knots.polygon_segments())?;
 
-    Ok(U0.eq(expected.vector()))
-    // U0.relative_eq(expected.vector(None), NUMERICAL_PRECISION, 0.0) // TODO test
+    Ok(u0.eq(expected.vector()))
+    // u0.relative_eq(expected.vector(None), NUMERICAL_PRECISION, 0.0) // TODO test
 }
 
 pub(crate) fn reverse(knots: &mut VecD) {
@@ -350,21 +320,6 @@ pub fn normalized(knots: &mut VecD) -> VecD {
     copy
 }
 
-fn rescaled_knot(mut knot: f64, old_lim: (f64, f64), new_lim: (f64, f64)) -> f64 {
-    knot -= old_lim.0;
-    knot /= old_lim.1 - old_lim.0;
-    knot *= new_lim.1 - new_lim.0;
-    knot += new_lim.0;
-
-    knot
-}
-
-fn rescaled(knots: &VecD, old_lim: (f64, f64), new_lim: (f64, f64)) -> VecD {
-    let mut copy = knots.clone();
-    rescale(&mut copy, old_lim, new_lim);
-    copy
-}
-
 fn rescale(knots: &mut VecD, old_lim: (f64, f64), new_lim: (f64, f64)) {
     let n = knots.len();
     *knots -= VecD::repeat(n, old_lim.0);
@@ -388,7 +343,7 @@ mod tests {
 
     #[rstest(degree, case(1), case(2), case(3))]
     fn segments(degree: usize) {
-        assert_eq!(knots_example(degree).segments(), SEGMENTS);
+        assert_eq!(knots_example(degree).polygon_segments(), SEGMENTS);
     }
 
     #[rstest(degree, expected, case(1, 3), case(2, 2), case(3, 1))]
@@ -452,15 +407,15 @@ mod tests {
         let degree = 3;
         let knots = methods::uniform(degree, SEGMENTS).unwrap();
 
-        let U0 = dvector![0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0];
-        let U1 = dvector![0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0];
-        let U2 = dvector![0.0, 0.0, 0.5, 1.0, 1.0];
-        let U3 = dvector![0.0, 0.5, 1.0];
+        let u0 = dvector![0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0];
+        let u1 = dvector![0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0];
+        let u2 = dvector![0.0, 0.0, 0.5, 1.0, 1.0];
+        let u3 = dvector![0.0, 0.5, 1.0];
 
-        assert_eq!(knots.vector_derivative(0), &U0);
-        assert_eq!(knots.vector_derivative(1), &U1);
-        assert_eq!(knots.vector_derivative(2), &U2);
-        assert_eq!(knots.vector_derivative(3), &U3);
+        assert_eq!(knots.vector_derivative(0), &u0);
+        assert_eq!(knots.vector_derivative(1), &u1);
+        assert_eq!(knots.vector_derivative(2), &u2);
+        assert_eq!(knots.vector_derivative(3), &u3);
     }
 
     #[test]
@@ -492,8 +447,8 @@ mod tests {
 
     #[test]
     fn is_normed_test() {
-        assert!(is_normed(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
-        assert!(!is_normed(&Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0])));
+        assert!(is_normalized(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
+        assert!(!is_normalized(&Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0])));
     }
 
     #[test]
@@ -510,19 +465,6 @@ mod tests {
     #[rstest(u, expected, case(0.24, 1), case(0.25, 2), case(0.26, 2), case(0.74, 3), case(0.75, 4), case(0.76, 4))]
     fn test_find_idx_of_left_or_equal_domain_knot(u: f64, expected: usize) {
         assert_eq!(knots_example(1).find_idx(u, 0, DomainKnotComparatorType::LeftOrEqual), expected);
-    }
-
-    #[rstest(u, expected, case(0.24, 1), case(0.25, 2), case(0.26, 2), case(0.74, 3), case(0.75, 4), case(0.76, 4))]
-    fn test_find_idx_of_left_or_equal_domain_knot_bisection(u: f64, expected: usize) {
-        assert_eq!(knots_example(1).find_index(u, 0).unwrap(), expected);
-    }
-
-    #[test]
-    fn test_find_idx_of_left_or_equal_domain_knot_bisection_limits() {
-        assert_eq!(knots_example(1).find_index(-0.1, 0), None);
-        assert_eq!(knots_example(1).find_index(0.0, 0), Some(1));
-        assert_eq!(knots_example(1).find_index(1.0, 0), Some(5));
-        assert_eq!(knots_example(1).find_index(1.2, 0), Some(5));
     }
 
     #[rstest(u, expected, case(0.24, 2), case(0.25, 2), case(0.26, 3), case(0.74, 4), case(0.75, 4), case(0.76, 5))]

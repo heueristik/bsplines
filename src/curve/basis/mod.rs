@@ -26,31 +26,31 @@ use crate::types::VecD;
 /// - `p` the spline degree
 /// - `k` the derivative order
 /// - `U` the knot vector
-pub fn basis(Uk: &VecD, i: usize, p: usize, k: usize, n: usize, u: f64) -> f64 {
+pub fn basis(knots: &VecD, i: usize, p: usize, k: usize, n: usize, u: f64) -> f64 {
     if p == 0 {
-        if (Uk[i] <= u && u < Uk[i + 1]) || (i == n - k && u == Uk[n + 1 - k]) {
+        if (knots[i] <= u && u < knots[i + 1]) || (i == n - k && u == knots[n + 1 - k]) {
             return 1.0;
         }
         return 0.0;
     }
 
-    let summand1 = if Uk[i + p] == Uk[i] {
+    let summand1 = if knots[i + p] == knots[i] {
         0.0
     } else {
         let g = i;
         let h = p - 1;
-        (u - Uk[g]) / (Uk[g + h + 1] - Uk[g]) * basis(Uk, i, h, k, n, u)
+        (u - knots[g]) / (knots[g + h + 1] - knots[g]) * basis(knots, i, h, k, n, u)
     };
 
-    let summand2 = if Uk[i + 1 + p] == Uk[i + 1] {
+    let summand2 = if knots[i + 1 + p] == knots[i + 1] {
         0.0
     } else {
         let g = i + 1;
         let h = p - 1;
 
         // The following equation is numerically more stable than
-        // `(1.0 - ((u - Uk[g]) / (Uk[g + h + 1] - Uk[g]))) * self.evaluate(k, g, h, u)`
-        (Uk[g + p] - u) / (Uk[g + h + 1] - Uk[g]) * basis(Uk, g, h, k, n, u)
+        // `(1.0 - ((u - knots[g]) / (knots[g + h + 1] - knots[g]))) * self.evaluate(k, g, h, u)`
+        (knots[g + p] - u) / (knots[g + h + 1] - knots[g]) * basis(knots, g, h, k, n, u)
     };
 
     summand1 + summand2
@@ -62,8 +62,6 @@ mod tests {
     use nalgebra::dvector;
 
     use crate::curve::knots::Knots;
-
-    const SEGMENTS: usize = 4;
 
     #[test]
     fn basis_func_degree3() {

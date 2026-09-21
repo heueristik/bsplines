@@ -28,19 +28,16 @@ mod visualization;
 
 const PLOTS_DIR: &str = "doc-images/plots/";
 
-const RED_50: RGBAColor = RGBAColor(255, 0, 0, 0.5);
 const RED_100: RGBAColor = RGBAColor(255, 0, 0, 1.0);
-const BLUE_50: RGBAColor = RGBAColor(0, 0, 255, 0.5);
 const BLUE_100: RGBAColor = RGBAColor(0, 0, 255, 1.0);
 
-const PURPLE_50: RGBAColor = RGBAColor(200, 0, 200, 0.5);
 const PURPLE_100: RGBAColor = RGBAColor(200, 0, 200, 1.0);
 
 fn limits() -> Limits {
     Limits { min: vec![-3.0, -3.0], max: vec![3.0, 3.0] }
 }
 
-fn scatteredDataPoints() -> DataPoints {
+fn scattered_data_points() -> DataPoints {
     DataPoints::new(dmatrix![
         -2.50,-2.45,-2.15,-1.70,-1.50,-1.35,-1.20, 0.05, 0.20, 0.55, 0.65, 1.00, 1.20, 1.50, 1.75, 2.00, 2.15, 2.50;
         -2.55,-2.10,-2.45,-2.60,-2.15,-2.15,-1.85,-1.20,-0.70,-0.90,-0.20, 2.00, 0.95, 1.40,-0.70,-1.90,-1.70,-2.15;
@@ -61,11 +58,11 @@ fn example_spline(p: usize) -> Curve {
 
 fn fit_plots() {
     let p = 2;
-    let dp = scatteredDataPoints();
+    let dp = scattered_data_points();
     let bs_max = generate(LeastSquaresFit {
         degree: p,
         points: &dp,
-        intended_segments: dp.segments(),
+        intended_polygon_segments: dp.polyline_segments(),
         method: LooseEnds,
         penalization: None,
     })
@@ -74,7 +71,7 @@ fn fit_plots() {
     let bs_half = generate(LeastSquaresFit {
         degree: p,
         points: &dp,
-        intended_segments: dp.count() / 3,
+        intended_polygon_segments: dp.count() / 3,
         method: LooseEnds,
         penalization: None,
     })
@@ -83,7 +80,7 @@ fn fit_plots() {
     let bs_half_penalized = generate(LeastSquaresFit {
         degree: p,
         points: &dp,
-        intended_segments: dp.count() / 3,
+        intended_polygon_segments: dp.count() / 3,
         method: LooseEnds,
         penalization: Some(Penalization { lambda: 0.5, kappa: 2 }),
     })
@@ -101,14 +98,14 @@ fn fit_plots() {
 }
 
 fn interpolation_plot() {
-    let dp = scatteredDataPoints();
+    let dp = scattered_data_points();
     let c = generate(Interpolation { degree: 2, points: &dp }).unwrap();
 
     visualization::generate_2d_plot("generation/interpolation.svg", vec![(&c, RED_100)], &limits(), Some(&dp));
 }
 
 fn manual_plot() {
-    let dp = scatteredDataPoints();
+    let dp = scattered_data_points();
     let c = generate(Manual { degree: 2, knots: Uniform, points: ControlPoints::new(dp.matrix().clone()) }).unwrap();
     visualization::generate_2d_plot("generation/manual.svg", vec![(&c, RED_100)], &limits(), Some(&dp));
 }
@@ -125,9 +122,9 @@ fn derivatives_plot() {
 
     let lim = Limits { min: vec![-4.4], max: vec![9.0] };
 
-    let bs_k1 = bs_k0.get_derivative_curve(1);
-    let bs_k2 = bs_k0.get_derivative_curve(2);
-    let bs_k3 = bs_k0.get_derivative_curve(3);
+    let bs_k1 = bs_k0.derivative_curve(1);
+    let bs_k2 = bs_k0.derivative_curve(2);
+    let bs_k3 = bs_k0.derivative_curve(3);
 
     visualization::generate_1d_plot(
         "derivatives.svg",
@@ -136,9 +133,9 @@ fn derivatives_plot() {
     );
 
     bs_k0.reverse(); // p = 3 CORRECT
-    let bs_k1_rev = bs_k0.get_derivative_curve(1); // p = 2 WRONG
-    let bs_k2_rev = bs_k0.get_derivative_curve(2); // p = 1 CORRECT
-    let bs_k3_rev = bs_k0.get_derivative_curve(3); // p = 0 WRONG
+    let bs_k1_rev = bs_k0.derivative_curve(1); // p = 2 WRONG
+    let bs_k2_rev = bs_k0.derivative_curve(2); // p = 1 CORRECT
+    let bs_k3_rev = bs_k0.derivative_curve(3); // p = 0 WRONG
 
     visualization::generate_1d_plot(
         "derivatives-reversed.svg",
@@ -179,15 +176,15 @@ fn merge_plots() {
     let c = example_spline(2);
     let (l_unshifted, r_unshifted) = split_and_normalize(&c, 0.5, (true, true)).unwrap();
 
-    let mut P_a = l_unshifted.points.matrix().clone();
-    let mut P_b = r_unshifted.points.matrix().clone();
+    let mut points_a = l_unshifted.points.matrix().clone();
+    let mut points_b = r_unshifted.points.matrix().clone();
 
     // Shift points
-    P_a.column_mut(P_a.ncols() - 1).add_assign(dvector![0.25, -0.25]);
-    P_b.column_mut(0).add_assign(dvector![0.25, 0.25]);
+    points_a.column_mut(points_a.ncols() - 1).add_assign(dvector![0.25, -0.25]);
+    points_b.column_mut(0).add_assign(dvector![0.25, 0.25]);
 
-    let a = Curve::new(l_unshifted.knots.clone(), ControlPoints::new(P_a)).unwrap();
-    let b = Curve::new(r_unshifted.knots.clone(), ControlPoints::new(P_b)).unwrap();
+    let a = Curve::new(l_unshifted.knots.clone(), ControlPoints::new(points_a)).unwrap();
+    let b = Curve::new(r_unshifted.knots.clone(), ControlPoints::new(points_b)).unwrap();
 
     let lim = limits();
 
