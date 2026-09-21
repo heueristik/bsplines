@@ -12,15 +12,23 @@ jobs:
     name: "Check"
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@v5"
       - uses: "dtolnay/rust-toolchain@stable"
+      - run: "cargo check --all-targets"
+
+  msrv:
+    name: "MSRV (1.85)"
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v5"
+      - uses: "dtolnay/rust-toolchain@1.85"
       - run: "cargo check"
 
   test:
     name: "Test Suite"
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@v5"
       - uses: "dtolnay/rust-toolchain@stable"
       - run: "cargo test"
 
@@ -28,7 +36,7 @@ jobs:
     name: "Rustfmt"
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@v5"
       - uses: "dtolnay/rust-toolchain@nightly"
         with:
           components: "rustfmt"
@@ -38,16 +46,18 @@ jobs:
     name: "Clippy"
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v3"
-      - uses: "dtolnay/rust-toolchain@nightly"
+      - uses: "actions/checkout@v5"
+      - uses: "dtolnay/rust-toolchain@stable"
         with:
           components: "clippy"
-      - run: "cargo clippy -- -D warnings"
+      - run: "cargo clippy --all-targets -- -D warnings"
 
   docs:
     name: "Docs"
     runs-on: "ubuntu-latest"
+    env:
+      RUSTDOCFLAGS: "-D warnings"
     steps:
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@v5"
       - uses: "dtolnay/rust-toolchain@stable"
       - run: "cargo doc --package bsplines --features doc-images --no-deps"
