@@ -2,18 +2,12 @@
 name = "bsplines"
 license = "Apache-2.0"
 version = "0.0.1-alpha.9"
-authors = [
-    "Michael A. Heuer <decentralised.systems@gmail.com>",
-]
+authors = ["Michael A. Heuer <decentralised.systems@gmail.com>"]
 edition = "2024"
 rust-version = "1.89"
 description = "N-dimensional B-spline curves and their derivatives built on top of nalgebra"
 keywords = ["b-spline", "spline", "curve", "derivatives", "nalgebra"]
-categories = [
-    "mathematics",
-    "algorithms",
-    "graphics",
-]
+categories = ["mathematics", "algorithms", "graphics"]
 
 readme = "README.md"
 homepage = "https://github.com/michael-a-heuer/bsplines"
