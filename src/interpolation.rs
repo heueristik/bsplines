@@ -7,24 +7,23 @@ use crate::{
     types::MatD,
 };
 
-pub fn interpolate(knots: &Knots, points: &DataPoints, params: &Parameters) -> MatD {
-    let p = knots.degree();
-    let m = points.polyline_segments();
-    // Interpolation uses one control point per data point.
-    let n = m;
+pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
+    let degree = knots.degree();
+    let polyline_segments = points.polyline_segments();
 
-    let u_bar = params.vector();
+    let u_bar = parameters.vector();
 
-    let mut n_mat = MatD::zeros(points.count(), points.count());
-    for i in 0..=n {
-        for g in 0..=m {
-            n_mat[(g, i)] = knots.evaluate(0, i, p, u_bar[g]);
+    // Interpolation uses one control point per data point, so the system is square.
+    let mut basis_matrix = MatD::zeros(points.count(), points.count());
+    for i in 0..=polyline_segments {
+        for g in 0..=polyline_segments {
+            basis_matrix[(g, i)] = knots.evaluate(0, i, degree, u_bar[g]);
         }
     }
 
-    let svd = SVD::new(n_mat, true, true);
-    let mat = points.matrix().transpose();
-    svd.solve(&mat, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T").transpose()
+    let svd = SVD::new(basis_matrix, true, true);
+    let transposed_data = points.matrix().transpose();
+    svd.solve(&transposed_data, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T").transpose()
 }
 
 #[cfg(test)]
@@ -43,10 +42,10 @@ mod tests {
             1., 2., 3., 4.;
         ]);
 
-        let params = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(1, points.polyline_segments(), &params, Averaging).unwrap();
+        let parameters = parameters::generate(&points, ChordLength);
+        let knots = knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
 
-        assert_eq!(interpolate(&knots, &points, &params), *points.matrix());
+        assert_eq!(interpolate(&knots, &points, &parameters), *points.matrix());
     }
 
     #[test]
@@ -55,11 +54,11 @@ mod tests {
             1., 2., 3., 4.;
             1., 2., 3., 4.;
         ]);
-        let params = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(2, points.polyline_segments(), &params, Averaging).unwrap();
+        let parameters = parameters::generate(&points, ChordLength);
+        let knots = knots::generate(2, points.polyline_segments(), &parameters, Averaging).unwrap();
 
         assert_relative_eq!(
-            interpolate(&knots, &points, &params),
+            interpolate(&knots, &points, &parameters),
             dmatrix![
                 1., 1.75, 3.25, 4.;
                 1., 1.75, 3.25, 4.;

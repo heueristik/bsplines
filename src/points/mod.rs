@@ -41,13 +41,13 @@ pub trait Points {
     fn matrix_mut(&mut self) -> &mut MatD;
 
     /// Returns a view of the `i`-th point.
-    fn get(&self, i: usize) -> VecDView<'_> {
-        self.matrix().column(i)
+    fn get(&self, index: usize) -> VecDView<'_> {
+        self.matrix().column(index)
     }
 
     /// Returns a mutable view of the `i`-th point.
-    fn get_mut(&mut self, i: usize) -> VecDViewMut<'_> {
-        self.matrix_mut().column_mut(i)
+    fn get_mut(&mut self, index: usize) -> VecDViewMut<'_> {
+        self.matrix_mut().column_mut(index)
     }
 
     /// Returns the dimension N of the points.
@@ -129,7 +129,7 @@ impl ControlPoints {
     /// # Panics
     /// Panics if the requested derivative has not been calculated via [`ControlPoints::derive`].
     pub fn matrix_derivative(&self, derivative: usize) -> &MatD {
-        assert!(derivative <= self.max_derivative, "Derivative {} is not calculated", derivative);
+        assert!(derivative <= self.max_derivative, "derivative {} is not calculated", derivative);
         &self.derivatives[derivative]
     }
 
@@ -138,7 +138,7 @@ impl ControlPoints {
     /// # Panics
     /// Panics if the requested derivative has not been calculated via [`ControlPoints::derive`].
     pub fn matrix_derivative_mut(&mut self, derivative: usize) -> &mut MatD {
-        assert!(derivative <= self.max_derivative, "Derivative {} is not calculated", derivative);
+        assert!(derivative <= self.max_derivative, "derivative {} is not calculated", derivative);
         &mut self.derivatives[derivative]
     }
 
@@ -148,8 +148,8 @@ impl ControlPoints {
     }
 
     /// Returns the number of control points of the `k`-th derivative curve.
-    pub fn count_derivative(&self, k: usize) -> usize {
-        self.derivatives[k].ncols()
+    pub fn count_derivative(&self, derivative: usize) -> usize {
+        self.derivatives[derivative].ncols()
     }
 
     /// Returns the highest derivative order for which control points are available.
@@ -160,44 +160,45 @@ impl ControlPoints {
     /// Derives the control points of all derivative orders from the curve's control points —
     /// see the formula in the [module documentation][self].
     pub fn derive(&mut self, knots: &Knots) {
-        let p = knots.degree();
-        let n = self.polygon_segments();
+        let degree = knots.degree();
+        let polygon_segments = self.polygon_segments();
 
         self.derivatives.truncate(1);
-        for k in 1..=p {
-            let mut new_points = MatD::zeros(self.dimension(), n - k + 1);
-            for (i, mut col) in new_points.column_iter_mut().enumerate() {
-                col.copy_from(&self.derive_single_point(i, k, knots));
+        for derivative in 1..=degree {
+            let mut new_points = MatD::zeros(self.dimension(), polygon_segments - derivative + 1);
+            for (i, mut column) in new_points.column_iter_mut().enumerate() {
+                column.copy_from(&self.derive_single_point(i, derivative, knots));
             }
             self.derivatives.push(new_points);
         }
-        self.max_derivative = p;
+        self.max_derivative = degree;
     }
 
-    fn derive_single_point(&self, i: usize, k: usize, knots: &Knots) -> VecD {
-        let p = knots.degree();
+    fn derive_single_point(&self, index: usize, derivative: usize, knots: &Knots) -> VecD {
+        let degree = knots.degree();
 
-        if k == 0 {
-            return self.derivatives[0].column(i).clone_owned();
+        if derivative == 0 {
+            return self.derivatives[0].column(index).clone_owned();
         }
 
-        let u0 = knots.vector();
-        if u0[i + p + 1] == u0[i + k] {
+        let knot_values = knots.vector();
+        if knot_values[index + degree + 1] == knot_values[index + derivative] {
             return VecD::zeros(self.dimension());
         }
 
-        (p - k + 1) as f64 / (u0[i + p + 1] - u0[i + k]) *
-            (self.derive_single_point(i + 1, k - 1, knots) - self.derive_single_point(i, k - 1, knots))
+        (degree - derivative + 1) as f64 / (knot_values[index + degree + 1] - knot_values[index + derivative]) *
+            (self.derive_single_point(index + 1, derivative - 1, knots) -
+                self.derive_single_point(index, derivative - 1, knots))
     }
 
     /// Reverses the order of the points of all derivative orders.
     /// The odd derivative matrices also change their sign.
     pub fn reverse(&mut self) -> &mut Self {
-        for k in 0..=self.max_derivative {
-            let matrix = self.matrix_derivative_mut(k);
+        for derivative in 0..=self.max_derivative {
+            let matrix = self.matrix_derivative_mut(derivative);
             reverse(matrix);
 
-            if k % 2 == 1 {
+            if derivative % 2 == 1 {
                 matrix.mul_assign(-1.0);
             }
         }

@@ -12,111 +12,125 @@ use crate::{
 pub fn fit(
     knots: &Knots,
     points: &DataPoints,
-    params: &Parameters,
+    parameters: &Parameters,
     penalization: Option<Penalization>,
 ) -> Result<MatD> {
-    input_checks(knots, points, params, &penalization)?;
+    input_checks(knots, points, parameters, &penalization)?;
 
-    let q = generate_qvectors(knots, points, params);
-    let q_mat = calculate_constant_terms_matrix(knots, points, params, &q);
-    let n_mat = calculate_coefficient_matrix(knots, points, params);
+    let residuals = calculate_residuals(knots, points, parameters);
+    let constant_terms = calculate_constant_terms_matrix(knots, points, parameters, &residuals);
+    let basis_matrix = calculate_basis_matrix(knots, points, parameters);
 
-    let svd = compute_svd(knots, &n_mat, &penalization, Box::new(calculate_finite_difference_matrix))?;
+    let svd = compute_svd(knots, &basis_matrix, &penalization, Box::new(calculate_finite_difference_matrix))?;
     let internal_control_points = svd
-        .solve(&q_mat.transpose(), f64::EPSILON.sqrt())
+        .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
         .expect("the SVD was computed with both U and V^T")
         .transpose();
 
-    let n = knots.polygon_segments();
-    let m = points.polyline_segments();
-    let mut control_points = MatD::zeros(points.dimension(), n + 1);
+    let polygon_segments = knots.polygon_segments();
+    let polyline_segments = points.polyline_segments();
+    let mut control_points = MatD::zeros(points.dimension(), polygon_segments + 1);
 
     // Fix the first and last control point to the end data points.
     control_points.column_mut(0).copy_from(&points.get(0));
-    control_points.column_mut(n).copy_from(&points.get(m));
+    control_points.column_mut(polygon_segments).copy_from(&points.get(polyline_segments));
 
-    for i in 1..=n - 1 {
+    for i in 1..=polygon_segments - 1 {
         control_points.column_mut(i).copy_from(&internal_control_points.column(i - 1));
     }
 
     Ok(control_points)
 }
 
-fn generate_qvectors(knots: &Knots, points: &DataPoints, params: &Parameters) -> MatD {
-    let p = knots.degree();
-    let n = knots.polygon_segments();
-    let m = points.polyline_segments();
-    let dim = points.dimension();
+/// Returns the residual vectors R: the internal data points reduced by the contributions
+/// of the two fixed end control points.
+fn calculate_residuals(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
+    let degree = knots.degree();
+    let polygon_segments = knots.polygon_segments();
+    let polyline_segments = points.polyline_segments();
+    let dimension = points.dimension();
 
-    let mut q = MatD::zeros(dim, m + 1);
+    let mut residuals = MatD::zeros(dimension, polyline_segments + 1);
 
-    let u_bar = params.vector();
+    let u_bar = parameters.vector();
 
-    for g in 1..=m - 1 {
-        q.column_mut(g).copy_from(&points.get(g));
+    for g in 1..=polyline_segments - 1 {
+        residuals.column_mut(g).copy_from(&points.get(g));
         let u = u_bar[g];
 
-        q.column_mut(g).sub_assign(knots.evaluate(0, 0, p, u) * points.get(0));
-        q.column_mut(g).sub_assign(knots.evaluate(0, n, p, u) * points.get(m));
+        residuals.column_mut(g).sub_assign(knots.evaluate(0, 0, degree, u) * points.get(0));
+        residuals
+            .column_mut(g)
+            .sub_assign(knots.evaluate(0, polygon_segments, degree, u) * points.get(polyline_segments));
     }
 
-    q
+    residuals
 }
 
-fn calculate_constant_terms_matrix(knots: &Knots, points: &DataPoints, params: &Parameters, q: &MatD) -> MatD {
-    let p = knots.degree();
-    let n = knots.polygon_segments();
-    let m = points.polyline_segments();
-    let dim = points.dimension();
+fn calculate_constant_terms_matrix(
+    knots: &Knots,
+    points: &DataPoints,
+    parameters: &Parameters,
+    residuals: &MatD,
+) -> MatD {
+    let degree = knots.degree();
+    let polygon_segments = knots.polygon_segments();
+    let polyline_segments = points.polyline_segments();
+    let dimension = points.dimension();
 
-    let u_bar = params.vector();
+    let u_bar = parameters.vector();
 
-    let mut q_mat = MatD::zeros(dim, n - 1);
+    let mut constant_terms = MatD::zeros(dimension, polygon_segments - 1);
 
-    let mut accum = VecD::zeros(dim);
-    for i in 1..=n - 1 {
-        accum *= 0.0;
+    let mut sum = VecD::zeros(dimension);
+    for i in 1..=polygon_segments - 1 {
+        sum *= 0.0;
 
-        for g in 1..=m - 1 {
+        for g in 1..=polyline_segments - 1 {
             let u = u_bar[g];
-            accum += knots.evaluate(0, i, p, u) * q.column(g);
+            sum += knots.evaluate(0, i, degree, u) * residuals.column(g);
         }
-        q_mat.column_mut(i - 1).copy_from(&accum);
+        constant_terms.column_mut(i - 1).copy_from(&sum);
     }
 
-    q_mat
+    constant_terms
 }
 
-fn calculate_coefficient_matrix(knots: &Knots, points: &DataPoints, params: &Parameters) -> MatD {
-    let p = knots.degree();
-    let n = knots.polygon_segments();
-    let m = points.polyline_segments();
+fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
+    let degree = knots.degree();
+    let polygon_segments = knots.polygon_segments();
+    let polyline_segments = points.polyline_segments();
 
-    let u_bar = params.vector();
+    let u_bar = parameters.vector();
 
-    let mut n_mat = MatD::zeros(m - 1, n - 1);
-    for g in 1..=m - 1 {
+    let mut basis_matrix = MatD::zeros(polyline_segments - 1, polygon_segments - 1);
+    for g in 1..=polyline_segments - 1 {
         let u = u_bar[g];
-        for i in 1..=n - 1 {
-            n_mat[(g - 1, i - 1)] = knots.evaluate(0, i, p, u);
+        for i in 1..=polygon_segments - 1 {
+            basis_matrix[(g - 1, i - 1)] = knots.evaluate(0, i, degree, u);
         }
     }
-    n_mat
+    basis_matrix
 }
 
 fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> MatD {
-    let n = knots.polygon_segments();
-    assert!(kappa <= n - 2, "the difference order kappa = {} must not exceed n - 2 = {}", kappa, n - 2);
+    let polygon_segments = knots.polygon_segments();
+    assert!(
+        kappa <= polygon_segments - 2,
+        "the difference order kappa = {} must not exceed n - 2 = {}",
+        kappa,
+        polygon_segments - 2
+    );
 
-    let mut delta_mat = MatD::zeros(n - 1 - kappa, n - 1);
+    let mut difference_matrix = MatD::zeros(polygon_segments - 1 - kappa, polygon_segments - 1);
 
-    for i in 0..=n - kappa - 2 {
-        for j in 0..=n - 2 {
-            delta_mat[(i, j)] = difference_operator(i, j, kappa) as f64;
+    for i in 0..=polygon_segments - kappa - 2 {
+        for j in 0..=polygon_segments - 2 {
+            difference_matrix[(i, j)] = difference_operator(i, j, kappa) as f64;
         }
     }
 
-    delta_mat
+    difference_matrix
 }
 
 #[cfg(test)]
@@ -136,24 +150,24 @@ mod tests {
     use crate::fit::test_data_points;
 
     #[test]
-    fn calculate_finite_difference_matrix_kappa1_test() {
+    fn finite_difference_matrix_kappa_1() {
         let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]);
-        let mat = calculate_finite_difference_matrix(1, &knots);
+        let matrix = calculate_finite_difference_matrix(1, &knots);
         let expected = dmatrix![
             -1.0, 1.0, 0.0;
              0.0,-1.0, 1.0;
         ];
-        assert_eq!(mat, expected);
+        assert_eq!(matrix, expected);
     }
 
     #[test]
-    fn calculate_finite_difference_matrix_kappa2_test() {
+    fn finite_difference_matrix_kappa_2() {
         let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]);
-        let mat = calculate_finite_difference_matrix(2, &knots);
+        let matrix = calculate_finite_difference_matrix(2, &knots);
         let expected = dmatrix![
              1.0,-2.0, 1.0;
         ];
-        assert_eq!(mat, expected);
+        assert_eq!(matrix, expected);
     }
 
     #[test]
@@ -163,9 +177,9 @@ mod tests {
             1., 2., 3., 4., 5.;
         ]);
 
-        let params = parameters::generate(&points, EquallySpaced);
-        let knots = knots::generate(1, points.polyline_segments(), &params, Uniform).unwrap();
-        assert_eq!(crate::fit::loose::fit(&knots, &points, &params, None).unwrap(), *points.matrix());
+        let parameters = parameters::generate(&points, EquallySpaced);
+        let knots = knots::generate(1, points.polyline_segments(), &parameters, Uniform).unwrap();
+        assert_eq!(crate::fit::loose::fit(&knots, &points, &parameters, None).unwrap(), *points.matrix());
     }
 
     #[test]
@@ -175,10 +189,10 @@ mod tests {
             1., 2., 3., 4., 5.;
         ]);
 
-        let params = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(1, points.polyline_segments(), &params, Averaging).unwrap();
+        let parameters = parameters::generate(&points, ChordLength);
+        let knots = knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
         assert_relative_eq!(
-            fit(&knots, &points, &params, Some(Penalization { lambda: 0.5, kappa: 2 })).unwrap(),
+            fit(&knots, &points, &parameters, Some(Penalization { lambda: 0.5, kappa: 2 })).unwrap(),
             points.matrix(),
             epsilon = f64::EPSILON.sqrt()
         );
@@ -186,15 +200,15 @@ mod tests {
 
     #[test]
     fn unpenalized_nonlinear() {
-        let p = 1;
+        let degree = 1;
         let data_points = test_data_points(10);
 
-        let n = data_points.polyline_segments();
-        let params = parameters::generate(&data_points, EquallySpaced);
-        let knots = knots::generate(p, n, &params, Uniform).unwrap();
+        let polygon_segments = data_points.polyline_segments();
+        let parameters = parameters::generate(&data_points, EquallySpaced);
+        let knots = knots::generate(degree, polygon_segments, &parameters, Uniform).unwrap();
 
         assert_relative_eq!(
-            fit(&knots, &data_points, &params, None).unwrap(),
+            fit(&knots, &data_points, &parameters, None).unwrap(),
             data_points.matrix(),
             epsilon = f64::EPSILON.sqrt()
         );
@@ -202,14 +216,14 @@ mod tests {
 
     #[test]
     fn penalized_nonlinear() {
-        let p = 2;
+        let degree = 2;
         let data_points = test_data_points(10);
 
-        let params = parameters::generate(&data_points, EquallySpaced);
-        let knots = knots::generate(p, data_points.polyline_segments(), &params, Uniform).unwrap();
-        let points = fit(&knots, &data_points, &params, Some(Penalization { lambda: 1.0, kappa: 2 })).unwrap();
-        let c = Curve::new(knots, ControlPoints::new(points)).unwrap();
+        let parameters = parameters::generate(&data_points, EquallySpaced);
+        let knots = knots::generate(degree, data_points.polyline_segments(), &parameters, Uniform).unwrap();
+        let points = fit(&knots, &data_points, &parameters, Some(Penalization { lambda: 1.0, kappa: 2 })).unwrap();
+        let curve = Curve::new(knots, ControlPoints::new(points)).unwrap();
 
-        assert_relative_eq!(c.evaluate(0.5).unwrap(), dvector![0.0, 0.0], epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(curve.evaluate(0.5).unwrap(), dvector![0.0, 0.0], epsilon = f64::EPSILON.sqrt());
     }
 }

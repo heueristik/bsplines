@@ -48,11 +48,11 @@ pub enum KnotMethod {
 }
 
 /// Generates a clamped knot vector with the given method from the parameters ū.
-pub fn generate(degree: usize, polygon_segments: usize, params: &Parameters, method: KnotMethod) -> Result<Knots> {
+pub fn generate(degree: usize, polygon_segments: usize, parameters: &Parameters, method: KnotMethod) -> Result<Knots> {
     match method {
         KnotMethod::Uniform => methods::uniform(degree, polygon_segments),
-        KnotMethod::DeBoor => methods::de_boor(degree, polygon_segments, params),
-        KnotMethod::Averaging => methods::averaging(degree, polygon_segments, params),
+        KnotMethod::DeBoor => methods::de_boor(degree, polygon_segments, parameters),
+        KnotMethod::Averaging => methods::averaging(degree, polygon_segments, parameters),
     }
 }
 
@@ -106,8 +106,8 @@ impl Knots {
     }
 
     /// Returns the number of knots of the `k`-th derivative knot vector.
-    pub fn len(&self, k: usize) -> usize {
-        self.derivatives[k].len()
+    pub fn len(&self, derivative: usize) -> usize {
+        self.derivatives[derivative].len()
     }
 
     /// Returns the number of internal knots, i.e. those between the clamps.
@@ -121,8 +121,8 @@ impl Knots {
     }
 
     /// Returns the `i`-th internal knot.
-    pub fn internal_knot(&self, i: usize) -> f64 {
-        self.internal()[i]
+    pub fn internal_knot(&self, index: usize) -> f64 {
+        self.internal()[index]
     }
 
     /// Returns the number of knots in the domain.
@@ -136,13 +136,13 @@ impl Knots {
     }
 
     /// Returns a view of the domain knots of the `k`-th derivative knot vector.
-    pub fn domain_derivative(&self, k: usize) -> VecDView<'_> {
-        self.derivatives[k].segment(self.degree - k, self.domain_count())
+    pub fn domain_derivative(&self, derivative: usize) -> VecDView<'_> {
+        self.derivatives[derivative].segment(self.degree - derivative, self.domain_count())
     }
 
     /// Returns the `i`-th domain knot.
-    pub fn domain_knot(&self, i: usize) -> f64 {
-        self.domain()[i]
+    pub fn domain_knot(&self, index: usize) -> f64 {
+        self.domain()[index]
     }
 
     /// Returns how often the knot value `u` occurs in the domain.
@@ -180,75 +180,71 @@ impl Knots {
     /// Derives the knot vectors of all derivative orders from the curve's knot vector.
     /// The `k`-th derivative knot vector drops the first and last knot of the previous order.
     pub fn derive(&mut self) {
-        let p = self.degree;
-
         self.derivatives.truncate(1);
-        for k in 1..=p {
-            let segment_of_previous_order_knot_vector =
-                self.derivatives[k - 1].segment(1, self.len(k - 1) - 2).clone_owned();
+        for derivative in 1..=self.degree {
+            let trimmed = self.derivatives[derivative - 1].segment(1, self.len(derivative - 1) - 2).clone_owned();
 
-            self.derivatives.push(segment_of_previous_order_knot_vector);
+            self.derivatives.push(trimmed);
         }
-        self.max_derivative = p;
+        self.max_derivative = self.degree;
     }
 
     /// Returns the index `i` of the last domain knot on the interval
     /// `[u_{p-k}^{(k)}, u_{n+1-k}^{(k)}]` that is less than or equal to `u`,
     /// stopping at the first knot of a repeated run (cf. algorithm A2.1 in `Piegl1997`).
-    pub(crate) fn find_span(&self, u: f64, k: usize) -> usize {
-        let knots = self.vector_derivative(k);
-        let pk = self.degree() - k;
-        let lim = self.polygon_segments() + 1 - k;
-        let mut i = pk;
+    pub(crate) fn find_span(&self, u: f64, derivative: usize) -> usize {
+        let knots = self.vector_derivative(derivative);
+        let last = self.polygon_segments() + 1 - derivative;
+        let mut span = self.degree() - derivative;
 
-        while u >= knots[i + 1] && i + 1 < lim {
-            i += 1;
-            if knots[i + 1] == knots[i] {
+        while u >= knots[span + 1] && span + 1 < last {
+            span += 1;
+            if knots[span + 1] == knots[span] {
                 break;
             }
         }
-        i
+        span
     }
 
     /// Evaluates the `i`-th basis function of the `k`-th derivative knot vector at the parameter `u`,
     /// where `p` is the degree of the curve itself, so the basis degree is p − k.
-    pub fn evaluate(&self, k: usize, i: usize, p: usize, u: f64) -> f64 {
-        let knots = &self.derivatives[k];
-        let n = self.polygon_segments();
-        let pk = p - k;
+    pub fn evaluate(&self, derivative: usize, index: usize, degree: usize, u: f64) -> f64 {
+        let knots = &self.derivatives[derivative];
+        let polygon_segments = self.polygon_segments();
+        let basis_degree = degree - derivative;
 
-        basis::basis(knots, i, pk, k, n, u)
+        basis::basis(knots, index, basis_degree, derivative, polygon_segments, u)
     }
 }
 
 /// Returns whether the first and last knot value are each repeated p + 1 times,
 /// so a curve starts and ends at its end control points.
 pub fn is_clamped(knots: &Knots) -> bool {
-    let u0 = knots.vector();
+    let knot_values = knots.vector();
     let clamp_size = knots.degree + 1;
 
-    let is_head_clamped = u0.iter().take(clamp_size).all(|&u| u == 0.0);
-    let is_tail_clamped = u0.iter().rev().take(clamp_size).all(|&u| u == 1.0);
+    let is_head_clamped = knot_values.iter().take(clamp_size).all(|&u| u == 0.0);
+    let is_tail_clamped = knot_values.iter().rev().take(clamp_size).all(|&u| u == 1.0);
 
     is_head_clamped && is_tail_clamped
 }
 
 /// Returns whether the knot values span exactly the domain [0, 1].
 pub fn is_normalized(knots: &Knots) -> bool {
-    let u0 = knots.vector();
+    let knot_values = knots.vector();
 
-    let is_min_zero = u0.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
-    let is_max_unity = u0.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
+    let is_min_zero = knot_values.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
+    let is_max_unity = knot_values.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
 
     is_min_zero && is_max_unity
 }
 
 /// Returns whether the knot values are in non-decreasing order.
 pub fn is_sorted(knots: &Knots) -> bool {
-    let mut it = knots.derivatives[0].iter();
-    match it.next() {
+    let mut values = knots.derivatives[0].iter();
+    match values.next() {
         None => true,
-        Some(first) => it
+        Some(first) => values
             .scan(first, |state, next| {
                 let cmp = *state <= next;
                 *state = next;
@@ -260,11 +256,11 @@ pub fn is_sorted(knots: &Knots) -> bool {
 
 /// Returns whether the knot values equal a clamped, uniform knot vector.
 pub fn is_uniform(knots: &Knots) -> Result<bool> {
-    let u0 = knots.vector();
+    let knot_values = knots.vector();
 
     let expected = methods::uniform(knots.degree(), knots.polygon_segments())?;
 
-    Ok(u0.eq(expected.vector()))
+    Ok(knot_values.eq(expected.vector()))
 }
 
 pub(crate) fn reverse(knots: &mut VecD) {
@@ -300,11 +296,11 @@ pub fn normalized(knots: &mut VecD) -> VecD {
 }
 
 fn rescale(knots: &mut VecD, old_lim: (f64, f64), new_lim: (f64, f64)) {
-    let n = knots.len();
-    *knots -= VecD::repeat(n, old_lim.0);
+    let len = knots.len();
+    *knots -= VecD::repeat(len, old_lim.0);
     *knots /= old_lim.1 - old_lim.0;
     *knots *= new_lim.1 - new_lim.0;
-    *knots += VecD::repeat(n, new_lim.0);
+    *knots += VecD::repeat(len, new_lim.0);
 }
 
 #[cfg(test)]
@@ -424,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn is_normed_test() {
+    fn is_normalized_test() {
         assert!(is_normalized(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
         assert!(!is_normalized(&Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0])));
     }
@@ -436,7 +432,7 @@ mod tests {
     }
 
     #[rstest(u, expected, case(0.24, 1), case(0.25, 2), case(0.26, 2), case(0.74, 3), case(0.75, 4), case(0.76, 4))]
-    fn test_find_span(u: f64, expected: usize) {
+    fn find_span_test(u: f64, expected: usize) {
         assert_eq!(knots_example(1).find_span(u, 0), expected);
     }
 }
