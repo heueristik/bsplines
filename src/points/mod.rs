@@ -14,11 +14,9 @@ doc = ::embed_doc_image::embed_image!("eq-control-points", "doc-images/equations
 use std::ops::MulAssign;
 
 use crate::{
-    curve::knots::Knots,
+    knots::Knots,
     types::{MatD, VecD, VecDView, VecDViewMut},
 };
-
-pub mod methods;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct ControlPoints {

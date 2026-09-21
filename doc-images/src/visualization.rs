@@ -1,7 +1,7 @@
 use plotters::{backend::SVGBackend, chart::ChartContext, coord::types::RangedCoordf64, prelude::*};
 use plotters_arrows::TriangleArrow;
 
-use bsplines::curve::{
+use bsplines::{
     Curve,
     points::{ControlPoints, DataPoints, Points},
 };

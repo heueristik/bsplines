@@ -26,14 +26,12 @@ doc = ::embed_doc_image::embed_image!("fit-loose-half-penalized", "doc-images/pl
 //! | Curve of degree `p = 2` with `n = N-1`<br>segments approximating the data points.<br> | Curve of degree `p = 2` with `n= N/3`<br>segments approximating the data points.<br> | Curve of degree `p = 2` with `n= N/3`<br>segments approximating the data<br> points penalized with `λ = 1`, `κ = 2`. |
 
 use crate::{
-    curve::{
-        Curve, knots, parameters,
-        points::{
-            ControlPoints, DataPoints, Points,
-            methods::{fit, fit::Penalization, interpolation},
-        },
-    },
+    Curve,
     error::{Error, Result},
+    fit,
+    fit::Penalization,
+    interpolation, knots, parameters,
+    points::{ControlPoints, DataPoints, Points},
 };
 
 #[derive()]
@@ -41,7 +39,7 @@ pub enum Generation<'a> {
     Manual {
         degree: usize,
         points: ControlPoints,
-        knots: knots::Generation,
+        knots: knots::KnotGeneration,
     },
     Interpolation {
         degree: usize,
@@ -65,9 +63,9 @@ pub enum Generation<'a> {
 /// # Examples
 /// ```
 /// use nalgebra::dmatrix;
-/// use bsplines::curve::generation::{generate, Generation::Manual};
-/// use bsplines::curve::knots::Generation::Uniform;
-/// use bsplines::curve::points::ControlPoints;
+/// use bsplines::generation::{generate, Generation::Manual};
+/// use bsplines::knots::KnotGeneration::Uniform;
+/// use bsplines::points::ControlPoints;
 ///
 /// // Create a coordinate matrix containing with four 2D points.
 /// let points = ControlPoints::new(dmatrix![
@@ -92,9 +90,9 @@ pub fn generate(generation: Generation) -> Result<Curve> {
 
             let data_points = DataPoints::new(points.matrix().clone());
             let knots = match method {
-                knots::Generation::Uniform => knots::methods::uniform(p, n),
-                knots::Generation::Manual { knots } => Ok(knots.clone()),
-                knots::Generation::Method {
+                knots::KnotGeneration::Uniform => knots::methods::uniform(p, n),
+                knots::KnotGeneration::Manual { knots } => Ok(knots.clone()),
+                knots::KnotGeneration::Method {
                     // TODO default methods deBoor + chord length
                     parameter_method,
                     knot_method,
@@ -107,9 +105,9 @@ pub fn generate(generation: Generation) -> Result<Curve> {
         }
         Generation::Interpolation { degree, points } => {
             // TODO allow other methods + uniform
-            let params = parameters::generate(points, parameters::Method::EquallySpaced); // TODO Piegl: ChordLength +
+            let params = parameters::generate(points, parameters::ParameterMethod::EquallySpaced); // TODO Piegl: ChordLength +
             // DeBoor
-            let knots = knots::generate(degree, points.polyline_segments(), &params, knots::Method::Uniform)?;
+            let knots = knots::generate(degree, points.polyline_segments(), &params, knots::KnotMethod::Uniform)?;
             let points = ControlPoints::new_with_capacity(
                 interpolation::interpolate(&knots, points, &params),
                 knots.degree() + 1,
@@ -119,18 +117,18 @@ pub fn generate(generation: Generation) -> Result<Curve> {
         }
         Generation::LeastSquaresFit { degree, points, intended_polygon_segments, method, penalization } => {
             // TODO allow other methods + uniform
-            let params = parameters::generate(points, parameters::Method::EquallySpaced);
-            let knots = knots::generate(degree, intended_polygon_segments, &params, knots::Method::Uniform)?;
+            let params = parameters::generate(points, parameters::ParameterMethod::EquallySpaced);
+            let knots = knots::generate(degree, intended_polygon_segments, &params, knots::KnotMethod::Uniform)?;
 
             /*let (knots, params) = match penalization {
                 Some(..) => {
-                    let params = parameters::generate(&points, parameters::Method::Centripetal);
+                    let params = parameters::generate(&points, parameters::ParameterMethod::Centripetal);
                     let knots = knots::generate(degree, segments, &params, knots::Method::DeBoor)?;
                     (knots, params)
                 }
                 None => {
-                    let params = parameters::generate(points, parameters::Method::EquallySpaced);
-                    let knots = knots::generate(degree, segments, &params, knots::Method::Uniform)?;
+                    let params = parameters::generate(points, parameters::ParameterMethod::EquallySpaced);
+                    let knots = knots::generate(degree, segments, &params, knots::KnotMethod::Uniform)?;
                     (knots, params)
                 }
             };*/

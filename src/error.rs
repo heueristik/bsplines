@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Convenience alias for a [`core::result::Result`] with the crate-wide [`Error`].
+/// Convenience alias for a [`core::result::Result`] with the crate-wide [`enum@Error`].
 pub type Result<T> = core::result::Result<T, Error>;
 
 /// The error type for all fallible B-spline operations.

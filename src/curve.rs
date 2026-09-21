@@ -14,31 +14,24 @@ doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.sv
 //! - derivative order `k`,
 //! - number of control polygon segments `n`,
 //! - spline degree `p`,
-//! - `k`-th derivative [knot vector][knots] `U`,
-//! - `n+1-k` [spline basis function][basis] `N` of degree `p-k` defined by the [knot vector][knots] `U`, and
-//! - `n+1-k`, `N`-dimensional [control points][points] `P`.
+//! - `k`-th derivative [knot vector][crate::knots] `U`,
+//! - `n+1-k` [spline basis function][crate::basis] `N` of degree `p-k` defined by the [knot vector][crate::knots] `U`,
+//!   and
+//! - `n+1-k`, `N`-dimensional [control points][crate::points] `P`.
 
 use embed_doc_image::embed_doc_image;
 
 use crate::{
-    curve::{
-        knots::Knots,
-        points::{ControlPoints, Points},
-    },
     error::{Error, Result},
+    knots::Knots,
     manipulation::{
         insert::insert,
         merge::{ConstrainedCurve, Constraints, merge, merge_with_constraints},
         split::split,
     },
+    points::{ControlPoints, Points},
     types::VecD,
 };
-
-pub mod basis;
-pub mod generation;
-pub mod knots;
-pub mod parameters;
-pub mod points;
 
 #[embed_doc_image("spline", "doc-images/plots/derivatives.svg")]
 #[derive(Debug, Clone)]
@@ -57,10 +50,10 @@ impl Curve {
     /// # Examples
     /// ```
     /// use nalgebra::{dmatrix, dvector};
-    /// use bsplines::curve::Curve;
-    /// use bsplines::curve::generation::{generate, Generation::Manual};
-    /// use bsplines::curve::knots;
-    /// use bsplines::curve::points::ControlPoints;
+    /// use bsplines::Curve;
+    /// use bsplines::generation::{generate, Generation::Manual};
+    /// use bsplines::knots;
+    /// use bsplines::points::ControlPoints;
     ///
     /// // Create a coordinate matrix containing with five 3D points.
     /// let points = ControlPoints::new(dmatrix![
@@ -115,7 +108,7 @@ impl Curve {
 
         if k <= p {
             let n = self.polygon_segments();
-            let l = self.knots.find_idx(u, k, knots::DomainKnotComparatorType::LeftOrEqual);
+            let l = self.knots.find_span(u, k);
 
             for i in l - (p - k)..=n - k {
                 value += self.knots.evaluate(k, i, p, u) * self.points.matrix_derivative(k).column(i);
@@ -156,11 +149,11 @@ impl Curve {
     /// ```
     /// use approx::relative_eq;
     /// use nalgebra::dmatrix;
-    /// use bsplines::curve::Curve;
-    /// use bsplines::curve::generation::generate;
-    /// use bsplines::curve::generation::Generation::Manual;
-    /// use bsplines::curve::knots::Generation::Uniform;
-    /// use bsplines::curve::points::{ControlPoints, Points};
+    /// use bsplines::Curve;
+    /// use bsplines::generation::generate;
+    /// use bsplines::generation::Generation::Manual;
+    /// use bsplines::knots::KnotGeneration::Uniform;
+    /// use bsplines::points::{ControlPoints, Points};
     ///
     /// let mut a = generate(Manual {
     ///             degree: 2,
@@ -211,11 +204,11 @@ impl Curve {
     /// ```
     /// use approx::relative_eq;
     /// use nalgebra::dmatrix;
-    /// use bsplines::curve::Curve;
-    /// use bsplines::curve::generation::generate;
-    /// use bsplines::curve::generation::Generation::Manual;
-    /// use bsplines::curve::knots::Generation::Uniform;
-    /// use bsplines::curve::points::{ControlPoints, Points};
+    /// use bsplines::Curve;
+    /// use bsplines::generation::generate;
+    /// use bsplines::generation::Generation::Manual;
+    /// use bsplines::knots::KnotGeneration::Uniform;
+    /// use bsplines::points::{ControlPoints, Points};
     ///
     /// let mut a = generate(Manual {
     ///             degree: 2,
@@ -306,14 +299,14 @@ mod tests {
     use nalgebra::{dmatrix, dvector};
     use rstest::fixture;
 
-    use points::DataPoints;
+    use crate::points::DataPoints;
 
-    use crate::curve::{
+    use crate::{
         generation::{
             Generation::{Interpolation, Manual},
             generate,
         },
-        knots::Generation::Uniform,
+        knots::KnotGeneration::Uniform,
     };
 
     use super::*;

@@ -1,13 +1,9 @@
 use crate::{
-    curve::{
-        knots::Knots,
-        parameters::Parameters,
-        points::{
-            DataPoints, Points,
-            methods::fit::{Penalization, compute_svd, difference_operator, input_checks},
-        },
-    },
     error::Result,
+    fit::{Penalization, compute_svd, difference_operator, input_checks},
+    knots::Knots,
+    parameters::Parameters,
+    points::{DataPoints, Points},
     types::MatD,
 };
 
@@ -66,15 +62,16 @@ mod tests {
     use approx::assert_relative_eq;
     use nalgebra::{dmatrix, dvector};
 
-    use crate::curve::{
+    use crate::{
         Curve, knots,
-        knots::Method::{Averaging, Uniform},
+        knots::KnotMethod::{Averaging, Uniform},
         parameters,
-        parameters::Method::{ChordLength, EquallySpaced},
-        points::{ControlPoints, methods::fit::test_data_points},
+        parameters::ParameterMethod::{ChordLength, EquallySpaced},
+        points::ControlPoints,
     };
 
     use super::*;
+    use crate::fit::test_data_points;
 
     #[test]
     fn calculate_finite_difference_matrix_kappa1_test() {
@@ -154,13 +151,9 @@ mod tests {
 
         let params = parameters::generate(&data_points, EquallySpaced);
         let knots = knots::generate(p, data_points.polyline_segments(), &params, Uniform).unwrap();
-        let points = crate::curve::points::methods::fit::fixed::fit(
-            &knots,
-            &data_points,
-            &params,
-            Some(Penalization { lambda: 1.0, kappa: 2 }),
-        )
-        .unwrap();
+        let points =
+            crate::fit::fixed::fit(&knots, &data_points, &params, Some(Penalization { lambda: 1.0, kappa: 2 }))
+                .unwrap();
         let c = Curve::new(knots, ControlPoints::new(points)).unwrap();
 
         assert_relative_eq!(c.evaluate(0.5).unwrap(), dvector![0.0, 0.0], epsilon = f64::EPSILON.sqrt());

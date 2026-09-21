@@ -14,9 +14,9 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //! - Efficient [curve evaluation][curve::Curve] for all available derivatives `k = 0, 1,... , p`.
 //! - Built with [nalgebra](https://crates.io/crates/nalgebra) to store point data in contiguous arrays
 //! - Multiple methods for
-//!   - [curve generation][curve::generation]
-//!   - [curve parametrization][curve::parameters]
-//!   - [knot generation][curve::knots]
+//!   - [curve generation][generation]
+//!   - [curve parametrization][parameters]
+//!   - [knot generation][knots]
 //!   - [curve manipulation][manipulation]
 //!     - [knot insertion][manipulation::insert]
 //!     - [reversing][manipulation::reverse]
@@ -25,11 +25,11 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //!
 //! ## What are B-Splines?
 //!
-//! B-splines are parametric functions composed of piecewise, polynomial [basis functions][curve::basis] of degree `p >
+//! B-splines are parametric functions composed of piecewise, polynomial [basis functions][basis] of degree `p >
 //! 0`. These piecewise polynomials are joined so that the parametric function is `p-1` times continuously
 //! differentiable. The overall functions are parametrized over finite domains with a so-called [knot
-//! vector][curve::knots] with the co-domain being an `N`-dimensional vector space, that is defined by [control
-//! points][curve::points]. They can describe [curves][curve], but also surfaces.
+//! vector][knots] with the co-domain being an `N`-dimensional vector space, that is defined by [control
+//! points][points]. They can describe [curves][curve], but also surfaces.
 
 //! These characteristics lead to many desirable properties.
 //! The piecewise definition makes B-spline functions versatile allowing to interpolate or approximate
@@ -50,9 +50,20 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //! | Eilers1996 | Eilers, P. H. C., Marx, B. D., Flexible smoothing with B -splines and penalties, Stat. Sci., 11(2) (1996) 89–121.                                                  |
 //! | Tai2003    | Tai, C.-L., Hu, S.-M., Huang, Q.-X., Approximate merging of B-spline curves via knot adjustment and constrained optimization, Comput. Des., 35(10) (2003) 893–899. |
 
+pub mod basis;
 pub mod curve;
 pub mod error;
+pub mod fit;
+pub mod generation;
+pub(crate) mod interpolation;
+pub mod knots;
 pub mod manipulation;
+pub mod parameters;
+pub mod points;
 pub mod types;
 
+pub use curve::Curve;
 pub use error::{Error, Result};
+pub use knots::{KnotMethod, Knots};
+pub use parameters::{ParameterMethod, Parameters};
+pub use points::{ControlPoints, DataPoints, Points};

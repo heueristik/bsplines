@@ -1,8 +1,6 @@
 use crate::{
-    curve::{
-        parameters::Parameters,
-        points::{DataPoints, Points},
-    },
+    parameters::Parameters,
+    points::{DataPoints, Points},
     types::VecD,
 };
 

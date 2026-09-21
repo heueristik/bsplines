@@ -4,7 +4,7 @@
 //! - Centripetal method
 //! - Chord-length method
 
-use crate::{curve::points::DataPoints, types::VecD};
+use crate::{points::DataPoints, types::VecD};
 
 pub mod methods;
 
@@ -28,16 +28,16 @@ impl Parameters {
     }
 }
 
-pub enum Method {
+pub enum ParameterMethod {
     EquallySpaced,
     Centripetal,
     ChordLength,
 }
 
-pub fn generate(points: &DataPoints, method: Method) -> Parameters {
+pub fn generate(points: &DataPoints, method: ParameterMethod) -> Parameters {
     match method {
-        Method::EquallySpaced => methods::equally_spaced(points.polyline_segments()),
-        Method::ChordLength => methods::chord_length(points),
-        Method::Centripetal => methods::centripetal(points),
+        ParameterMethod::EquallySpaced => methods::equally_spaced(points.polyline_segments()),
+        ParameterMethod::ChordLength => methods::chord_length(points),
+        ParameterMethod::Centripetal => methods::centripetal(points),
     }
 }

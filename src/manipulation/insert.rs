@@ -11,8 +11,9 @@ doc = ::embed_doc_image::embed_image!("insert-after", "doc-images/plots/manipula
 use std::ops::AddAssign;
 
 use crate::{
-    curve::{Curve, knots::DomainKnotComparatorType, points::Points},
+    Curve,
     error::{Error, Result},
+    points::Points,
     types::MatD,
 };
 
@@ -35,7 +36,7 @@ pub fn insert(c: &mut Curve, u: f64) -> Result<()> {
     let old_knots = c.knots.vector();
     let old_points = c.points.matrix();
 
-    let l = c.knots.find_idx(u, 0, DomainKnotComparatorType::LeftOrEqual);
+    let l = c.knots.find_span(u, 0);
 
     // Insert u into the knot vector
     let new_knots = old_knots.clone().insert_row(l + 1, u);
@@ -71,9 +72,9 @@ pub fn insert(c: &mut Curve, u: f64) -> Result<()> {
 mod tests {
     use nalgebra::{dmatrix, dvector};
 
-    use crate::curve::{
+    use crate::{
         generation::{Generation::Manual, generate},
-        knots::Generation::Uniform,
+        knots::KnotGeneration::Uniform,
         points::ControlPoints,
     };
 

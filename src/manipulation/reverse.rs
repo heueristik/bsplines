@@ -8,7 +8,7 @@ doc = ::embed_doc_image::embed_image!("reverse-after", "doc-images/plots/manipul
 //! |:--------------------:|:-------------------:|
 //! | ![][reverse-before]  | ![][reverse-after]  |
 
-use crate::curve::Curve;
+use crate::Curve;
 
 pub fn reverse(curve: &mut Curve) -> &mut Curve {
     curve.knots.reverse();

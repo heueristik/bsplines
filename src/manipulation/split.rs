@@ -12,13 +12,11 @@ doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulat
 //! The knot vector can then be re-normalized on the interval `[0,1]`.
 
 use crate::{
-    curve::{
-        Curve,
-        knots::{DomainKnotComparatorType, Knots, normalize},
-        points::{ControlPoints, Points},
-    },
+    Curve,
     error::{Error, Result},
+    knots::{Knots, normalize},
     manipulation::insert::insert,
+    points::{ControlPoints, Points},
     types::{MatD, VecD, VecHelpers},
 };
 
@@ -35,7 +33,7 @@ pub fn split_and_normalize(c: &Curve, u: f64, normalize_knot_vectors: (bool, boo
 
     let mut bs_inserted = c.clone();
 
-    let l = c.knots.find_idx(u, 0, DomainKnotComparatorType::LeftOrEqual);
+    let l = c.knots.find_span(u, 0);
     let multiplicity = c.knots.vector().iter().skip(l).take_while(|&&x| x == u).count();
 
     if multiplicity > p {
@@ -119,9 +117,9 @@ mod tests {
     use nalgebra::{dmatrix, dvector};
     use rstest::{fixture, rstest};
 
-    use crate::curve::{
+    use crate::{
         generation::{Generation::Manual, generate},
-        knots::Generation::Uniform,
+        knots::KnotGeneration::Uniform,
     };
 
     use super::*;

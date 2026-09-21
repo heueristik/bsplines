@@ -17,8 +17,10 @@ doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.sv
 use std::ops::MulAssign;
 
 use crate::{
-    curve::{basis, parameters, parameters::Parameters},
+    basis,
     error::Result,
+    parameters,
+    parameters::Parameters,
     types::{VecD, VecDView, VecHelpers},
 };
 
@@ -32,30 +34,23 @@ pub struct Knots {
     pub(crate) max_derivative: usize,
 }
 
-pub enum DomainKnotComparatorType {
-    Left,
-    LeftOrEqual,
-    RightOrEqual,
-    Right,
-}
-
-pub enum Generation {
+pub enum KnotGeneration {
     Uniform,
     Manual { knots: Knots },
-    Method { parameter_method: parameters::Method, knot_method: Method },
+    Method { parameter_method: parameters::ParameterMethod, knot_method: KnotMethod },
 }
 
-pub enum Method {
+pub enum KnotMethod {
     Uniform,
     DeBoor,
     Averaging,
 }
 
-pub fn generate(degree: usize, polygon_segments: usize, params: &Parameters, method: Method) -> Result<Knots> {
+pub fn generate(degree: usize, polygon_segments: usize, params: &Parameters, method: KnotMethod) -> Result<Knots> {
     match method {
-        Method::Uniform => methods::uniform(degree, polygon_segments),
-        Method::DeBoor => methods::de_boor(degree, polygon_segments, params),
-        Method::Averaging => methods::averaging(degree, polygon_segments, params),
+        KnotMethod::Uniform => methods::uniform(degree, polygon_segments),
+        KnotMethod::DeBoor => methods::de_boor(degree, polygon_segments, params),
+        KnotMethod::Averaging => methods::averaging(degree, polygon_segments, params),
     }
 }
 
@@ -173,54 +168,22 @@ impl Knots {
         self.max_derivative = p;
     }
 
-    /// Returns the index `i` of the knot on the domain interval
-    /// `[u_{p-k}^{(k)}, u_{n+1-k}^{(k)}]`,
-    /// being lower, equal, or higher than `u`.
-    pub fn find_idx(&self, u: f64, k: usize, comparator: DomainKnotComparatorType) -> usize {
+    /// Returns the index `i` of the last domain knot on the interval
+    /// `[u_{p-k}^{(k)}, u_{n+1-k}^{(k)}]` that is less than or equal to `u`,
+    /// stopping at the first knot of a repeated run (cf. algorithm A2.1 in `Piegl1997`).
+    pub(crate) fn find_span(&self, u: f64, k: usize) -> usize {
         let knots = self.vector_derivative(k);
         let pk = self.degree() - k;
-        match comparator {
-            DomainKnotComparatorType::Left => {
-                let lim = self.polygon_segments() + 1 - k;
-                let mut i = pk;
+        let lim = self.polygon_segments() + 1 - k;
+        let mut i = pk;
 
-                while u > knots[i + 1] && i + 1 < lim {
-                    i += 1;
-                }
-                i
-            }
-            DomainKnotComparatorType::LeftOrEqual => {
-                let lim = self.polygon_segments() + 1 - k;
-                let mut i = pk;
-
-                while u >= knots[i + 1] && i + 1 < lim {
-                    i += 1;
-                    if knots[i + 1] == knots[i] {
-                        break;
-                    }
-                }
-                i
-            }
-            DomainKnotComparatorType::RightOrEqual => {
-                let mut i = knots.len() - 1 - pk;
-
-                while u <= knots[i - 1] && i > pk {
-                    i -= 1;
-                    if knots[i - 1] == knots[i] {
-                        break;
-                    }
-                }
-                i
-            }
-            DomainKnotComparatorType::Right => {
-                let mut i = knots.len() - 1 - pk;
-
-                while u < knots[i - 1] && i - 1 > pk {
-                    i -= 1;
-                }
-                i
+        while u >= knots[i + 1] && i + 1 < lim {
+            i += 1;
+            if knots[i + 1] == knots[i] {
+                break;
             }
         }
+        i
     }
 
     /// `p` the degree of this basis function of the kth degree spline - not of the 0th degree spline
@@ -442,23 +405,8 @@ mod tests {
         assert!(!is_uniform(&Knots::new(1, dvector![0.0, 0.0, 0.25, 0.75, 1.0, 1.0])).unwrap());
     }
 
-    #[rstest(u, expected, case(0.24, 1), case(0.25, 1), case(0.26, 2), case(0.74, 3), case(0.75, 3), case(0.76, 4))]
-    fn test_find_idx_of_left_domain_knot(u: f64, expected: usize) {
-        assert_eq!(knots_example(1).find_idx(u, 0, DomainKnotComparatorType::Left), expected);
-    }
-
     #[rstest(u, expected, case(0.24, 1), case(0.25, 2), case(0.26, 2), case(0.74, 3), case(0.75, 4), case(0.76, 4))]
-    fn test_find_idx_of_left_or_equal_domain_knot(u: f64, expected: usize) {
-        assert_eq!(knots_example(1).find_idx(u, 0, DomainKnotComparatorType::LeftOrEqual), expected);
-    }
-
-    #[rstest(u, expected, case(0.24, 2), case(0.25, 2), case(0.26, 3), case(0.74, 4), case(0.75, 4), case(0.76, 5))]
-    fn test_find_idx_of_right_or_equal_domain_knot(u: f64, expected: usize) {
-        assert_eq!(knots_example(1).find_idx(u, 0, DomainKnotComparatorType::RightOrEqual), expected);
-    }
-
-    #[rstest(u, expected, case(0.24, 2), case(0.25, 3), case(0.26, 3), case(0.74, 4), case(0.75, 5), case(0.76, 5))]
-    fn test_find_idx_of_right_domain_knot(u: f64, expected: usize) {
-        assert_eq!(knots_example(1).find_idx(u, 0, DomainKnotComparatorType::Right), expected);
+    fn test_find_span(u: f64, expected: usize) {
+        assert_eq!(knots_example(1).find_span(u, 0), expected);
     }
 }
