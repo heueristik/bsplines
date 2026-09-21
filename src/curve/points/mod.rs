@@ -35,11 +35,11 @@ pub trait Points {
     fn matrix(&self) -> &MatD;
     fn matrix_mut(&mut self) -> &mut MatD;
 
-    fn get(&self, i: usize) -> VecDView {
+    fn get(&self, i: usize) -> VecDView<'_> {
         self.matrix().column(i)
     }
 
-    fn get_mut(&mut self, i: usize) -> VecDViewMut {
+    fn get_mut(&mut self, i: usize) -> VecDViewMut<'_> {
         self.matrix_mut().column_mut(i)
     }
 

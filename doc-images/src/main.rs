@@ -5,16 +5,16 @@ use plotters::{prelude::*, style::full_palette::TEAL};
 
 use bsplines::{
     curve::{
+        Curve,
         generation::{
-            generate,
             Generation::{Interpolation, LeastSquaresFit, Manual},
+            generate,
         },
         knots::Generation::Uniform,
         points::{
-            methods::fit::{Method::LooseEnds, Penalization},
             ControlPoints, DataPoints, Points,
+            methods::fit::{Method::LooseEnds, Penalization},
         },
-        Curve,
     },
     manipulation::{
         merge::{merge, merge_from, merge_to},
@@ -41,12 +41,10 @@ fn limits() -> Limits {
 }
 
 fn scatteredDataPoints() -> DataPoints {
-    let dp = DataPoints::new(dmatrix![
+    DataPoints::new(dmatrix![
         -2.50,-2.45,-2.15,-1.70,-1.50,-1.35,-1.20, 0.05, 0.20, 0.55, 0.65, 1.00, 1.20, 1.50, 1.75, 2.00, 2.15, 2.50;
         -2.55,-2.10,-2.45,-2.60,-2.15,-2.15,-1.85,-1.20,-0.70,-0.90,-0.20, 2.00, 0.95, 1.40,-0.70,-1.90,-1.70,-2.15;
-    ]);
-
-    dp
+    ])
 }
 
 fn example_spline(p: usize) -> Curve {

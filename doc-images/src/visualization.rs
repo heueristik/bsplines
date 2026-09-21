@@ -2,8 +2,8 @@ use plotters::{backend::SVGBackend, chart::ChartContext, coord::types::RangedCoo
 use plotters_arrows::TriangleArrow;
 
 use bsplines::curve::{
-    points::{ControlPoints, DataPoints, Points},
     Curve,
+    points::{ControlPoints, DataPoints, Points},
 };
 
 use crate::PLOTS_DIR;
@@ -147,7 +147,7 @@ pub fn generate_2d_plot(filename: &str, splines: Vec<(&Curve, RGBAColor)>, limit
     if let Some(dp) = data {
         assert_eq!(dp.dimension(), 2);
 
-        draw_data_points_2d(&mut chart_context, &dp, false)
+        draw_data_points_2d(&mut chart_context, dp, false)
     }
 
     for (c, color) in splines {

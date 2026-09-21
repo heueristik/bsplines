@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use crate::{
     curve::{
-        knots::{is_uniform, Knots},
+        knots::{Knots, is_uniform},
         parameters::Parameters,
         points::DataPoints,
     },
@@ -23,9 +23,7 @@ pub enum FitError {
     #[error("The penalization parameter `lambda = {lambda}` cannot be negative.")]
     NegativeLambda { lambda: f64 },
 
-    #[error(
-        "The number of data point segments m = {m} must be greater than the requested polynomial segments n = {n}"
-    )]
+    #[error("The number of data point segments m = {m} must be greater than the requested polynomial segments n = {n}")]
     RequestedPolynomialSegmentAndDataSegementMismatch { n: usize, m: usize },
 
     #[error(
@@ -33,7 +31,9 @@ pub enum FitError {
     )]
     RequestedPolynomialSegmentAndSplineDegreeMismatch { n: usize, p: usize },
 
-    #[error("The requested number of polynomial segments n = {n} must be larger than penalization offset kappa kappa = {kappa}")]
+    #[error(
+        "The requested number of polynomial segments n = {n} must be larger than penalization offset kappa kappa = {kappa}"
+    )]
     RequestedPolynomialSegmentAndPenalizationKappaMismatch { n: usize, kappa: usize },
 
     #[error("The number of data point segments m = {m} must be equal to the number of parameter segments mp = {mp}.")]
@@ -78,16 +78,15 @@ pub fn compute_svd(
 ) -> Result<SVD<f64, Dyn, Dyn>, FitError> {
     let mut mat = Nmat.transpose() * Nmat;
 
-    match penalization {
-        Some(penalization) => match penalization.lambda {
+    if let Some(penalization) = penalization {
+        match penalization.lambda {
             l if l < 0.0 => return Err(FitError::NegativeLambda { lambda: l }),
             l if l > 0.0 && !is_uniform(knots).unwrap() /*TODO refactor errors and eliminate unwrap*/ => return Err(FitError::NonUniformKnots),
             l => {
                 let delta_mat = calculate_finite_difference_matrix(penalization.kappa, knots);
                 mat += l * (delta_mat.transpose() * delta_mat);
             }
-        },
-        None => {}
+        }
     }
 
     Ok(SVD::new(mat, true, true))
@@ -120,11 +119,7 @@ fn test_data_points(npoints: usize) -> DataPoints {
             c as f64 * inc - shift
         } else {
             // y coord
-            if c % 2 == 0 {
-                0.5
-            } else {
-                -0.5
-            }
+            if c % 2 == 0 { 0.5 } else { -0.5 }
         }
     }))
 }
