@@ -20,10 +20,14 @@ use crate::{
     types::{MatD, VecD, VecHelpers},
 };
 
+/// Splits the curve into two independent curves at the parameter `u`,
+/// normalizing both resulting knot vectors to the domain [0, 1].
 pub fn split(c: &Curve, u: f64) -> Result<(Curve, Curve)> {
     split_and_normalize(c, u, (true, true))
 }
 
+/// Splits the curve into two independent curves at the parameter `u`,
+/// normalizing the knot vector of the left and right result on demand.
 pub fn split_and_normalize(c: &Curve, u: f64, normalize_knot_vectors: (bool, bool)) -> Result<(Curve, Curve)> {
     if u <= 0.0 || u >= 1.0 {
         return Err(Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });

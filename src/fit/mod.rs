@@ -1,3 +1,5 @@
+//! Least-squares fitting of data points, with fixed or loose ends and optional penalization.
+
 use nalgebra::{Dyn, SVD};
 
 use crate::{
@@ -14,14 +16,17 @@ use crate::{
 pub(crate) mod fixed;
 pub(crate) mod loose;
 
+/// The penalization of a least-squares fit, see `Eilers1996`.
 pub struct Penalization {
+    /// The penalization strength λ ≥ 0.
     pub lambda: f64,
+    /// The finite-difference order κ of the penalty term.
     pub kappa: usize,
     // TODO add `new` method and assertions according to below
     // A B-spline curve C(u) of degree p can be generated via least-squares minimization and results in
     // an approximation of the (m + 1) data points with dimension N . The number of control points (n + 1)
-    // can be specified but must be smaller then the number of data points and greater than the spline degree (m > n ≥
-    // p).
+    // can be specified but must be smaller then the number of data points and greater than the spline degree (m > n
+    // â¥ p).
 }
 
 /// Builds a least-squares fit of data points; created by [`Curve::fit`].

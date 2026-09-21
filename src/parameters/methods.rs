@@ -4,9 +4,13 @@ use crate::{
     types::VecD,
 };
 
-/// Creates a parameters for every data point and distributes them equally ranging from 0 to 1.
-/// This method is not recommended, as it can produce erratic shapes (such as loops) when the data is unevenly spaced.
-///  see eq. (9.3) in `Piegl1997`
+/// Generates one parameter per data point, equally spaced on [0, 1] — eq. (9.3) in `Piegl1997`:
+///
+/// ūg = g / m,   g = 0, …, m
+///
+/// with the parameters ū and the number of polyline segments m.
+///
+/// Not recommended for unevenly spaced data, as it can produce erratic shapes such as loops.
 pub fn equally_spaced(polyline_segments: usize) -> Parameters {
     let m = polyline_segments; //data_points.nrows() - 1;
     let mut u_bar = VecD::zeros(m + 1);
@@ -19,7 +23,13 @@ pub fn equally_spaced(polyline_segments: usize) -> Parameters {
     Parameters { vector: u_bar, polyline_segments }
 }
 
-///  see eqs. (9.4) and (9.5) in `Piegl1997`
+/// Generates the parameters by the centripetal method — eq. (9.6) in `Piegl1997`:
+///
+/// ūg = ūg₋₁ + √|Qg − Qg₋₁| ∕ d,   d = Σg √|Qg − Qg₋₁|
+///
+/// with the parameters ū, the data points Q, and the total sum d.
+///
+/// Dampens the effect of outlier points on the parametrization.
 pub fn centripetal(points: &DataPoints) -> Parameters {
     let m = points.polyline_segments(); //data_points.nrows() - 1;
 
@@ -44,6 +54,11 @@ pub fn centripetal(points: &DataPoints) -> Parameters {
     Parameters { vector: u_bar, polyline_segments: points.polyline_segments() }
 }
 
+/// Generates the parameters by the chord-length method — eqs. (9.4) and (9.5) in `Piegl1997`:
+///
+/// ūg = ūg₋₁ + |Qg − Qg₋₁| ∕ d,   d = Σg |Qg − Qg₋₁|
+///
+/// with the parameters ū, the data points Q, and the total chord length d.
 pub fn chord_length(points: &DataPoints) -> Parameters {
     let m = points.polyline_segments();
 
