@@ -25,12 +25,15 @@ doc = ::embed_doc_image::embed_image!("fit-loose-half-penalized", "doc-images/pl
 //! | ![][fit-loose-all] | ![][fit-loose-half] | ![][fit-loose-half-penalized] |
 //! | Curve of degree `p = 2` with `n = N-1`<br>segments approximating the data points.<br> | Curve of degree `p = 2` with `n= N/3`<br>segments approximating the data points.<br> | Curve of degree `p = 2` with `n= N/3`<br>segments approximating the data<br> points penalized with `λ = 1`, `κ = 2`. |
 
-use crate::curve::{
-    Curve, CurveError, knots, parameters,
-    points::{
-        ControlPoints, DataPoints, Points,
-        methods::{fit, fit::Penalization, interpolation},
+use crate::{
+    curve::{
+        Curve, knots, parameters,
+        points::{
+            ControlPoints, DataPoints, Points,
+            methods::{fit, fit::Penalization, interpolation},
+        },
     },
+    error::{Error, Result},
 };
 
 #[derive()]
@@ -76,7 +79,7 @@ pub enum Generation<'a> {
 /// let curve = generate(Manual{degree, points, knots: Uniform}).unwrap();
 /// println!("{:?}", curve.evaluate(0.5));
 /// ```
-pub fn generate(generation: Generation) -> Result<Curve, CurveError> {
+pub fn generate(generation: Generation) -> Result<Curve> {
     match generation {
         Generation::Manual { degree, points, knots: method } => {
             // TODO more sanity checks
@@ -84,7 +87,7 @@ pub fn generate(generation: Generation) -> Result<Curve, CurveError> {
             let p = degree;
 
             if points.polygon_segments() < degree {
-                return Err(CurveError::DegreeAndSegmentsMismatch { p, n });
+                return Err(Error::TooFewPolygonSegments { degree: p, polygon_segments: n });
             }
 
             let data_points = DataPoints::new(points.matrix().clone());
@@ -134,13 +137,11 @@ pub fn generate(generation: Generation) -> Result<Curve, CurveError> {
 
             let points = match method {
                 fit::Method::FixedEnds => ControlPoints::new_with_capacity(
-                    fit::fixed::fit(&knots, points, &params, penalization)
-                        .map_err(|err| CurveError::FitError { err })?,
+                    fit::fixed::fit(&knots, points, &params, penalization)?,
                     degree + 1,
                 ),
                 fit::Method::LooseEnds => ControlPoints::new_with_capacity(
-                    fit::loose::fit(&knots, points, &params, penalization)
-                        .map_err(|err| CurveError::FitError { err })?,
+                    fit::loose::fit(&knots, points, &params, penalization)?,
                     degree + 1,
                 ),
             };

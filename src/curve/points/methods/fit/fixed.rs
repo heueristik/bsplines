@@ -6,9 +6,10 @@ use crate::{
         parameters::Parameters,
         points::{
             DataPoints, Points,
-            methods::fit::{FitError, Penalization, compute_svd, difference_operator, input_checks},
+            methods::fit::{Penalization, compute_svd, difference_operator, input_checks},
         },
     },
+    error::Result,
     types::{MatD, VecD},
 };
 
@@ -17,7 +18,7 @@ pub fn fit(
     points: &DataPoints,
     params: &Parameters,
     penalization: Option<Penalization>,
-) -> Result<MatD, FitError> {
+) -> Result<MatD> {
     input_checks(knots, points, params, &penalization)?;
 
     let q = generate_qvectors(knots, points, params);
@@ -25,7 +26,10 @@ pub fn fit(
     let n_mat = calculate_coefficient_matrix(knots, points, params);
 
     let svd = compute_svd(knots, &n_mat, &penalization, Box::new(calculate_finite_difference_matrix))?;
-    let internal_control_points = svd.solve(&q_mat.transpose(), f64::EPSILON.sqrt()).unwrap().transpose();
+    let internal_control_points = svd
+        .solve(&q_mat.transpose(), f64::EPSILON.sqrt())
+        .expect("the SVD was computed with both U and V^T")
+        .transpose();
 
     let n = knots.polygon_segments();
     let m = points.polyline_segments();

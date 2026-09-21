@@ -1,5 +1,4 @@
 use nalgebra::{Dyn, SVD};
-use thiserror::Error;
 
 use crate::{
     curve::{
@@ -7,6 +6,7 @@ use crate::{
         parameters::Parameters,
         points::DataPoints,
     },
+    error::{Error, Result},
     types::MatD,
 };
 
@@ -16,31 +16,6 @@ pub mod loose;
 pub enum Method {
     FixedEnds,
     LooseEnds,
-}
-
-#[derive(Error, Debug, PartialEq)]
-pub enum FitError {
-    #[error("The penalization parameter `lambda = {lambda}` cannot be negative.")]
-    NegativeLambda { lambda: f64 },
-
-    #[error("The number of data point segments m = {m} must be greater than the requested polynomial segments n = {n}")]
-    RequestedPolynomialSegmentAndDataSegementMismatch { n: usize, m: usize },
-
-    #[error(
-        "The requested number of polynomial segments n = {n} must be equal or greater than the spline degree p = {p}"
-    )]
-    RequestedPolynomialSegmentAndSplineDegreeMismatch { n: usize, p: usize },
-
-    #[error(
-        "The requested number of polynomial segments n = {n} must be larger than penalization offset kappa kappa = {kappa}"
-    )]
-    RequestedPolynomialSegmentAndPenalizationKappaMismatch { n: usize, kappa: usize },
-
-    #[error("The number of data point segments m = {m} must be equal to the number of parameter segments mp = {mp}.")]
-    DataSegmentsAndParameterSegmentsMismatch { m: usize, mp: usize },
-
-    #[error("Penalization requires equidistant/uniform knots.")] // See `Eilers1996`.
-    NonUniformKnots,
 }
 
 pub struct Penalization {
@@ -58,7 +33,7 @@ fn input_checks(
     points: &DataPoints,
     params: &Parameters,
     penalization: &Option<Penalization>,
-) -> Result<(), FitError> {
+) -> Result<()> {
     match (
         knots.polygon_segments(),
         points.polyline_segments(),
@@ -66,11 +41,13 @@ fn input_checks(
         knots.degree(),
         penalization,
     ) {
-        (n, m, _, _, _) if n > m => Err(FitError::RequestedPolynomialSegmentAndDataSegementMismatch { n, m }),
-        (_, m, mp, _, _) if m != mp => Err(FitError::DataSegmentsAndParameterSegmentsMismatch { m, mp }),
-        (n, _, _, p, _) if n < p => Err(FitError::RequestedPolynomialSegmentAndSplineDegreeMismatch { n, p }),
+        (n, m, _, _, _) if n > m => Err(Error::TooFewPolylineSegments { polygon_segments: n, polyline_segments: m }),
+        (_, m, mp, _, _) if m != mp => {
+            Err(Error::ParameterSegmentsMismatch { polyline_segments: m, parameter_segments: mp })
+        }
+        (n, _, _, p, _) if n < p => Err(Error::TooFewPolygonSegments { degree: p, polygon_segments: n }),
         (n, _, _, _, Some(pen)) if n - 1 < pen.kappa => {
-            Err(FitError::RequestedPolynomialSegmentAndPenalizationKappaMismatch { n, kappa: pen.kappa })
+            Err(Error::KappaTooLarge { kappa: pen.kappa, polygon_segments: n })
         }
         _ => Ok(()),
     }
@@ -81,17 +58,20 @@ pub fn compute_svd(
     n_mat: &MatD,
     penalization: &Option<Penalization>,
     calculate_finite_difference_matrix: Box<dyn FnOnce(usize, &Knots) -> MatD>,
-) -> Result<SVD<f64, Dyn, Dyn>, FitError> {
+) -> Result<SVD<f64, Dyn, Dyn>> {
     let mut mat = n_mat.transpose() * n_mat;
 
     if let Some(penalization) = penalization {
-        match penalization.lambda {
-            l if l < 0.0 => return Err(FitError::NegativeLambda { lambda: l }),
-            l if l > 0.0 && !is_uniform(knots).unwrap() /*TODO refactor errors and eliminate unwrap*/ => return Err(FitError::NonUniformKnots),
-            l => {
-                let delta_mat = calculate_finite_difference_matrix(penalization.kappa, knots);
-                mat += l * (delta_mat.transpose() * delta_mat);
+        let lambda = penalization.lambda;
+        if lambda < 0.0 {
+            return Err(Error::NegativeLambda { lambda });
+        }
+        if lambda > 0.0 {
+            if !is_uniform(knots)? {
+                return Err(Error::NonUniformKnots);
             }
+            let delta_mat = calculate_finite_difference_matrix(penalization.kappa, knots);
+            mat += lambda * (delta_mat.transpose() * delta_mat);
         }
     }
 

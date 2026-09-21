@@ -16,10 +16,9 @@ doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.sv
 
 use std::ops::MulAssign;
 
-use thiserror::Error;
-
 use crate::{
-    curve::{CurveError, basis, parameters, parameters::Parameters},
+    curve::{basis, parameters, parameters::Parameters},
+    error::Result,
     types::{VecD, VecDView, VecHelpers},
 };
 
@@ -52,21 +51,7 @@ pub enum Method {
     Averaging,
 }
 
-#[derive(Error, Debug, PartialEq)]
-pub enum KnotError {
-    #[error("Parameter `u = {u}` lies outside the interval `[{lower_bound}, {upper_bound}]`.")]
-    ParameterOutOfBounds { u: f64, lower_bound: f64, upper_bound: f64 },
-    // TODO needed?
-    //#[error("Knot `u = {u}` has a muliplicity of {multiplicity}.")]
-    //InvalidMultiplicity { u: f64, multiplicity: usize },
-}
-
-pub fn generate(
-    degree: usize,
-    polygon_segments: usize,
-    params: &Parameters,
-    method: Method,
-) -> Result<Knots, CurveError> {
+pub fn generate(degree: usize, polygon_segments: usize, params: &Parameters, method: Method) -> Result<Knots> {
     match method {
         Method::Uniform => methods::uniform(degree, polygon_segments),
         Method::DeBoor => methods::de_boor(degree, polygon_segments, params),
@@ -281,7 +266,7 @@ pub fn is_sorted(knots: &Knots) -> bool {
     }
 }
 
-pub fn is_uniform(knots: &Knots) -> Result<bool, CurveError> {
+pub fn is_uniform(knots: &Knots) -> Result<bool> {
     let u0 = knots.vector();
 
     let expected = methods::uniform(knots.degree(), knots.polygon_segments())?;
