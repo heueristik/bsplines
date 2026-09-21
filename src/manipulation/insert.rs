@@ -10,38 +10,24 @@ doc = ::embed_doc_image::embed_image!("insert-after", "doc-images/plots/manipula
 
 use std::ops::AddAssign;
 
-use thiserror::Error;
-
 use crate::{
     curve::{Curve, knots::DomainKnotComparatorType, points::Points},
+    error::{Error, Result},
     types::MatD,
 };
 
-#[derive(Error, Debug, PartialEq)]
-pub enum InsertError {
-    #[error("Parameter `u = {u}` lies outside the interval `({lower_bound}, {upper_bound})`.")]
-    OutOfBounds { u: f64, lower_bound: f64, upper_bound: f64 },
-
-    #[error(
-        "The knot `u = {u}` has a multiplicity of `m = {m}` already. \
-    Therefore, the knot cannot be inserted as this would exceed the maximum \
-    multiplicity corresponding to the curve degree with `p = {p}`."
-    )]
-    MultiplicityError { u: f64, m: usize, p: usize },
-}
-
 /// Knot insertion algorithm by Boehm
 /// `u` the knot to be inserted. The value must be in `u ∈ (0, 1)`
-pub fn insert(c: &mut Curve, u: f64) -> Result<(), InsertError> {
+pub fn insert(c: &mut Curve, u: f64) -> Result<()> {
     if u <= 0.0 || u >= 1.0 {
-        return Err(InsertError::OutOfBounds { u, lower_bound: 0.0, upper_bound: 1.0 });
+        return Err(Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
     }
 
     let p = c.degree();
 
     let m = c.knots.multiplicity(u);
     if c.knots.multiplicity(u) > p {
-        return Err(InsertError::MultiplicityError { u, m, p });
+        return Err(Error::MultiplicityExceedsDegree { u, multiplicity: m, degree: p });
     }
 
     let dim = c.points.dimension();

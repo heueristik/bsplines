@@ -19,17 +19,16 @@ doc = ::embed_doc_image::embed_image!("merge-after-right-start-constrained", "do
 use std::ops::{AddAssign, DivAssign, SubAssign};
 
 use nalgebra::SVD;
-use thiserror::Error;
 
 use crate::{
     curve,
     curve::{
-        Curve, CurveError,
+        Curve,
         basis::basis,
         knots::{Knots, is_clamped, is_normalized, reversed},
         points::{ControlPoints, Points},
     },
-    manipulation::merge::MergeError::CurveGenerationFailure,
+    error::{Error, Result},
     types::{MatD, VecD, VecHelpers},
 };
 
@@ -52,33 +51,8 @@ pub struct ConstrainedCurve<'a> {
     pub(crate) constraints: Constraints,
 }
 
-#[derive(Error, Debug, PartialEq)]
-pub enum MergeError {
-    #[error("The degree of the left curve `p = {left}` differs from the right curve `p = {right}`.")]
-    DegreeMismatch { left: usize, right: usize },
-
-    #[error("The dimension of the left curve `dim = {left}` differs from the right curve `dim = {right}`.")]
-    DimensionMismatch { left: usize, right: usize },
-
-    #[error("Curves must be clamped")]
-    UnclampedCurve,
-
-    #[error("Curves must be normed.")]
-    UnnormedCurve,
-
-    #[error(
-        "The total number of constrained points `{total_constraints}` must be \
-        less than the curve degree `p = {degree}`. \
-        Otherwise no solution for the linear system of equations exists."
-    )]
-    TooManyConstraints { total_constraints: usize, degree: usize },
-
-    #[error("Curve generation failed with error {err}.")]
-    CurveGenerationFailure { err: CurveError },
-}
-
 // Keeps the start of spline 1 fixed
-pub fn merge_from(a: &Curve, b: &Curve) -> Result<Curve, MergeError> {
+pub fn merge_from(a: &Curve, b: &Curve) -> Result<Curve> {
     merge_with_constraints(
         &ConstrainedCurve { curve: a, constraints: Constraints { params: vec![1.] } },
         &ConstrainedCurve { curve: b, constraints: Constraints { params: vec![] } },
@@ -86,43 +60,43 @@ pub fn merge_from(a: &Curve, b: &Curve) -> Result<Curve, MergeError> {
 }
 
 // Keeps the end of spline 2 fixed
-pub fn merge_to(a: &Curve, b: &Curve) -> Result<Curve, MergeError> {
+pub fn merge_to(a: &Curve, b: &Curve) -> Result<Curve> {
     merge_with_constraints(
         &ConstrainedCurve { curve: a, constraints: Constraints { params: vec![] } },
         &ConstrainedCurve { curve: b, constraints: Constraints { params: vec![0.] } },
     )
 }
 
-pub fn merge(a: &Curve, b: &Curve) -> Result<Curve, MergeError> {
+pub fn merge(a: &Curve, b: &Curve) -> Result<Curve> {
     merge_with_constraints(
         &ConstrainedCurve { curve: a, constraints: Constraints { params: vec![] } },
         &ConstrainedCurve { curve: b, constraints: Constraints { params: vec![] } },
     )
 }
 
-pub(crate) fn merge_with_constraints(a: &ConstrainedCurve, b: &ConstrainedCurve) -> Result<Curve, MergeError> {
+pub(crate) fn merge_with_constraints(a: &ConstrainedCurve, b: &ConstrainedCurve) -> Result<Curve> {
     let p_a = a.curve.degree();
     let p_b = b.curve.degree();
 
     if p_a != p_b {
-        return Err(MergeError::DegreeMismatch { left: p_a, right: p_b });
+        return Err(Error::DegreeMismatch { left: p_a, right: p_b });
     }
 
     if a.curve.dimension() != b.curve.dimension() {
-        return Err(MergeError::DimensionMismatch { left: a.curve.dimension(), right: b.curve.dimension() });
+        return Err(Error::DimensionMismatch { left: a.curve.dimension(), right: b.curve.dimension() });
     }
 
     if !is_clamped(&a.curve.knots) || !is_clamped(&b.curve.knots) {
-        return Err(MergeError::UnclampedCurve);
+        return Err(Error::UnclampedCurve);
     }
 
     if !is_normalized(&a.curve.knots) || !is_normalized(&b.curve.knots) {
-        return Err(MergeError::UnnormedCurve);
+        return Err(Error::UnnormalizedCurve);
     }
 
     let total_constraints = a.constraints.count() + b.constraints.count();
     if total_constraints >= p_a {
-        return Err(MergeError::TooManyConstraints { total_constraints, degree: p_a });
+        return Err(Error::TooManyConstraints { total: total_constraints, degree: p_a });
     }
 
     let shifts = solve_linear_equation_system(a, b);
@@ -146,7 +120,6 @@ pub(crate) fn merge_with_constraints(a: &ConstrainedCurve, b: &ConstrainedCurve)
     let merged_points = generate_control_point_vector_of_merged_spline(a.curve, b.curve, &s_adjusted, &t_adjusted);
 
     Curve::new(Knots::new(p_a, merged_knots), ControlPoints::new(merged_points))
-        .map_err(|err| CurveGenerationFailure { err })
 }
 
 fn construct_n_mat(a: &ConstrainedCurve, b: &ConstrainedCurve) -> MatD {

@@ -11,40 +11,24 @@ doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulat
 //! The splitting is conducted by adding the respective knot `p+1`-times, which allows for splitting the knot vector.
 //! The knot vector can then be re-normalized on the interval `[0,1]`.
 
-use thiserror::Error;
-
 use crate::{
     curve::{
-        Curve, CurveError,
+        Curve,
         knots::{DomainKnotComparatorType, Knots, normalize},
         points::{ControlPoints, Points},
     },
+    error::{Error, Result},
     manipulation::insert::insert,
     types::{MatD, VecD, VecHelpers},
 };
 
-#[derive(Error, Debug, PartialEq)]
-pub enum SplitError {
-    #[error("The curve cannot be disconnected. The Multiplicity of `{multiplicity}` at u = {u}` exceeds `p = {p}.")]
-    MultiplicityTooHigh { u: f64, p: usize, multiplicity: usize },
-    #[error("Parameter `u = {u}` lies outside the interval `({lower_bound}, {upper_bound})`.")]
-    OutOfBounds { u: f64, lower_bound: f64, upper_bound: f64 },
-
-    #[error("Curve generation failed with error.")]
-    CurveError(#[from] CurveError),
-}
-
-pub fn split(c: &Curve, u: f64) -> Result<(Curve, Curve), SplitError> {
+pub fn split(c: &Curve, u: f64) -> Result<(Curve, Curve)> {
     split_and_normalize(c, u, (true, true))
 }
 
-pub fn split_and_normalize(
-    c: &Curve,
-    u: f64,
-    normalize_knot_vectors: (bool, bool),
-) -> Result<(Curve, Curve), SplitError> {
+pub fn split_and_normalize(c: &Curve, u: f64, normalize_knot_vectors: (bool, bool)) -> Result<(Curve, Curve)> {
     if u <= 0.0 || u >= 1.0 {
-        return Err(SplitError::OutOfBounds { u, lower_bound: 0.0, upper_bound: 1.0 });
+        return Err(Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
     }
 
     let p = c.degree();
@@ -55,11 +39,11 @@ pub fn split_and_normalize(
     let multiplicity = c.knots.vector().iter().skip(l).take_while(|&&x| x == u).count();
 
     if multiplicity > p {
-        return Err(SplitError::MultiplicityTooHigh { u, p, multiplicity });
+        return Err(Error::MultiplicityExceedsDegree { u, multiplicity, degree: p });
     }
 
     for _ in 0..p - multiplicity {
-        insert(&mut bs_inserted, u).unwrap();
+        insert(&mut bs_inserted, u)?;
     }
 
     let knots = bs_inserted.knots.vector();
@@ -157,7 +141,7 @@ mod tests {
         let u = 0.0;
         let res = split_and_normalize(&c, u, (true, true));
         assert!(res.is_err());
-        assert_eq!(res.unwrap_err(), SplitError::OutOfBounds { u, lower_bound: 0.0, upper_bound: 1.0 });
+        assert_eq!(res.unwrap_err(), Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
     }
 
     #[rstest]
@@ -165,7 +149,7 @@ mod tests {
         let u = 1.0;
         let res = split_and_normalize(&c, u, (true, true));
         assert!(res.is_err());
-        assert_eq!(res.unwrap_err(), SplitError::OutOfBounds { u, lower_bound: 0.0, upper_bound: 1.0 });
+        assert_eq!(res.unwrap_err(), Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
     }
 
     /*#[rstest]

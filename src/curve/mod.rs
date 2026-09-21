@@ -19,17 +19,17 @@ doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.sv
 //! - `n+1-k`, `N`-dimensional [control points][points] `P`.
 
 use embed_doc_image::embed_doc_image;
-use thiserror::Error;
 
 use crate::{
     curve::{
         knots::Knots,
-        points::{ControlPoints, Points, methods::fit::FitError},
+        points::{ControlPoints, Points},
     },
+    error::{Error, Result},
     manipulation::{
-        insert::{InsertError, insert},
+        insert::insert,
         merge::{ConstrainedCurve, Constraints, merge, merge_with_constraints},
-        split::{SplitError, split},
+        split::split,
     },
     types::VecD,
 };
@@ -45,32 +45,6 @@ pub mod points;
 pub struct Curve {
     pub knots: Knots,
     pub points: ControlPoints,
-}
-
-#[derive(Error, Debug, PartialEq)]
-pub enum CurveError {
-    #[error("Parameter `u = {u}` lies outside the interval `[{lower_bound}, {upper_bound}]`.")]
-    ParameterOutOfBounds { u: f64, lower_bound: f64, upper_bound: f64 },
-    #[error(
-        "The number of polynomial segments `n = {n}` of the curve must be \
-        greater than or equal to its polynomial degree `p = {p}."
-    )]
-    DegreeAndSegmentsMismatch { p: usize, n: usize },
-
-    #[error("The derivative order `k = {k}` cannot be greater than curve degree `p = {p}.")]
-    DegreeAndDerivativeOrderMismatch { p: usize, k: usize },
-
-    #[error("The maximal derivative order k_max = {k_max} cannot be greater than the spline degree p = {p}.")]
-    DerivativeNotAvailable { k_max: usize, p: usize },
-
-    #[error("Degree `p = {p}` is too low and must be greater than `{limit}`")]
-    DegreeTooLow { p: usize, limit: usize },
-
-    #[error("Curve generation failed with error {err}.")]
-    FitError { err: FitError },
-    // TODO
-    //#[error("Knot generation failed with error {err}.")]
-    //KnotError { err: KnotError },
 }
 
 impl Curve {
@@ -100,11 +74,11 @@ impl Curve {
     /// let curve = Curve::new(knots, points).unwrap();
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
-    pub fn new(knots: Knots, points: ControlPoints) -> Result<Self, CurveError> {
+    pub fn new(knots: Knots, points: ControlPoints) -> Result<Self> {
         // TODO more sanity checks
 
         match (knots.degree(), points.polygon_segments()) {
-            (p, n) if n < p => Err(CurveError::DegreeAndSegmentsMismatch { p, n }),
+            (p, n) if n < p => Err(Error::TooFewPolygonSegments { degree: p, polygon_segments: n }),
             _ => {
                 let mut c = Self { knots, points };
                 c.calculate_derivatives();
@@ -126,13 +100,13 @@ impl Curve {
         self.points.dimension()
     }
 
-    pub fn evaluate(&self, u: f64) -> Result<VecD, CurveError> {
+    pub fn evaluate(&self, u: f64) -> Result<VecD> {
         self.evaluate_derivative(u, 0)
     }
 
-    pub fn evaluate_derivative(&self, u: f64, k: usize) -> Result<VecD, CurveError> {
+    pub fn evaluate_derivative(&self, u: f64, k: usize) -> Result<VecD> {
         if !(0.0..=1.0).contains(&u) {
-            return Err(CurveError::ParameterOutOfBounds { u, lower_bound: 0.0, upper_bound: 1.0 });
+            return Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 });
         }
 
         let p = self.degree();
@@ -198,15 +172,15 @@ impl Curve {
     ///             points: ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;]),
     ///             knots: Uniform,
     ///         }).unwrap();
-    ///  let c = a.prepend(&b);
+    ///  let c = a.prepend(&b).unwrap();
     ///
     ///  relative_eq!(c.points.matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
     /// ```
-    pub fn prepend(&mut self, other: &Self) -> &mut Self {
-        let c = merge(other, self).unwrap();
+    pub fn prepend(&mut self, other: &Self) -> Result<&mut Self> {
+        let c = merge(other, self)?;
         self.knots = c.knots;
         self.points = c.points;
-        self
+        Ok(self)
     }
 
     /// Prepends another curve with maximally `p-1` constraints.
@@ -215,15 +189,14 @@ impl Curve {
         constraints_self: Constraints,
         other: &Self,
         constraints_other: Constraints,
-    ) -> &mut Self {
+    ) -> Result<&mut Self> {
         let c = merge_with_constraints(
             &ConstrainedCurve { curve: other, constraints: constraints_self },
             &ConstrainedCurve { curve: self, constraints: constraints_other },
-        )
-        .unwrap();
+        )?;
         self.knots = c.knots;
         self.points = c.points;
-        self
+        Ok(self)
     }
 
     /// Appends another curve.
@@ -255,15 +228,15 @@ impl Curve {
     ///             knots: Uniform,
     ///         }).unwrap();
     ///
-    ///  let c = a.append(&b);
+    ///  let c = a.append(&b).unwrap();
     ///
     ///  relative_eq!(c.points.matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
     /// ```
-    pub fn append(&mut self, other: &Self) -> &mut Self {
-        let c = merge(self, other).unwrap();
+    pub fn append(&mut self, other: &Self) -> Result<&mut Self> {
+        let c = merge(self, other)?;
         self.knots = c.knots;
         self.points = c.points;
-        self
+        Ok(self)
     }
 
     /// Appends another curve with maximally `p-1` constraints.
@@ -272,22 +245,21 @@ impl Curve {
         constraints_self: Constraints,
         other: &Self,
         constraints_other: Constraints,
-    ) -> &mut Self {
+    ) -> Result<&mut Self> {
         let c = merge_with_constraints(
             &ConstrainedCurve { curve: self, constraints: constraints_self },
             &ConstrainedCurve { curve: other, constraints: constraints_other },
-        )
-        .unwrap();
+        )?;
         self.knots = c.knots;
         self.points = c.points;
-        self
+        Ok(self)
     }
 
     /// Splits a curve into two at parameter `u`.
     ///
     /// # Arguments
     /// * `u` - The parameter`u` that must lie in the interval `(0,1)`.
-    pub fn split(&self, u: f64) -> Result<(Self, Self), SplitError> {
+    pub fn split(&self, u: f64) -> Result<(Self, Self)> {
         split(self, u)
     }
 
@@ -295,7 +267,7 @@ impl Curve {
     ///
     /// # Arguments
     /// * `u` - The parameter`u` that must lie in the interval `(0,1)`.
-    pub fn insert(&mut self, u: f64) -> Result<&mut Self, InsertError> {
+    pub fn insert(&mut self, u: f64) -> Result<&mut Self> {
         self.insert_times(u, 1)?;
         Ok(self)
     }
@@ -305,7 +277,7 @@ impl Curve {
     /// # Arguments
     /// * `u` - The parameter`u` that must lie in the interval `(0,1)`.
     /// * `x` - The number of insertions of parameter `u`.
-    pub fn insert_times(&mut self, u: f64, x: usize) -> Result<&mut Self, InsertError> {
+    pub fn insert_times(&mut self, u: f64, x: usize) -> Result<&mut Self> {
         for _ in 0..x {
             insert(self, u)?;
         }
@@ -376,19 +348,13 @@ mod tests {
         #[rstest] //TODO test for orders > 0
         fn outside_lower_bound(c: Curve) {
             let u = -0.1;
-            assert_eq!(
-                c.evaluate_derivative(u, 0),
-                Err(CurveError::ParameterOutOfBounds { u, lower_bound: 0.0, upper_bound: 1.0 })
-            );
+            assert_eq!(c.evaluate_derivative(u, 0), Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 }));
         }
 
         #[rstest]
         fn outside_upper_bound(c: Curve) {
             let u = 1.1;
-            assert_eq!(
-                c.evaluate_derivative(u, 0),
-                Err(CurveError::ParameterOutOfBounds { u, lower_bound: 0.0, upper_bound: 1.0 })
-            );
+            assert_eq!(c.evaluate_derivative(u, 0), Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 }));
         }
 
         #[test]

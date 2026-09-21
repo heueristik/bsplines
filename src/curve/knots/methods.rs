@@ -1,14 +1,13 @@
 use crate::{
-    curve::{CurveError, knots::Knots, parameters::Parameters},
+    curve::{knots::Knots, parameters::Parameters},
+    error::{Error, Result},
     types::VecD,
 };
 
-fn input_check(degree: usize, polygon_segments: usize) -> Result<(), CurveError> {
+fn input_check(degree: usize, polygon_segments: usize) -> Result<()> {
     match degree {
-        0 => Err(CurveError::DegreeTooLow { p: degree, limit: 0 }),
-        degree if degree > polygon_segments => {
-            Err(CurveError::DegreeAndSegmentsMismatch { p: degree, n: polygon_segments })
-        }
+        0 => Err(Error::DegreeTooLow { degree }),
+        degree if degree > polygon_segments => Err(Error::TooFewPolygonSegments { degree, polygon_segments }),
         _ => Ok(()),
     }
 }
@@ -17,7 +16,7 @@ fn input_check(degree: usize, polygon_segments: usize) -> Result<(), CurveError>
 ///
 /// ## Note
 /// Use this method only if the control points are evenly distributed.
-pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots, CurveError> {
+pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
     let p = degree;
     let n = polygon_segments;
 
@@ -41,7 +40,7 @@ pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots, CurveErr
 }
 
 ///  see eq. (9.8) in `Piegl1997`
-pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots, CurveError> {
+pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots> {
     let p = degree;
     let n = polygon_segments;
 
@@ -78,7 +77,7 @@ pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters
 /// It guarantees that every knot span contains at least one u_bar.
 /// According to deBoor, this ensures that the $$N\times N$$ cofficient matrix is positive definite and
 /// well-conditioned, which is important for the least-squares fitting and interpolation of data points.
-pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots, CurveError> {
+pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots> {
     let p = degree;
     let n = polygon_segments;
 
