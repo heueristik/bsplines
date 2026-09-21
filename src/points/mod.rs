@@ -166,7 +166,6 @@ impl ControlPoints {
         self.derivatives.truncate(1);
         for k in 1..=p {
             let mut new_points = MatD::zeros(self.dimension(), n - k + 1);
-            // TODO iter over points instead
             for (i, mut col) in new_points.column_iter_mut().enumerate() {
                 col.copy_from(&self.derive_single_point(i, k, knots));
             }
@@ -261,9 +260,4 @@ mod tests {
         );
     }
 
-    /* TODO
-    #[test]
-    fn reverse_derivatives() {
-        todo!()
-    }*/
 }

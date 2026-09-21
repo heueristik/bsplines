@@ -279,14 +279,6 @@ fn calculate_hw(b: &ConstrainedCurve) -> MatD {
         }
     }
 
-    // TODO use below
-    /*let mut hw = MatD::zeros(constraints_b.count(), p);
-
-    for (h, u) in constraints_b.params.iter().enumerate() {
-        for i in 0..=p - 1 {
-            hw[(h, i)] = evaluate(i, p, o, wk0, *u);
-        }
-    }*/
     hw
 }
 
@@ -347,15 +339,12 @@ fn calculate_kconst(a: &Curve, b: &Curve) -> MatD {
 
         for i in m - p..=m {
             for a in m - p..=m - k {
-                // TODO use point getter instead of .column(i)
                 sum += prefactor(p, a, i, k, s, &vk[0]) * basis(&vk[k], a, p - k, 0, m - k, vk[0][m + 1]) * s.column(i);
             }
         }
 
         for j in 0..=p {
             for b in 0..=p - k {
-                //sumB += -prefactor(p, b, j, k, &t, &wk[0]) * evaluate(b, p - k, o - k, &wk[k], wk[0][p]) * t.row(j);
-                // TODO use point getter instead of .column(j)
                 sum -= prefactor(p, b, j, k, t, &wk[0]) * basis(&wk[k], b, p - k, 0, o - k, wk[0][p]) * t.column(j);
             }
         }
@@ -466,9 +455,9 @@ fn generate_derivative_control_point(
 }
 
 fn adjust_shifted_control_points(
-    p_shifted: &MatD,  //shifted_control_points: &MatD,
-    u0: &VecD,         //original_knot_vector: &VecD,
-    u_adjusted: &VecD, //adjusted_knot_vector: &VecD,
+    p_shifted: &MatD,
+    u0: &VecD,
+    u_adjusted: &VecD,
     p: usize,
     n: usize,
     dim: usize,
@@ -481,7 +470,7 @@ fn adjust_shifted_control_points(
     }
 
     for k in 0..=p - 1 {
-        let derivative_point = generate_derivative_control_point(n - p + 1, k, p_shifted, u0, p, n, dim); //generate_derivative_control_point(n - p + 1, k, shifted_control_points, original_knot_vector);
+        let derivative_point = generate_derivative_control_point(n - p + 1, k, p_shifted, u0, p, n, dim);
         qki[n - p + 1].push(derivative_point);
     }
 
@@ -559,7 +548,7 @@ fn kronecker_delta(i: usize, j: usize) -> bool {
 /// `u0` 0th order knot vector
 /// `p0` 0th order control point matrix
 fn prefactor(p: usize, i: usize, i0: usize, k: usize, p0: &MatD, u0: &VecD) -> f64 {
-    let n = p0.ncols() - 1; // TODO use points
+    let n = p0.ncols() - 1;
 
     if i <= n - k {
         if k == 0 {

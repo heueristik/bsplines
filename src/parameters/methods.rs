@@ -12,7 +12,7 @@ use crate::{
 ///
 /// Not recommended for unevenly spaced data, as it can produce erratic shapes such as loops.
 pub fn equally_spaced(polyline_segments: usize) -> Parameters {
-    let m = polyline_segments; //data_points.nrows() - 1;
+    let m = polyline_segments;
     let mut u_bar = VecD::zeros(m + 1);
 
     for g in 1..m {
@@ -31,7 +31,7 @@ pub fn equally_spaced(polyline_segments: usize) -> Parameters {
 ///
 /// Dampens the effect of outlier points on the parametrization.
 pub fn centripetal(points: &DataPoints) -> Parameters {
-    let m = points.polyline_segments(); //data_points.nrows() - 1;
+    let m = points.polyline_segments();
 
     let mut sum = 0.0;
 
