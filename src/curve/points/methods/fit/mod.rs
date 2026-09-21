@@ -78,16 +78,15 @@ pub fn compute_svd(
 ) -> Result<SVD<f64, Dyn, Dyn>, FitError> {
     let mut mat = Nmat.transpose() * Nmat;
 
-    match penalization {
-        Some(penalization) => match penalization.lambda {
+    if let Some(penalization) = penalization {
+        match penalization.lambda {
             l if l < 0.0 => return Err(FitError::NegativeLambda { lambda: l }),
             l if l > 0.0 && !is_uniform(knots).unwrap() /*TODO refactor errors and eliminate unwrap*/ => return Err(FitError::NonUniformKnots),
             l => {
                 let delta_mat = calculate_finite_difference_matrix(penalization.kappa, knots);
                 mat += l * (delta_mat.transpose() * delta_mat);
             }
-        },
-        None => {}
+        }
     }
 
     Ok(SVD::new(mat, true, true))

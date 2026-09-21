@@ -12,7 +12,6 @@ categories = [
     "mathematics",
     "algorithms",
     "graphics",
-    "no-std",
 ]
 
 readme = "README.md"
@@ -45,13 +44,12 @@ type_complexity = "allow"
 
 [dependencies]
 embed-doc-image = "0.1.4"
-nalgebra = "0.32.3"
-thiserror = "1.0.56"
-
+nalgebra = "0.35.0"
+thiserror = "2.0.19"
 
 [dev-dependencies]
-rstest = "0.18.2"
+rstest = "0.26.1"
 approx = "0.5.1"
-plotters = "0.3.5"
+plotters = "0.3.7"
 plotters-arrows = "0.1.0"
-num-traits = "0.2.17"
+num-traits = "0.2.19"

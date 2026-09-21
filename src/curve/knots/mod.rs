@@ -119,7 +119,7 @@ impl Knots {
         self.segments() - self.p
     }
 
-    pub fn internal(&self) -> VecDView {
+    pub fn internal(&self) -> VecDView<'_> {
         self.Uk[0].segment(self.p + 1, self.internal_count())
     }
 
@@ -131,11 +131,11 @@ impl Knots {
         self.segments() - self.p + 2
     }
 
-    pub fn domain(&self) -> VecDView {
+    pub fn domain(&self) -> VecDView<'_> {
         self.domain_derivative(0)
     }
 
-    pub fn domain_derivative(&self, k: usize) -> VecDView {
+    pub fn domain_derivative(&self, k: usize) -> VecDView<'_> {
         self.Uk[k].segment(self.p - k, self.domain_count())
     }
 

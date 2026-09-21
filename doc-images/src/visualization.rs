@@ -147,7 +147,7 @@ pub fn generate_2d_plot(filename: &str, splines: Vec<(&Curve, RGBAColor)>, limit
     if let Some(dp) = data {
         assert_eq!(dp.dimension(), 2);
 
-        draw_data_points_2d(&mut chart_context, &dp, false)
+        draw_data_points_2d(&mut chart_context, dp, false)
     }
 
     for (c, color) in splines {

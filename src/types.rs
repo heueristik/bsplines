@@ -14,38 +14,38 @@ pub type KnotVectorDerivatives = Vec<VecD>;
 pub type ControlPointDerivatves = Vec<MatD>;
 
 pub trait VecHelpers {
-    fn head(&self, n: usize) -> MatrixView<f64, Dyn, U1, U1, Dyn>;
-    fn head_mut(&mut self, n: usize) -> MatrixViewMut<f64, Dyn, U1, U1, Dyn>;
+    fn head(&self, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
+    fn head_mut(&mut self, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
 
-    fn segment(&self, i: usize, n: usize) -> MatrixView<f64, Dyn, U1, U1, Dyn>;
-    fn segment_mut(&mut self, i: usize, n: usize) -> MatrixViewMut<f64, Dyn, U1, U1, Dyn>;
+    fn segment(&self, i: usize, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
+    fn segment_mut(&mut self, i: usize, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
 
-    fn tail(&self, n: usize) -> MatrixView<f64, Dyn, U1, U1, Dyn>;
-    fn tail_mut(&mut self, n: usize) -> MatrixViewMut<f64, Dyn, U1, U1, Dyn>;
+    fn tail(&self, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
+    fn tail_mut(&mut self, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
 }
 
 impl VecHelpers for VecD {
-    fn head(&self, n: usize) -> MatrixView<f64, Dyn, U1, U1, Dyn> {
+    fn head(&self, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn> {
         self.segment(0, n)
     }
 
-    fn head_mut(&mut self, n: usize) -> MatrixViewMut<f64, Dyn, U1, U1, Dyn> {
+    fn head_mut(&mut self, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn> {
         self.segment_mut(0, n)
     }
 
-    fn segment(&self, start: usize, n: usize) -> MatrixView<f64, Dyn, U1, U1, Dyn> {
+    fn segment(&self, start: usize, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn> {
         self.generic_view((start, 0), (Dyn(n), U1))
     }
 
-    fn segment_mut(&mut self, start: usize, n: usize) -> MatrixViewMut<f64, Dyn, U1, U1, Dyn> {
+    fn segment_mut(&mut self, start: usize, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn> {
         self.generic_view_mut((start, 0), (Dyn(n), U1))
     }
 
-    fn tail(&self, n: usize) -> MatrixView<f64, Dyn, U1, U1, Dyn> {
+    fn tail(&self, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn> {
         self.segment(self.len() - n, n)
     }
 
-    fn tail_mut(&mut self, n: usize) -> MatrixViewMut<f64, Dyn, U1, U1, Dyn> {
+    fn tail_mut(&mut self, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn> {
         self.segment_mut(self.len() - n, n)
     }
 }

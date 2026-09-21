@@ -112,7 +112,8 @@ pub fn split_and_normalize(
         };
 
         let right = {
-            let mut U_right = VecD::zeros(U.len() + 1 - (l + 1)); // length of U - the elements that occur before the split idx
+            let mut U_right = VecD::zeros(U.len() + 1 - (l + 1)); // length of U - the elements that occur before the
+                                                                  // split idx
             U_right[0] = u;
             U_right.tail_mut(U.len() - (l + 1)).copy_from(&U.tail(U.len() - (l + 1)));
 

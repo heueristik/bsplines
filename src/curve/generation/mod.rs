@@ -105,7 +105,8 @@ pub fn generate(generation: Generation) -> Result<Curve, CurveError> {
         }
         Generation::Interpolation { degree, points } => {
             // TODO allow other methods + uniform
-            let params = parameters::generate(points, parameters::Method::EquallySpaced); // TODO Piegl: ChordLength + DeBoor
+            let params = parameters::generate(points, parameters::Method::EquallySpaced); // TODO Piegl: ChordLength +
+                                                                                          // DeBoor
             let knots = knots::generate(degree, points.segments(), &params, knots::Method::Uniform)?;
             let points = ControlPoints::new_with_capacity(
                 interpolation::interpolate(&knots, points, &params),
