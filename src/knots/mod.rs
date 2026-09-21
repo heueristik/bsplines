@@ -12,19 +12,18 @@ doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.sv
 //! This leaves `n-p` internal knots in the center.
 //! The interval from index `i = p-k,..., n+1-k` is called 'domain'.
 //!
-//! Different [knot vector generation methods][methods] are available.
+//! Different knot vector generation methods are available via [KnotMethod].
 
 use std::ops::MulAssign;
 
 use crate::{
     basis,
     error::Result,
-    parameters,
     parameters::Parameters,
     types::{VecD, VecDView, VecHelpers},
 };
 
-pub mod methods;
+pub(crate) mod methods;
 
 #[derive(Debug, Clone)]
 pub struct Knots {
@@ -32,12 +31,6 @@ pub struct Knots {
     pub(crate) derivatives: Vec<VecD>,
     pub(crate) degree: usize,
     pub(crate) max_derivative: usize,
-}
-
-pub enum KnotGeneration {
-    Uniform,
-    Manual { knots: Knots },
-    Method { parameter_method: parameters::ParameterMethod, knot_method: KnotMethod },
 }
 
 pub enum KnotMethod {
@@ -55,6 +48,12 @@ pub fn generate(degree: usize, polygon_segments: usize, params: &Parameters, met
 }
 
 impl Knots {
+    /// Returns a clamped, uniform knot vector for a curve of the given degree
+    /// with `n` polygon segments.
+    pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Self> {
+        methods::uniform(degree, polygon_segments)
+    }
+
     // generates params automatically, if none are provided.
     pub fn new(degree: usize, knots: VecD) -> Self {
         let mut derivatives: Vec<VecD> = Vec::with_capacity(degree + 1);

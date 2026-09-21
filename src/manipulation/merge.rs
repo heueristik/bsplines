@@ -572,16 +572,12 @@ fn prefactor(p: usize, i: usize, i0: usize, k: usize, p0: &MatD, u0: &VecD) -> f
 mod tests {
     use nalgebra::{dmatrix, dvector};
 
-    use crate::{
-        Curve,
-        generation::{Generation::Manual, generate},
-        knots::KnotGeneration::Uniform,
-    };
+    use crate::Curve;
 
     use super::*;
 
     fn test_bspline(degree: usize, points: MatD) -> Curve {
-        generate(Manual { degree, points: ControlPoints::new(points), knots: Uniform }).unwrap()
+        Curve::with_uniform_knots(degree, ControlPoints::new(points)).unwrap()
     }
 
     mod knots {

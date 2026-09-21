@@ -14,7 +14,7 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //! - Efficient [curve evaluation][curve::Curve] for all available derivatives `k = 0, 1,... , p`.
 //! - Built with [nalgebra](https://crates.io/crates/nalgebra) to store point data in contiguous arrays
 //! - Multiple methods for
-//!   - [curve generation][generation]
+//!   - [curve generation][Curve]
 //!   - [curve parametrization][parameters]
 //!   - [knot generation][knots]
 //!   - [curve manipulation][manipulation]
@@ -54,7 +54,6 @@ pub mod basis;
 pub mod curve;
 pub mod error;
 pub mod fit;
-pub mod generation;
 pub(crate) mod interpolation;
 pub mod knots;
 pub mod manipulation;

@@ -72,18 +72,13 @@ pub fn insert(c: &mut Curve, u: f64) -> Result<()> {
 mod tests {
     use nalgebra::{dmatrix, dvector};
 
-    use crate::{
-        generation::{Generation::Manual, generate},
-        knots::KnotGeneration::Uniform,
-        points::ControlPoints,
-    };
+    use crate::points::ControlPoints;
 
     use super::*;
 
     #[test]
     fn degree_1() {
-        let mut c =
-            generate(Manual { degree: 1, points: ControlPoints::new(dmatrix![-1., 1.;]), knots: Uniform }).unwrap();
+        let mut c = Curve::with_uniform_knots(1, ControlPoints::new(dmatrix![-1., 1.;])).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 1., 1.]);
 
         insert(&mut c, 0.5).unwrap();
@@ -93,8 +88,7 @@ mod tests {
 
     #[test]
     fn degree_2() {
-        let mut c =
-            generate(Manual { degree: 2, points: ControlPoints::new(dmatrix![-1., 0., 1.;]), knots: Uniform }).unwrap();
+        let mut c = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-1., 0., 1.;])).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
         assert_eq!(c.points.matrix(), &dmatrix![-1., 0., 1.;]);
 
@@ -105,9 +99,7 @@ mod tests {
 
     #[test]
     fn degree_2_preexisting_knot() {
-        let mut c =
-            generate(Manual { degree: 2, points: ControlPoints::new(dmatrix![-1.5, -0.5, 0.5, 1.5;]), knots: Uniform })
-                .unwrap();
+        let mut c = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-1.5, -0.5, 0.5, 1.5;])).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
         assert_eq!(c.points.matrix(), &dmatrix![-1.5, -0.5, 0.5, 1.5;]);
 
@@ -118,8 +110,7 @@ mod tests {
 
     #[test]
     fn degree_1_repeated_knot() {
-        let mut c =
-            generate(Manual { degree: 1, points: ControlPoints::new(dmatrix![-1., 1.;]), knots: Uniform }).unwrap();
+        let mut c = Curve::with_uniform_knots(1, ControlPoints::new(dmatrix![-1., 1.;])).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 1., 1.]);
 
         insert(&mut c, 0.5).unwrap();
@@ -133,8 +124,7 @@ mod tests {
 
     #[test]
     fn degree_2_repeated_knots() {
-        let mut c =
-            generate(Manual { degree: 2, points: ControlPoints::new(dmatrix![-1., 0., 1.;]), knots: Uniform }).unwrap();
+        let mut c = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-1., 0., 1.;])).unwrap();
         let u = 0.5;
         let expected_evaluation_result = dvector![0.0];
 

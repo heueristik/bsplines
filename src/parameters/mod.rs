@@ -6,7 +6,7 @@
 
 use crate::{points::DataPoints, types::VecD};
 
-pub mod methods;
+pub(crate) mod methods;
 
 #[derive(Debug, Clone)]
 pub struct Parameters {
