@@ -422,7 +422,7 @@ mod tests {
     #[test]
     fn is_clamped_test() {
         assert!(is_clamped(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
-        assert!(!is_uniform(&Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0])).unwrap());
+        assert!(!is_clamped(&Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0])));
     }
 
     #[test]

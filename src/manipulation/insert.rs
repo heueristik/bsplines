@@ -130,12 +130,12 @@ mod tests {
 
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
         assert_eq!(c.points.matrix(), &dmatrix![-1., 0., 1.;]);
-        //assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
+        assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
 
         insert(&mut c, u).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., u, 1., 1., 1.]);
         assert_eq!(c.points.matrix(), &dmatrix![-1., -0.5, 0.5, 1.;]);
-        //assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
+        assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
 
         insert(&mut c, u).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., u, u, 1., 1., 1.]);
