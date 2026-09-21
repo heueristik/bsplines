@@ -1,5 +1,3 @@
-//#![warn(missing_docs)]
-//#![warn(missing_doc_code_examples)]
 #![cfg_attr(feature = "doc-images",
 cfg_attr(all(),
 doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg")))]
@@ -64,8 +62,6 @@ impl Curve {
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
     pub fn new(knots: Knots, points: ControlPoints) -> Result<Self> {
-        // TODO more sanity checks
-
         match (knots.degree(), points.polygon_segments()) {
             (p, n) if n < p => Err(Error::TooFewPolygonSegments { degree: p, polygon_segments: n }),
             _ => {
@@ -389,7 +385,7 @@ mod tests {
             assert_eq!(c.evaluate_derivative(0.5, k), Ok(dvector![0., 0.]));
         }
 
-        #[rstest] //TODO test for orders > 0
+        #[rstest]
         fn outside_lower_bound(c: Curve) {
             let u = -0.1;
             assert_eq!(c.evaluate_derivative(u, 0), Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 }));
@@ -433,7 +429,6 @@ mod tests {
             insert(&mut c, u).unwrap();
             assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0., u, u, 1., 1., 1., 1.]);
             assert_eq!(c.points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.375, 0.75, 1.;]);
-            //assert_eq!(c.evaluate_naive(u).unwrap(), expected_evaluation_result);
             assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
             assert_eq!(c.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(c.evaluate(1.0).unwrap(), dvector![1.]);
@@ -441,7 +436,6 @@ mod tests {
             insert(&mut c, u).unwrap();
             assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0., u, u, u, 1., 1., 1., 1.]);
             assert_eq!(c.points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.0, 0.375, 0.75, 1.;]);
-            //assert_eq!(c.evaluate_naive(u).unwrap(), expected_evaluation_result);
             assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
             assert_eq!(c.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(c.evaluate(1.0).unwrap(), dvector![1.]);

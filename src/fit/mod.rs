@@ -22,11 +22,6 @@ pub struct Penalization {
     pub lambda: f64,
     /// The finite-difference order κ of the penalty term.
     pub kappa: usize,
-    // TODO add `new` method and assertions according to below
-    // A B-spline curve C(u) of degree p can be generated via least-squares minimization and results in
-    // an approximation of the (m + 1) data points with dimension N . The number of control points (n + 1)
-    // can be specified but must be smaller then the number of data points and greater than the spline degree (m > n
-    // â¥ p).
 }
 
 /// Builds a least-squares fit of data points; created by [`Curve::fit`].
@@ -154,7 +149,6 @@ fn difference_operator(i: usize, j: usize, kappa: usize) -> isize {
     }
 }
 
-// TODO remove and use explicit input
 #[cfg(test)]
 pub(crate) fn test_data_points(npoints: usize) -> DataPoints {
     let inc = 5.0 / npoints as f64;

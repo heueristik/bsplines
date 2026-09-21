@@ -53,7 +53,6 @@ pub fn split_and_normalize(c: &Curve, u: f64, normalize_knot_vectors: (bool, boo
 
     if multiplicity > 0 {
         let left = {
-            // TODO reduce index calcs
             let mut left_knots = VecD::zeros(l + p + 1);
             left_knots.head_mut(l + p).copy_from(&knots.head(l + p));
             left_knots[l + p] = u;
@@ -146,11 +145,6 @@ mod tests {
         assert!(res.is_err());
         assert_eq!(res.unwrap_err(), Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
     }
-
-    /*#[rstest]
-    fn cannot_split_wrong_mult() {
-        todo!("add multiplicity test");
-    }*/
 
     #[rstest]
     fn split_close_to_start(c: Curve) {

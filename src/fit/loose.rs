@@ -84,7 +84,6 @@ mod tests {
              0.0, 0.0, 0.0,-1.0, 1.0;
         ];
         assert_eq!(mat, expected);
-        // TODO check
     }
 
     #[test]
@@ -97,7 +96,6 @@ mod tests {
              0.0, 0.0, 1.0,-2.0, 1.0;
         ];
         assert_eq!(mat, expected);
-        // TODO check
     }
 
     #[test]

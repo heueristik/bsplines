@@ -69,8 +69,6 @@ impl Knots {
         let mut derivatives: Vec<VecD> = Vec::with_capacity(degree + 1);
         derivatives.push(knots);
 
-        // TODO Add multiplicity check
-
         let mut knots = Knots { derivatives, degree, max_derivative: 0 };
         knots.derive();
         knots
@@ -269,7 +267,6 @@ pub fn is_uniform(knots: &Knots) -> Result<bool> {
     let expected = methods::uniform(knots.degree(), knots.polygon_segments())?;
 
     Ok(u0.eq(expected.vector()))
-    // u0.relative_eq(expected.vector(None), NUMERICAL_PRECISION, 0.0) // TODO test
 }
 
 pub(crate) fn reverse(knots: &mut VecD) {
@@ -426,7 +423,6 @@ mod tests {
     fn is_clamped_test() {
         assert!(is_clamped(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
         assert!(!is_uniform(&Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0])).unwrap());
-        //TODO assert_eq!(is_clamped(&Knots::new(1, dvector![2.0, 2.0, 0.5, 3.0, 3.0])), true);
     }
 
     #[test]

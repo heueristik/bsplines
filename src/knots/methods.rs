@@ -40,7 +40,6 @@ pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
         knots[i] = 1.;
     }
 
-    //TODO the equally spaced method should not be used in conjunction with the uniform method."
     Ok(Knots::new(degree, knots))
 }
 

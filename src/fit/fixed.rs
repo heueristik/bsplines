@@ -35,7 +35,6 @@ pub fn fit(
     control_points.column_mut(0).copy_from(&points.get(0));
     control_points.column_mut(n).copy_from(&points.get(m));
 
-    // TODO copy matrix view instead of individual columns
     for i in 1..=n - 1 {
         control_points.column_mut(i).copy_from(&internal_control_points.column(i - 1));
     }
@@ -66,7 +65,7 @@ fn generate_qvectors(knots: &Knots, points: &DataPoints, params: &Parameters) ->
 
 fn calculate_constant_terms_matrix(knots: &Knots, points: &DataPoints, params: &Parameters, q: &MatD) -> MatD {
     let p = knots.degree();
-    let n = knots.polygon_segments(); //settings.intended_control_points_count - 1;
+    let n = knots.polygon_segments();
     let m = points.polyline_segments();
     let dim = points.dimension();
 
@@ -106,7 +105,7 @@ fn calculate_coefficient_matrix(knots: &Knots, points: &DataPoints, params: &Par
 }
 
 fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> MatD {
-    let n = knots.polygon_segments(); //settings.intended_control_points_count - 1;
+    let n = knots.polygon_segments();
     assert!(kappa <= n - 2, "the difference order kappa = {} must not exceed n - 2 = {}", kappa, n - 2);
 
     let mut delta_mat = MatD::zeros(n - 1 - kappa, n - 1);
@@ -145,7 +144,6 @@ mod tests {
              0.0,-1.0, 1.0;
         ];
         assert_eq!(mat, expected);
-        // TODO check
     }
 
     #[test]
@@ -156,10 +154,8 @@ mod tests {
              1.0,-2.0, 1.0;
         ];
         assert_eq!(mat, expected);
-        // TODO check
     }
 
-    // TODO reuse tests for fixed and loose
     #[test]
     fn unpenalized_linear() {
         let points = DataPoints::new(dmatrix![
