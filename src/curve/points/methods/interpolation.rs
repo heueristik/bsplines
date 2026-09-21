@@ -11,7 +11,7 @@ use crate::{
 
 pub fn interpolate(knots: &Knots, points: &DataPoints, params: &Parameters) -> MatD {
     let p = knots.degree();
-    let m = points.segments();
+    let m = points.polyline_segments();
     let n = m;
 
     let u_bar = params.vector();
@@ -45,7 +45,7 @@ mod tests {
         ]);
 
         let params = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(1, points.segments(), &params, Averaging).unwrap();
+        let knots = knots::generate(1, points.polyline_segments(), &params, Averaging).unwrap();
 
         assert_eq!(interpolate(&knots, &points, &params), points.matrix);
     }
@@ -57,7 +57,7 @@ mod tests {
             1., 2., 3., 4.;
         ]);
         let params = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(2, points.segments(), &params, Averaging).unwrap();
+        let knots = knots::generate(2, points.polyline_segments(), &params, Averaging).unwrap();
 
         assert_relative_eq!(
             interpolate(&knots, &points, &params),

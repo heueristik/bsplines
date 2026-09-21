@@ -11,20 +11,20 @@ pub mod methods;
 #[derive(Debug, Clone)]
 pub struct Parameters {
     vector: VecD,
-    segments: usize,
+    polyline_segments: usize,
 }
 
 impl Parameters {
-    pub fn new(vector: VecD, segments: usize) -> Self {
-        Parameters { vector, segments }
+    pub fn new(vector: VecD, polyline_segments: usize) -> Self {
+        Parameters { vector, polyline_segments }
     }
 
     pub fn vector(&self) -> &VecD {
         &self.vector
     }
 
-    pub fn segments(&self) -> usize {
-        self.segments
+    pub fn polyline_segments(&self) -> usize {
+        self.polyline_segments
     }
 }
 
@@ -36,7 +36,7 @@ pub enum Method {
 
 pub fn generate(points: &DataPoints, method: Method) -> Parameters {
     match method {
-        Method::EquallySpaced => methods::equally_spaced(points.segments()),
+        Method::EquallySpaced => methods::equally_spaced(points.polyline_segments()),
         Method::ChordLength => methods::chord_length(points),
         Method::Centripetal => methods::centripetal(points),
     }

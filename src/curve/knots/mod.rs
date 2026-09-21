@@ -61,11 +61,16 @@ pub enum KnotError {
     //InvalidMultiplicity { u: f64, multiplicity: usize },
 }
 
-pub fn generate(degree: usize, segments: usize, params: &Parameters, method: Method) -> Result<Knots, CurveError> {
+pub fn generate(
+    degree: usize,
+    polygon_segments: usize,
+    params: &Parameters,
+    method: Method,
+) -> Result<Knots, CurveError> {
     match method {
-        Method::Uniform => methods::uniform(degree, segments),
-        Method::DeBoor => methods::de_boor(degree, segments, params),
-        Method::Averaging => methods::averaging(degree, segments, params),
+        Method::Uniform => methods::uniform(degree, polygon_segments),
+        Method::DeBoor => methods::de_boor(degree, polygon_segments, params),
+        Method::Averaging => methods::averaging(degree, polygon_segments, params),
     }
 }
 
@@ -104,7 +109,7 @@ impl Knots {
         self.degree
     }
 
-    pub fn segments(&self) -> usize {
+    pub fn polygon_segments(&self) -> usize {
         self.derivatives[0].len() - (self.degree + 2)
     }
 
@@ -113,7 +118,7 @@ impl Knots {
     }
 
     pub fn internal_count(&self) -> usize {
-        self.segments() - self.degree
+        self.polygon_segments() - self.degree
     }
 
     pub fn internal(&self) -> VecDView<'_> {
@@ -125,7 +130,7 @@ impl Knots {
     }
 
     pub fn domain_count(&self) -> usize {
-        self.segments() - self.degree + 2
+        self.polygon_segments() - self.degree + 2
     }
 
     pub fn domain(&self) -> VecDView<'_> {
@@ -191,7 +196,7 @@ impl Knots {
         let pk = self.degree() - k;
         match comparator {
             DomainKnotComparatorType::Left => {
-                let lim = self.segments() + 1 - k;
+                let lim = self.polygon_segments() + 1 - k;
                 let mut i = pk;
 
                 while u > knots[i + 1] && i + 1 < lim {
@@ -200,7 +205,7 @@ impl Knots {
                 i
             }
             DomainKnotComparatorType::LeftOrEqual => {
-                let lim = self.segments() + 1 - k;
+                let lim = self.polygon_segments() + 1 - k;
                 let mut i = pk;
 
                 while u >= knots[i + 1] && i + 1 < lim {
@@ -236,7 +241,7 @@ impl Knots {
     /// `p` the degree of this basis function of the kth degree spline - not of the 0th degree spline
     pub fn evaluate(&self, k: usize, i: usize, p: usize, u: f64) -> f64 {
         let knots = &self.derivatives[k];
-        let n = self.segments();
+        let n = self.polygon_segments();
         let pk = p - k;
 
         basis::basis(knots, i, pk, k, n, u)
@@ -279,7 +284,7 @@ pub fn is_sorted(knots: &Knots) -> bool {
 pub fn is_uniform(knots: &Knots) -> Result<bool, CurveError> {
     let u0 = knots.vector();
 
-    let expected = methods::uniform(knots.degree(), knots.segments())?;
+    let expected = methods::uniform(knots.degree(), knots.polygon_segments())?;
 
     Ok(u0.eq(expected.vector()))
     // u0.relative_eq(expected.vector(None), NUMERICAL_PRECISION, 0.0) // TODO test
@@ -338,7 +343,7 @@ mod tests {
 
     #[rstest(degree, case(1), case(2), case(3))]
     fn segments(degree: usize) {
-        assert_eq!(knots_example(degree).segments(), SEGMENTS);
+        assert_eq!(knots_example(degree).polygon_segments(), SEGMENTS);
     }
 
     #[rstest(degree, expected, case(1, 3), case(2, 2), case(3, 1))]

@@ -9,8 +9,8 @@ use crate::{
 /// Creates a parameters for every data point and distributes them equally ranging from 0 to 1.
 /// This method is not recommended, as it can produce erratic shapes (such as loops) when the data is unevenly spaced.
 ///  see eq. (9.3) in `Piegl1997`
-pub fn equally_spaced(segments: usize) -> Parameters {
-    let m = segments; //data_points.nrows() - 1;
+pub fn equally_spaced(polyline_segments: usize) -> Parameters {
+    let m = polyline_segments; //data_points.nrows() - 1;
     let mut u_bar = VecD::zeros(m + 1);
 
     for g in 1..m {
@@ -18,12 +18,12 @@ pub fn equally_spaced(segments: usize) -> Parameters {
     }
     u_bar[m] = 1f64;
 
-    Parameters { vector: u_bar, segments }
+    Parameters { vector: u_bar, polyline_segments }
 }
 
 ///  see eqs. (9.4) and (9.5) in `Piegl1997`
 pub fn centripetal(points: &DataPoints) -> Parameters {
-    let m = points.segments(); //data_points.nrows() - 1;
+    let m = points.polyline_segments(); //data_points.nrows() - 1;
 
     let mut sum = 0.0;
 
@@ -43,11 +43,11 @@ pub fn centripetal(points: &DataPoints) -> Parameters {
 
     u_bar[m] = 1.0;
 
-    Parameters { vector: u_bar, segments: points.segments() }
+    Parameters { vector: u_bar, polyline_segments: points.polyline_segments() }
 }
 
 pub fn chord_length(points: &DataPoints) -> Parameters {
-    let m = points.segments();
+    let m = points.polyline_segments();
 
     let mut sum = 0f64;
 
@@ -64,7 +64,7 @@ pub fn chord_length(points: &DataPoints) -> Parameters {
 
     u_bar[m] = 1f64;
 
-    Parameters { vector: u_bar, segments: points.segments() }
+    Parameters { vector: u_bar, polyline_segments: points.polyline_segments() }
 }
 
 #[cfg(test)]
@@ -79,7 +79,7 @@ mod tests {
         #[test]
         fn test() {
             let points = DataPoints::new(dmatrix![1.0, 2.0, 3.0, 4.0, 5.0;]);
-            let knots = equally_spaced(points.segments());
+            let knots = equally_spaced(points.polyline_segments());
             assert_eq!(knots.vector, dvector![0., 0.25, 0.5, 0.75, 1.]);
         }
     }

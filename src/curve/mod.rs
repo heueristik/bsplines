@@ -12,10 +12,10 @@ doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.sv
 //! with the
 //! - parameter `u ∈ [0,1]` defining a point on the curve,
 //! - derivative order `k`,
-//! - number of polynomial spline segments `n`,
+//! - number of control polygon segments `n`,
 //! - spline degree `p`,
 //! - `k`-th derivative [knot vector][knots] `U`,
-//! - `n+1-k` [spline basis function][basis] `N` of degree `p` defined by the [knot vector][knots] `U`, and
+//! - `n+1-k` [spline basis function][basis] `N` of degree `p-k` defined by the [knot vector][knots] `U`, and
 //! - `n+1-k`, `N`-dimensional [control points][points] `P`.
 
 use embed_doc_image::embed_doc_image;
@@ -96,14 +96,14 @@ impl Curve {
     ///   0.0, 0.5, 1.5,-0.5,-1.0; // z
     /// ]);
     /// let degree = 2;
-    /// let knots = knots::methods::uniform(degree, points.segments()).unwrap();
+    /// let knots = knots::methods::uniform(degree, points.polygon_segments()).unwrap();
     /// let curve = Curve::new(knots, points).unwrap();
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
     pub fn new(knots: Knots, points: ControlPoints) -> Result<Self, CurveError> {
         // TODO more sanity checks
 
-        match (knots.degree(), points.segments()) {
+        match (knots.degree(), points.polygon_segments()) {
             (p, n) if n < p => Err(CurveError::DegreeAndSegmentsMismatch { p, n }),
             _ => {
                 let mut c = Self { knots, points };
@@ -117,8 +117,8 @@ impl Curve {
         self.knots.degree()
     }
 
-    pub fn segments(&self) -> usize {
-        self.points.segments()
+    pub fn polygon_segments(&self) -> usize {
+        self.points.polygon_segments()
     }
 
     /// Returns the dimension of the curve.
@@ -140,7 +140,7 @@ impl Curve {
         let mut value = VecD::zeros(self.points.dimension());
 
         if k <= p {
-            let n = self.segments();
+            let n = self.polygon_segments();
             let l = self.knots.find_idx(u, k, knots::DomainKnotComparatorType::LeftOrEqual);
 
             for i in l - (p - k)..=n - k {

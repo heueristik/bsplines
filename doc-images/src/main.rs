@@ -62,7 +62,7 @@ fn fit_plots() {
     let bs_max = generate(LeastSquaresFit {
         degree: p,
         points: &dp,
-        intended_segments: dp.segments(),
+        intended_polygon_segments: dp.polyline_segments(),
         method: LooseEnds,
         penalization: None,
     })
@@ -71,7 +71,7 @@ fn fit_plots() {
     let bs_half = generate(LeastSquaresFit {
         degree: p,
         points: &dp,
-        intended_segments: dp.count() / 3,
+        intended_polygon_segments: dp.count() / 3,
         method: LooseEnds,
         penalization: None,
     })
@@ -80,7 +80,7 @@ fn fit_plots() {
     let bs_half_penalized = generate(LeastSquaresFit {
         degree: p,
         points: &dp,
-        intended_segments: dp.count() / 3,
+        intended_polygon_segments: dp.count() / 3,
         method: LooseEnds,
         penalization: Some(Penalization { lambda: 0.5, kappa: 2 }),
     })

@@ -76,7 +76,7 @@ impl DataPoints {
         reverse(self.matrix_mut());
         self
     }
-    pub fn segments(&self) -> usize {
+    pub fn polyline_segments(&self) -> usize {
         self.count() - 1
     }
 }
@@ -103,7 +103,7 @@ impl ControlPoints {
         ControlPoints { derivatives, max_derivative: 0 }
     }
 
-    pub fn segments(&self) -> usize {
+    pub fn polygon_segments(&self) -> usize {
         self.count() - 1
     }
 
@@ -130,7 +130,7 @@ impl ControlPoints {
 
     pub fn derive(&mut self, knots: &Knots) {
         let p = knots.degree();
-        let n = self.segments();
+        let n = self.polygon_segments();
 
         self.derivatives.truncate(1);
         for k in 1..=p {
@@ -213,8 +213,8 @@ mod tests {
     }
 
     #[test]
-    fn segments() {
-        assert_eq!(control_points_example().segments(), 3);
+    fn polygon_segments() {
+        assert_eq!(control_points_example().polygon_segments(), 3);
     }
 
     #[test]

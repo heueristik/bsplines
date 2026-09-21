@@ -47,7 +47,7 @@ pub enum Generation<'a> {
     LeastSquaresFit {
         degree: usize,
         points: &'a DataPoints,
-        intended_segments: usize,
+        intended_polygon_segments: usize,
         method: fit::Method,
         penalization: Option<Penalization>,
     },
@@ -80,10 +80,10 @@ pub fn generate(generation: Generation) -> Result<Curve, CurveError> {
     match generation {
         Generation::Manual { degree, points, knots: method } => {
             // TODO more sanity checks
-            let n = points.segments();
+            let n = points.polygon_segments();
             let p = degree;
 
-            if points.segments() < degree {
+            if points.polygon_segments() < degree {
                 return Err(CurveError::DegreeAndSegmentsMismatch { p, n });
             }
 
@@ -106,7 +106,7 @@ pub fn generate(generation: Generation) -> Result<Curve, CurveError> {
             // TODO allow other methods + uniform
             let params = parameters::generate(points, parameters::Method::EquallySpaced); // TODO Piegl: ChordLength +
             // DeBoor
-            let knots = knots::generate(degree, points.segments(), &params, knots::Method::Uniform)?;
+            let knots = knots::generate(degree, points.polyline_segments(), &params, knots::Method::Uniform)?;
             let points = ControlPoints::new_with_capacity(
                 interpolation::interpolate(&knots, points, &params),
                 knots.degree() + 1,
@@ -114,10 +114,10 @@ pub fn generate(generation: Generation) -> Result<Curve, CurveError> {
 
             Curve::new(knots, points)
         }
-        Generation::LeastSquaresFit { degree, points, intended_segments, method, penalization } => {
+        Generation::LeastSquaresFit { degree, points, intended_polygon_segments, method, penalization } => {
             // TODO allow other methods + uniform
             let params = parameters::generate(points, parameters::Method::EquallySpaced);
-            let knots = knots::generate(degree, intended_segments, &params, knots::Method::Uniform)?;
+            let knots = knots::generate(degree, intended_polygon_segments, &params, knots::Method::Uniform)?;
 
             /*let (knots, params) = match penalization {
                 Some(..) => {

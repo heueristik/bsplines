@@ -42,7 +42,7 @@ impl Constraints {
         self.params.len()
     }
 
-    pub fn segments(&self) -> usize {
+    pub fn polyline_segments(&self) -> usize {
         self.count() - 1
     }
 }
@@ -181,7 +181,7 @@ fn construct_n_mat(a: &ConstrainedCurve, b: &ConstrainedCurve) -> MatD {
 
 fn calculate_kv(a: &Curve) -> MatD {
     let p = a.degree();
-    let m = a.segments();
+    let m = a.polygon_segments();
 
     let vk = &a.knots.derivatives;
     let s = a.points.matrix();
@@ -203,7 +203,7 @@ fn calculate_kv(a: &Curve) -> MatD {
 
 fn calculate_kw(b: &Curve) -> MatD {
     let p = b.degree();
-    let o = b.segments();
+    let o = b.polygon_segments();
     let wk = &b.knots.derivatives;
     let t = b.points.matrix();
 
@@ -226,7 +226,7 @@ fn calculate_kw(b: &Curve) -> MatD {
 
 fn calculate_iv(a: &Curve) -> MatD {
     let p = a.degree();
-    let m = a.segments();
+    let m = a.polygon_segments();
     let vk = &a.knots.derivatives;
     let s = a.points.matrix();
 
@@ -249,7 +249,7 @@ fn calculate_iv(a: &Curve) -> MatD {
 
 fn calculate_jw(b: &Curve) -> MatD {
     let p = b.degree();
-    let o = b.segments();
+    let o = b.polygon_segments();
     let wk = &b.knots.derivatives;
     let t = b.points.matrix();
 
@@ -272,10 +272,10 @@ fn calculate_jw(b: &Curve) -> MatD {
 
 fn calculate_gv(a: &ConstrainedCurve) -> MatD {
     let p = a.curve.degree();
-    let m = a.curve.segments();
+    let m = a.curve.polygon_segments();
     let vk0 = a.curve.knots.vector();
 
-    let mg = a.constraints.segments();
+    let mg = a.constraints.polyline_segments();
 
     let mut gv = MatD::zeros(mg + 1, p);
 
@@ -289,10 +289,10 @@ fn calculate_gv(a: &ConstrainedCurve) -> MatD {
 
 fn calculate_hw(b: &ConstrainedCurve) -> MatD {
     let p = b.curve.degree();
-    let o = b.curve.segments();
+    let o = b.curve.polygon_segments();
     let wk0 = b.curve.knots.vector();
 
-    let oh = b.constraints.segments();
+    let oh = b.constraints.polyline_segments();
     let mut hw = MatD::zeros(oh + 1, p);
 
     for h in 0..=oh {
@@ -314,10 +314,10 @@ fn calculate_hw(b: &ConstrainedCurve) -> MatD {
 
 fn calculate_ipv(a: &ConstrainedCurve) -> MatD {
     let p = a.curve.degree();
-    let m = a.curve.segments();
+    let m = a.curve.polygon_segments();
     let vk0 = a.curve.knots.vector();
 
-    let mg = a.constraints.segments();
+    let mg = a.constraints.polyline_segments();
 
     let mut ipv = MatD::zeros(p, mg + 1);
 
@@ -332,10 +332,10 @@ fn calculate_ipv(a: &ConstrainedCurve) -> MatD {
 
 fn calculate_jppw(b: &ConstrainedCurve) -> MatD {
     let p_ = b.curve.degree();
-    let o_ = b.curve.segments();
+    let o_ = b.curve.polygon_segments();
     let wk0 = b.curve.knots.vector();
 
-    let oh_ = b.constraints.segments();
+    let oh_ = b.constraints.polyline_segments();
 
     let mut jppw = MatD::zeros(p_, oh_ + 1);
 
@@ -355,8 +355,8 @@ fn calculate_kconst(a: &Curve, b: &Curve) -> MatD {
     let mut kconst = MatD::zeros(dim, p);
     let mut sum = VecD::zeros(dim);
 
-    let m = a.segments();
-    let o = b.segments();
+    let m = a.polygon_segments();
+    let o = b.polygon_segments();
 
     let vk = &a.knots.derivatives;
     let wk = &b.knots.derivatives;
@@ -425,8 +425,8 @@ fn generate_shifted_control_point_vectors_of_spline1and2(a: &Curve, b: &Curve, s
 fn adjust_knots_of_both_splines(a: &Curve, b: &Curve) -> (VecD, VecD, VecD) {
     let p = a.degree();
 
-    let m = a.segments();
-    let o = b.segments();
+    let m = a.polygon_segments();
+    let o = b.polygon_segments();
 
     let v0 = a.knots.vector();
     let w0 = b.knots.vector();
@@ -454,8 +454,8 @@ fn adjust_knots(p: usize, u_left: &VecD, n_left: usize, u_right: &VecD) -> VecD 
 }
 
 fn create_merged_knot_vector(a: &Curve, b: &Curve, v_adjusted: &VecD, w_adjusted: &VecD) -> VecD {
-    let m = a.segments();
-    let o = b.segments();
+    let m = a.polygon_segments();
+    let o = b.polygon_segments();
 
     // construct the knot vector of the merged spline
     let mut merged_knots = VecD::zeros(m + 2 + o + 1);
@@ -531,7 +531,7 @@ fn adjust_shifted_control_points_of_both_splines(
     w_adjusted_reversed: &VecD,
 ) -> (MatD, MatD) {
     let p = a.degree();
-    let n = a.segments();
+    let n = a.polygon_segments();
     let dim = a.dimension();
 
     let v0 = a.knots.vector();

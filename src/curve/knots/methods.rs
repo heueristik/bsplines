@@ -3,10 +3,12 @@ use crate::{
     types::VecD,
 };
 
-fn input_check(degree: usize, segments: usize) -> Result<(), CurveError> {
+fn input_check(degree: usize, polygon_segments: usize) -> Result<(), CurveError> {
     match degree {
         0 => Err(CurveError::DegreeTooLow { p: degree, limit: 0 }),
-        degree if degree > segments => Err(CurveError::DegreeAndSegmentsMismatch { p: degree, n: segments }),
+        degree if degree > polygon_segments => {
+            Err(CurveError::DegreeAndSegmentsMismatch { p: degree, n: polygon_segments })
+        }
         _ => Ok(()),
     }
 }
@@ -15,9 +17,9 @@ fn input_check(degree: usize, segments: usize) -> Result<(), CurveError> {
 ///
 /// ## Note
 /// Use this method only if the control points are evenly distributed.
-pub fn uniform(degree: usize, segments: usize) -> Result<Knots, CurveError> {
+pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots, CurveError> {
     let p = degree;
-    let n = segments;
+    let n = polygon_segments;
 
     input_check(p, n)?;
 
@@ -39,9 +41,9 @@ pub fn uniform(degree: usize, segments: usize) -> Result<Knots, CurveError> {
 }
 
 ///  see eq. (9.8) in `Piegl1997`
-pub fn averaging(degree: usize, segments: usize, parameters: &Parameters) -> Result<Knots, CurveError> {
+pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots, CurveError> {
     let p = degree;
-    let n = segments;
+    let n = polygon_segments;
 
     input_check(p, n)?;
 
@@ -76,9 +78,9 @@ pub fn averaging(degree: usize, segments: usize, parameters: &Parameters) -> Res
 /// It guarantees that every knot span contains at least one u_bar.
 /// According to deBoor, this ensures that the $$N\times N$$ cofficient matrix is positive definite and
 /// well-conditioned, which is important for the least-squares fitting and interpolation of data points.
-pub fn de_boor(degree: usize, segments: usize, parameters: &Parameters) -> Result<Knots, CurveError> {
+pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots, CurveError> {
     let p = degree;
-    let n = segments;
+    let n = polygon_segments;
 
     input_check(p, n)?;
 
@@ -127,9 +129,9 @@ mod tests {
         #[test]
         fn degree_0_errors() {
             let degree = 0;
-            let segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
 
-            assert!(uniform(degree, segments).is_err());
+            assert!(uniform(degree, polygon_segments).is_err());
         }
 
         #[test]
@@ -182,24 +184,27 @@ mod tests {
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree(degree: usize) {
-            let segments = degree; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree; // data points and control points counts are chosen to be identical here
 
             let head = vec![0.0; degree + 1];
             let tail = vec![1.0; degree + 1];
 
-            assert_eq!(uniform(degree, segments).unwrap().derivatives[0], VecD::from_vec([head, tail].concat()));
+            assert_eq!(
+                uniform(degree, polygon_segments).unwrap().derivatives[0],
+                VecD::from_vec([head, tail].concat())
+            );
         }
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree_plus_1(degree: usize) {
-            let segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
 
             let head = vec![0.0; degree + 1];
             let internal = vec![0.5];
             let tail = vec![1.0; degree + 1];
 
             assert_eq!(
-                uniform(degree, segments).unwrap().derivatives[0],
+                uniform(degree, polygon_segments).unwrap().derivatives[0],
                 VecD::from_vec([head, internal, tail].concat())
             );
         }
@@ -215,66 +220,66 @@ mod tests {
         #[test]
         fn degree_0_errors() {
             let degree = 0;
-            let segments = degree + 1; // data points and control points counts are chosen to be identical here
-            let params = equally_spaced(segments);
+            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let params = equally_spaced(polygon_segments);
 
-            assert!(averaging(degree, segments, &params).is_err());
+            assert!(averaging(degree, polygon_segments, &params).is_err());
         }
 
         #[test]
         fn degree_1() {
-            let segments = 4; // data points and control points counts are chosen to be identical here
-            let params = equally_spaced(segments);
+            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let params = equally_spaced(polygon_segments);
             assert_eq!(
-                averaging(1, segments, &params).unwrap().derivatives[0],
+                averaging(1, polygon_segments, &params).unwrap().derivatives[0],
                 dvector![0., 0., 0.25, 0.5, 0.75, 1., 1.]
             );
         }
 
         #[test]
         fn degree_2() {
-            let segments = 4; // data points and control points counts are chosen to be identical here
-            let params = equally_spaced(segments);
+            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let params = equally_spaced(polygon_segments);
             assert_eq!(
-                averaging(2, segments, &params).unwrap().derivatives[0],
+                averaging(2, polygon_segments, &params).unwrap().derivatives[0],
                 dvector![0., 0., 0., 0.375, 0.625, 1., 1., 1.]
             );
         }
 
         #[test]
         fn degree_3() {
-            let segments = 4; // data points and control points counts are chosen to be identical here
+            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
             let params = equally_spaced(4);
             assert_eq!(
-                averaging(3, segments, &params).unwrap().derivatives[0],
+                averaging(3, polygon_segments, &params).unwrap().derivatives[0],
                 dvector![0., 0., 0., 0., 0.5, 1., 1., 1., 1.]
             );
         }
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree(degree: usize) {
-            let segments = degree; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree; // data points and control points counts are chosen to be identical here
             let params = equally_spaced(4);
 
             let head = vec![0.0; degree + 1];
             let tail = vec![1.0; degree + 1];
             assert_eq!(
-                averaging(degree, segments, &params).unwrap().derivatives[0],
+                averaging(degree, polygon_segments, &params).unwrap().derivatives[0],
                 VecD::from_vec([head, tail].concat())
             );
         }
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree_plus_1(degree: usize) {
-            let segments = degree + 1; // data points and control points counts are chosen to be identical here
-            let params = equally_spaced(segments);
+            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let params = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];
             let internal = vec![0.5];
             let tail = vec![1.0; degree + 1];
 
             assert_eq!(
-                averaging(degree, segments, &params).unwrap().derivatives[0],
+                averaging(degree, polygon_segments, &params).unwrap().derivatives[0],
                 VecD::from_vec([head, internal, tail].concat())
             );
         }
@@ -290,28 +295,28 @@ mod tests {
         #[test]
         fn degree_0_errors() {
             let degree = 0;
-            let segments = degree + 1; // data points and control points counts are chosen to be identical here
-            let params = equally_spaced(segments);
+            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let params = equally_spaced(polygon_segments);
 
-            assert!(de_boor(degree, segments, &params).is_err());
+            assert!(de_boor(degree, polygon_segments, &params).is_err());
         }
 
         #[test]
         fn degree_1() {
-            let segments = 4; // data points and control points counts are chosen to be identical here
-            let params = equally_spaced(segments);
+            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let params = equally_spaced(polygon_segments);
             assert_eq!(
-                de_boor(1, segments, &params).unwrap().derivatives[0],
+                de_boor(1, polygon_segments, &params).unwrap().derivatives[0],
                 dvector![0., 0., 0.0625, 0.375, 0.6875, 1., 1.]
             );
         }
 
         #[test]
         fn degree_2() {
-            let segments = 4; // data points and control points counts are chosen to be identical here
-            let params = equally_spaced(segments);
+            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
+            let params = equally_spaced(polygon_segments);
             assert_relative_eq!(
-                de_boor(2, segments, &params).unwrap().derivatives[0],
+                de_boor(2, polygon_segments, &params).unwrap().derivatives[0],
                 dvector![0., 0., 0., 1. / 6., 1. / 3. + 0.25, 1., 1., 1.],
                 epsilon = f64::EPSILON.sqrt()
             );
@@ -319,38 +324,38 @@ mod tests {
 
         #[test]
         fn degree_3() {
-            let segments = 4; // data points and control points counts are chosen to be identical here
+            let polygon_segments = 4; // data points and control points counts are chosen to be identical here
             let params = equally_spaced(4);
             assert_eq!(
-                de_boor(3, segments, &params).unwrap().derivatives[0],
+                de_boor(3, polygon_segments, &params).unwrap().derivatives[0],
                 dvector![0., 0., 0., 0., 0.375, 1., 1., 1., 1.]
             );
         }
 
         #[rstest(degree, case(1), case(2), case(3))]
         fn segments_eq_degree(degree: usize) {
-            let segments = degree; // data points and control points counts are chosen to be identical here
+            let polygon_segments = degree; // data points and control points counts are chosen to be identical here
             let params = equally_spaced(4);
 
             let head = vec![0.0; degree + 1];
             let tail = vec![1.0; degree + 1];
             assert_eq!(
-                de_boor(degree, segments, &params).unwrap().derivatives[0],
+                de_boor(degree, polygon_segments, &params).unwrap().derivatives[0],
                 VecD::from_vec([head, tail].concat())
             );
         }
 
         #[rstest(degree, internal_knot, case(1, 1. / 4.), case(2, 2. / 6.), case(3, 3. / 8.))]
         fn segments_eq_degree_plus_1(degree: usize, internal_knot: f64) {
-            let segments = degree + 1; // data points and control points counts are chosen to be identical here
-            let params = equally_spaced(segments);
+            let polygon_segments = degree + 1; // data points and control points counts are chosen to be identical here
+            let params = equally_spaced(polygon_segments);
 
             let head = vec![0.0; degree + 1];
             let internal = vec![internal_knot];
             let tail = vec![1.0; degree + 1];
 
             assert_eq!(
-                de_boor(degree, segments, &params).unwrap().derivatives[0],
+                de_boor(degree, polygon_segments, &params).unwrap().derivatives[0],
                 VecD::from_vec([head, internal, tail].concat())
             );
         }

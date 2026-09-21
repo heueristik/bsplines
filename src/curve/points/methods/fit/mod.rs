@@ -59,7 +59,13 @@ fn input_checks(
     params: &Parameters,
     penalization: &Option<Penalization>,
 ) -> Result<(), FitError> {
-    match (knots.segments(), points.segments(), params.segments(), knots.degree(), penalization) {
+    match (
+        knots.polygon_segments(),
+        points.polyline_segments(),
+        params.polyline_segments(),
+        knots.degree(),
+        penalization,
+    ) {
         (n, m, _, _, _) if n > m => Err(FitError::RequestedPolynomialSegmentAndDataSegementMismatch { n, m }),
         (_, m, mp, _, _) if m != mp => Err(FitError::DataSegmentsAndParameterSegmentsMismatch { m, mp }),
         (n, _, _, p, _) if n < p => Err(FitError::RequestedPolynomialSegmentAndSplineDegreeMismatch { n, p }),
