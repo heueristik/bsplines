@@ -1,11 +1,9 @@
 //! Numeric type aliases over [nalgebra] with dynamic dimensions and `f64` scalars.
 
-use nalgebra::{Dyn, Matrix, MatrixView, MatrixViewMut, OMatrix, OVector, Owned, U1};
+use nalgebra::{Dyn, MatrixView, MatrixViewMut, OMatrix, OVector, U1};
 
 /// A dynamically sized column vector.
 pub type VecD = OVector<f64, Dyn>;
-/// A dynamically sized row vector.
-pub type RowVecD = Matrix<f64, U1, Dyn, Owned<f64, U1, Dyn>>;
 
 /// An immutable view into a [`VecD`].
 pub type VecDView<'a> = MatrixView<'a, f64, Dyn, U1, U1, Dyn>;
@@ -14,10 +12,6 @@ pub type VecDViewMut<'a> = MatrixViewMut<'a, f64, Dyn, U1, U1, Dyn>;
 
 /// A dynamically sized matrix.
 pub type MatD = OMatrix<f64, Dyn, Dyn>;
-/// An immutable view into a [`MatD`].
-pub type MatDView<'a> = MatrixView<'a, f64, Dyn, Dyn>;
-/// A dynamically sized matrix with a single row.
-pub type MatRowD = OMatrix<f64, U1, Dyn>;
 
 /// Eigen-style sub-vector accessors for [`VecD`].
 pub trait VecHelpers {
