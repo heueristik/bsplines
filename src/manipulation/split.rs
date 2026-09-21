@@ -41,7 +41,7 @@ pub fn split(c: &Curve, u: f64) -> Result<(Curve, Curve), SplitError> {
 pub fn split_and_normalize(
     c: &Curve,
     u: f64,
-    normalizeKnotVectors: (bool, bool),
+    normalize_knot_vectors: (bool, bool),
 ) -> Result<(Curve, Curve), SplitError> {
     if u <= 0.0 || u >= 1.0 {
         return Err(SplitError::OutOfBounds { u, lower_bound: 0.0, upper_bound: 1.0 });
@@ -62,68 +62,68 @@ pub fn split_and_normalize(
         insert(&mut bs_inserted, u).unwrap();
     }
 
-    let U = bs_inserted.knots.vector();
-    let P = bs_inserted.points.matrix();
+    let knots = bs_inserted.knots.vector();
+    let points = bs_inserted.points.matrix();
 
     if multiplicity > 0 {
         let left = {
             // TODO reduce index calcs
-            let mut U_left = VecD::zeros(l + p + 1);
-            U_left.head_mut(l + p).copy_from(&U.head(l + p));
-            U_left[l + p] = u;
+            let mut left_knots = VecD::zeros(l + p + 1);
+            left_knots.head_mut(l + p).copy_from(&knots.head(l + p));
+            left_knots[l + p] = u;
 
-            if normalizeKnotVectors.0 {
-                normalize(&mut U_left);
+            if normalize_knot_vectors.0 {
+                normalize(&mut left_knots);
             }
-            let bot_cols = U_left.len() - (p + 2) + 1;
-            let P_left: MatD = P.columns(0, bot_cols).into();
+            let bot_cols = left_knots.len() - (p + 2) + 1;
+            let left_points: MatD = points.columns(0, bot_cols).into();
 
-            Curve::new(Knots::new(p, U_left), ControlPoints::new(P_left))?
+            Curve::new(Knots::new(p, left_knots), ControlPoints::new(left_points))?
         };
 
         let right = {
-            let mut U_right = VecD::zeros(U.len() + 1 - l);
-            U_right[0] = u;
-            U_right.tail_mut(U.len() - l).copy_from(&U.tail(U.len() - l));
+            let mut right_knots = VecD::zeros(knots.len() + 1 - l);
+            right_knots[0] = u;
+            right_knots.tail_mut(knots.len() - l).copy_from(&knots.tail(knots.len() - l));
 
-            if normalizeKnotVectors.1 {
-                normalize(&mut U_right);
+            if normalize_knot_vectors.1 {
+                normalize(&mut right_knots);
             }
-            let bot_cols = U_right.len() - (p + 2) + 1;
-            let P_right: MatD = P.columns(P.ncols() - bot_cols, bot_cols).into();
+            let bot_cols = right_knots.len() - (p + 2) + 1;
+            let right_points: MatD = points.columns(points.ncols() - bot_cols, bot_cols).into();
 
-            Curve::new(Knots::new(p, U_right), ControlPoints::new(P_right))?
+            Curve::new(Knots::new(p, right_knots), ControlPoints::new(right_points))?
         };
         Ok((left, right))
     } else {
         let left = {
-            let mut U_left = VecD::zeros(l + p + 1 + 1);
-            U_left.head_mut(l + p + 1).copy_from(&U.head(l + p + 1));
-            U_left[l + p + 1] = u;
+            let mut left_knots = VecD::zeros(l + p + 1 + 1);
+            left_knots.head_mut(l + p + 1).copy_from(&knots.head(l + p + 1));
+            left_knots[l + p + 1] = u;
 
-            if normalizeKnotVectors.0 {
-                normalize(&mut U_left);
+            if normalize_knot_vectors.0 {
+                normalize(&mut left_knots);
             }
 
-            let top_cols = U_left.len() + 1 - (p + 2);
-            let P_left: MatD = P.columns(0, top_cols).into();
+            let top_cols = left_knots.len() + 1 - (p + 2);
+            let left_points: MatD = points.columns(0, top_cols).into();
 
-            Curve::new(Knots::new(p, U_left), ControlPoints::new(P_left))?
+            Curve::new(Knots::new(p, left_knots), ControlPoints::new(left_points))?
         };
 
         let right = {
-            let mut U_right = VecD::zeros(U.len() + 1 - (l + 1)); // length of U - the elements that occur before the
+            let mut right_knots = VecD::zeros(knots.len() + 1 - (l + 1)); // length of knots - the elements that occur before the
             // split idx
-            U_right[0] = u;
-            U_right.tail_mut(U.len() - (l + 1)).copy_from(&U.tail(U.len() - (l + 1)));
+            right_knots[0] = u;
+            right_knots.tail_mut(knots.len() - (l + 1)).copy_from(&knots.tail(knots.len() - (l + 1)));
 
-            if normalizeKnotVectors.1 {
-                normalize(&mut U_right);
+            if normalize_knot_vectors.1 {
+                normalize(&mut right_knots);
             }
-            let bot_cols = U_right.len() + 1 - (p + 2);
-            let P_right: MatD = P.columns(P.ncols() - bot_cols, bot_cols).into();
+            let bot_cols = right_knots.len() + 1 - (p + 2);
+            let right_points: MatD = points.columns(points.ncols() - bot_cols, bot_cols).into();
 
-            Curve::new(Knots::new(p, U_right), ControlPoints::new(P_right))?
+            Curve::new(Knots::new(p, right_knots), ControlPoints::new(right_points))?
         };
         Ok((left, right))
     }

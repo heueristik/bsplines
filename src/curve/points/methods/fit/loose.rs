@@ -18,10 +18,10 @@ pub fn fit(
 ) -> Result<MatD, FitError> {
     input_checks(knots, points, params, &penalization)?;
 
-    let Nmat = calculate_coefficient_matrix(knots, points, params);
+    let n_mat = calculate_coefficient_matrix(knots, points, params);
 
-    let svd = compute_svd(knots, &Nmat, &penalization, Box::new(calculate_finite_difference_matrix))?;
-    let mat = Nmat.transpose() * points.matrix().transpose();
+    let svd = compute_svd(knots, &n_mat, &penalization, Box::new(calculate_finite_difference_matrix))?;
+    let mat = n_mat.transpose() * points.matrix().transpose();
     let control_points = svd.solve(&mat, f64::EPSILON.sqrt()).unwrap().transpose();
 
     Ok(control_points)
@@ -32,16 +32,16 @@ fn calculate_coefficient_matrix(knots: &Knots, points: &DataPoints, params: &Par
     let n = knots.segments();
     let m = points.segments();
 
-    let U_bar = params.vector();
+    let u_bar = params.vector();
 
-    let mut Nmat = MatD::zeros(m + 1, n + 1);
+    let mut n_mat = MatD::zeros(m + 1, n + 1);
     for g in 0..=m {
-        let u = U_bar[g];
+        let u = u_bar[g];
         for i in 0..=n {
-            Nmat[(g, i)] = knots.evaluate(0, i, p, u);
+            n_mat[(g, i)] = knots.evaluate(0, i, p, u);
         }
     }
-    Nmat
+    n_mat
 }
 
 fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> MatD {

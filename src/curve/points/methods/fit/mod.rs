@@ -1,4 +1,4 @@
-use nalgebra::{DMatrix, Dyn, SVD};
+use nalgebra::{Dyn, SVD};
 use thiserror::Error;
 
 use crate::{
@@ -72,11 +72,11 @@ fn input_checks(
 
 pub fn compute_svd(
     knots: &Knots,
-    Nmat: &MatD,
+    n_mat: &MatD,
     penalization: &Option<Penalization>,
     calculate_finite_difference_matrix: Box<dyn FnOnce(usize, &Knots) -> MatD>,
 ) -> Result<SVD<f64, Dyn, Dyn>, FitError> {
-    let mut mat = Nmat.transpose() * Nmat;
+    let mut mat = n_mat.transpose() * n_mat;
 
     if let Some(penalization) = penalization {
         match penalization.lambda {
@@ -110,10 +110,11 @@ fn difference_operator(i: usize, j: usize, kappa: usize) -> isize {
 }
 
 // TODO remove and use explicit input
-fn test_data_points(npoints: usize) -> DataPoints {
+#[cfg(test)]
+pub(crate) fn test_data_points(npoints: usize) -> DataPoints {
     let inc = 5.0 / npoints as f64;
     let shift = (npoints - 1) as f64 * inc / 2.0;
-    DataPoints::new(DMatrix::from_fn(2, npoints, |r, c| {
+    DataPoints::new(nalgebra::DMatrix::from_fn(2, npoints, |r, c| {
         if r == 0 {
             // x coords
             c as f64 * inc - shift

@@ -321,7 +321,7 @@ impl Curve {
     /// # Arguments
     ///
     /// * `k` - The derivative
-    pub fn get_derivative_curve(&self, k: usize) -> Self {
+    pub fn derivative_curve(&self, k: usize) -> Self {
         let knots = Knots::new(self.degree() - k, self.knots.vector_derivative(k).clone());
         let points = ControlPoints::new(self.points.matrix_derivative(k).clone());
         Curve { knots, points }
@@ -408,7 +408,7 @@ mod tests {
             let points = dmatrix![-1., -0.5, 0.5, 1.;];
             let mut c = generate(Manual { degree: p, points: ControlPoints::new(points), knots: Uniform }).unwrap();
             let u = 0.5;
-            let expectedEvaluationResult = dvector![0.0];
+            let expected_evaluation_result = dvector![0.0];
             assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0., 1., 1., 1., 1.]);
             assert_eq!(c.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(c.evaluate(1.0).unwrap(), dvector![1.]);
@@ -416,23 +416,23 @@ mod tests {
             insert(&mut c, u).unwrap();
             assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0., u, 1., 1., 1., 1.]);
             assert_eq!(c.points.matrix(), &dmatrix![-1., -0.75, 0.0, 0.75, 1.;]);
-            assert_eq!(c.evaluate(u).unwrap(), expectedEvaluationResult);
+            assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
             assert_eq!(c.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(c.evaluate(1.0).unwrap(), dvector![1.]);
 
             insert(&mut c, u).unwrap();
             assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0., u, u, 1., 1., 1., 1.]);
             assert_eq!(c.points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.375, 0.75, 1.;]);
-            //assert_eq!(c.evaluate_naive(u).unwrap(), expectedEvaluationResult);
-            assert_eq!(c.evaluate(u).unwrap(), expectedEvaluationResult);
+            //assert_eq!(c.evaluate_naive(u).unwrap(), expected_evaluation_result);
+            assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
             assert_eq!(c.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(c.evaluate(1.0).unwrap(), dvector![1.]);
 
             insert(&mut c, u).unwrap();
             assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0., u, u, u, 1., 1., 1., 1.]);
             assert_eq!(c.points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.0, 0.375, 0.75, 1.;]);
-            //assert_eq!(c.evaluate_naive(u).unwrap(), expectedEvaluationResult);
-            assert_eq!(c.evaluate(u).unwrap(), expectedEvaluationResult);
+            //assert_eq!(c.evaluate_naive(u).unwrap(), expected_evaluation_result);
+            assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
             assert_eq!(c.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(c.evaluate(1.0).unwrap(), dvector![1.]);
         }

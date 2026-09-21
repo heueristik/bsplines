@@ -15,15 +15,16 @@ use std::ops::MulAssign;
 
 use crate::{
     curve::knots::Knots,
-    types::{ControlPointDerivatves, MatD, VecD, VecDView, VecDViewMut},
+    types::{MatD, VecD, VecDView, VecDViewMut},
 };
 
 pub mod methods;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct ControlPoints {
-    pub(crate) Pk: ControlPointDerivatves,
-    k_max: usize,
+    /// The control point matrices of the curve and of its derivatives, indexed by derivative order.
+    pub(crate) derivatives: Vec<MatD>,
+    max_derivative: usize,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -82,24 +83,24 @@ impl DataPoints {
 
 impl Points for ControlPoints {
     fn matrix(&self) -> &MatD {
-        &self.Pk[0]
+        &self.derivatives[0]
     }
 
     fn matrix_mut(&mut self) -> &mut MatD {
-        &mut self.Pk[0]
+        &mut self.derivatives[0]
     }
 }
 
 impl ControlPoints {
     pub fn new(points: MatD) -> Self {
-        ControlPoints { Pk: vec![points], k_max: 0 }
+        ControlPoints { derivatives: vec![points], max_derivative: 0 }
     }
 
     pub fn new_with_capacity(points: MatD, capacity: usize) -> ControlPoints {
-        let mut Pk: Vec<MatD> = Vec::with_capacity(capacity);
-        Pk.push(points);
+        let mut derivatives: Vec<MatD> = Vec::with_capacity(capacity);
+        derivatives.push(points);
 
-        ControlPoints { Pk, k_max: 0 }
+        ControlPoints { derivatives, max_derivative: 0 }
     }
 
     pub fn segments(&self) -> usize {
@@ -107,66 +108,66 @@ impl ControlPoints {
     }
 
     pub fn matrix_derivative(&self, derivative: usize) -> &MatD {
-        assert!(derivative <= self.k_max, "Derivative {} is not calculated", derivative);
-        &self.Pk[derivative]
+        assert!(derivative <= self.max_derivative, "Derivative {} is not calculated", derivative);
+        &self.derivatives[derivative]
     }
 
     pub fn matrix_derivative_mut(&mut self, derivative: usize) -> &mut MatD {
-        assert!(derivative <= self.k_max, "Derivative {} is not calculated", derivative);
-        &mut self.Pk[derivative]
+        assert!(derivative <= self.max_derivative, "Derivative {} is not calculated", derivative);
+        &mut self.derivatives[derivative]
     }
 
     pub fn count(&self) -> usize {
         self.count_derivative(0)
     }
     pub fn count_derivative(&self, k: usize) -> usize {
-        self.Pk[k].ncols()
+        self.derivatives[k].ncols()
     }
 
     pub fn max_derivative(&self) -> usize {
-        self.k_max
+        self.max_derivative
     }
 
     pub fn derive(&mut self, knots: &Knots) {
         let p = knots.degree();
         let n = self.segments();
 
-        self.Pk.truncate(1);
+        self.derivatives.truncate(1);
         for k in 1..=p {
-            let mut Pnew = MatD::zeros(self.dimension(), n - k + 1);
+            let mut new_points = MatD::zeros(self.dimension(), n - k + 1);
             // TODO iter over points instead
-            for (i, mut col) in Pnew.column_iter_mut().enumerate() {
+            for (i, mut col) in new_points.column_iter_mut().enumerate() {
                 col.copy_from(&self.derive_single_point(i, k, knots));
             }
-            self.Pk.push(Pnew);
+            self.derivatives.push(new_points);
         }
-        self.k_max = p;
+        self.max_derivative = p;
     }
 
-    fn derive_single_point(&self, i: usize, k_max: usize, knots: &Knots) -> VecD {
+    fn derive_single_point(&self, i: usize, k: usize, knots: &Knots) -> VecD {
         let p = knots.degree();
 
-        if k_max == 0 {
-            return self.Pk[0].column(i).clone_owned();
+        if k == 0 {
+            return self.derivatives[0].column(i).clone_owned();
         }
 
-        let U0 = knots.vector();
-        if U0[i + p + 1] == U0[i + k_max] {
+        let u0 = knots.vector();
+        if u0[i + p + 1] == u0[i + k] {
             return VecD::zeros(self.dimension());
         }
 
-        (p - k_max + 1) as f64 / (U0[i + p + 1] - U0[i + k_max]) *
-            (self.derive_single_point(i + 1, k_max - 1, knots) - self.derive_single_point(i, k_max - 1, knots))
+        (p - k + 1) as f64 / (u0[i + p + 1] - u0[i + k]) *
+            (self.derive_single_point(i + 1, k - 1, knots) - self.derive_single_point(i, k - 1, knots))
     }
 
     pub fn reverse(&mut self) -> &mut Self {
-        for k in 0..=self.k_max {
-            let Pk = self.matrix_derivative_mut(k);
-            reverse(Pk);
+        for k in 0..=self.max_derivative {
+            let matrix = self.matrix_derivative_mut(k);
+            reverse(matrix);
 
             // Odd derivatives change their sign upon reversal
             if k % 2 == 1 {
-                Pk.mul_assign(-1.0);
+                matrix.mul_assign(-1.0);
             }
         }
         self
@@ -219,7 +220,7 @@ mod tests {
     #[test]
     fn reverse() {
         assert_eq!(
-            control_points_example().reverse().Pk,
+            control_points_example().reverse().derivatives,
             vec![dmatrix![
                 7., 5., 3., 1.;
                 8., 6., 4., 2.;

@@ -46,35 +46,37 @@ pub fn insert(c: &mut Curve, u: f64) -> Result<(), InsertError> {
 
     let dim = c.points.dimension();
 
-    let U_old = c.knots.vector();
-    let P_old = c.points.matrix();
+    let old_knots = c.knots.vector();
+    let old_points = c.points.matrix();
 
     let l = c.knots.find_idx(u, 0, DomainKnotComparatorType::LeftOrEqual);
 
     // Insert u into the knot vector
-    let U_new = U_old.clone().insert_row(l + 1, u);
+    let new_knots = old_knots.clone().insert_row(l + 1, u);
 
     // Compute the new control points.
     // Only the control points `l-p+1` to `l` change.
     let control_point_count = c.points.count();
 
-    let mut P_new = MatD::zeros(dim, control_point_count + 1);
+    let mut new_points = MatD::zeros(dim, control_point_count + 1);
 
     let top_cols = l - p + 1;
-    P_new.columns_mut(0, top_cols).copy_from(&P_old.columns(0, top_cols));
+    new_points.columns_mut(0, top_cols).copy_from(&old_points.columns(0, top_cols));
 
     let bot_cols = control_point_count - l;
-    P_new.columns_mut(P_new.ncols() - bot_cols, bot_cols).copy_from(&P_old.columns(P_old.ncols() - bot_cols, bot_cols));
+    new_points
+        .columns_mut(new_points.ncols() - bot_cols, bot_cols)
+        .copy_from(&old_points.columns(old_points.ncols() - bot_cols, bot_cols));
 
     let mut alpha: f64;
     for i in (l - p + 1)..=l {
-        alpha = (u - U_old[i]) / (U_old[i + p] - U_old[i]);
+        alpha = (u - old_knots[i]) / (old_knots[i + p] - old_knots[i]);
 
-        P_new.column_mut(i).add_assign((1. - alpha) * P_old.column(i - 1) + alpha * P_old.column(i));
+        new_points.column_mut(i).add_assign((1. - alpha) * old_points.column(i - 1) + alpha * old_points.column(i));
     }
 
-    c.knots.Uk[0] = U_new;
-    c.points.Pk[0] = P_new;
+    c.knots.derivatives[0] = new_knots;
+    c.points.derivatives[0] = new_points;
     c.calculate_derivatives();
     Ok(())
 }
@@ -147,21 +149,21 @@ mod tests {
         let mut c =
             generate(Manual { degree: 2, points: ControlPoints::new(dmatrix![-1., 0., 1.;]), knots: Uniform }).unwrap();
         let u = 0.5;
-        let expectedEvaluationResult = dvector![0.0];
+        let expected_evaluation_result = dvector![0.0];
 
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
         assert_eq!(c.points.matrix(), &dmatrix![-1., 0., 1.;]);
-        //assert_eq!(c.evaluate(u).unwrap(), expectedEvaluationResult);
+        //assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
 
         insert(&mut c, u).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., u, 1., 1., 1.]);
         assert_eq!(c.points.matrix(), &dmatrix![-1., -0.5, 0.5, 1.;]);
-        //assert_eq!(c.evaluate(u).unwrap(), expectedEvaluationResult);
+        //assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
 
         insert(&mut c, u).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., u, u, 1., 1., 1.]);
         assert_eq!(c.points.matrix(), &dmatrix![-1., -0.5, 0.0, 0.5, 1.;]);
-        assert_eq!(c.evaluate(u).unwrap(), expectedEvaluationResult);
+        assert_eq!(c.evaluate(u).unwrap(), expected_evaluation_result);
 
         insert(&mut c, u).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., u, u, u, 1., 1., 1.]);

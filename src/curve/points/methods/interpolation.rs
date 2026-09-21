@@ -14,18 +14,18 @@ pub fn interpolate(knots: &Knots, points: &DataPoints, params: &Parameters) -> M
     let m = points.segments();
     let n = m;
 
-    let Ubar = params.vector();
+    let u_bar = params.vector();
 
-    let mut Nmat = MatD::zeros(points.count(), points.count());
+    let mut n_mat = MatD::zeros(points.count(), points.count());
     for i in 0..=n {
         for g in 0..=m {
-            Nmat[(g, i)] = knots.evaluate(0, i, p, Ubar[g]);
+            n_mat[(g, i)] = knots.evaluate(0, i, p, u_bar[g]);
         }
     }
 
-    let svd = SVD::new(Nmat, true, true);
+    let svd = SVD::new(n_mat, true, true);
     let mat = points.matrix().transpose();
-    svd.solve(&mat, f64::EPSILON.sqrt()).unwrap().transpose()
+    svd.solve(&mat, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T").transpose()
 }
 
 #[cfg(test)]

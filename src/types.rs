@@ -10,9 +10,6 @@ pub type MatD = OMatrix<f64, Dyn, Dyn>;
 pub type MatDView<'a> = MatrixView<'a, f64, Dyn, Dyn>;
 pub type MatRowD = OMatrix<f64, U1, Dyn>;
 
-pub type KnotVectorDerivatives = Vec<VecD>;
-pub type ControlPointDerivatves = Vec<MatD>;
-
 pub trait VecHelpers {
     fn head(&self, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
     fn head_mut(&mut self, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
