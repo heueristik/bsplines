@@ -117,19 +117,12 @@ mod tests {
     use nalgebra::{dmatrix, dvector};
     use rstest::{fixture, rstest};
 
-    use crate::{
-        generation::{Generation::Manual, generate},
-        knots::KnotGeneration::Uniform,
-    };
-
     use super::*;
 
     #[fixture]
     /// A one-dimensional, linear test curve with default degree two.
     fn c(#[default(2)] degree: usize) -> Curve {
-        let c =
-            generate(Manual { degree, points: ControlPoints::new(dmatrix![1., 2., 3., 4., 5., 6.;]), knots: Uniform })
-                .unwrap();
+        let c = Curve::with_uniform_knots(degree, ControlPoints::new(dmatrix![1., 2., 3., 4., 5., 6.;])).unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0.25, 0.5, 0.75, 1., 1., 1.]);
         c
     }

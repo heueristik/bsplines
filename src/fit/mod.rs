@@ -1,20 +1,18 @@
 use nalgebra::{Dyn, SVD};
 
 use crate::{
+    Curve,
     error::{Error, Result},
-    knots::{Knots, is_uniform},
-    parameters::Parameters,
-    points::DataPoints,
+    knots,
+    knots::{KnotMethod, Knots, is_uniform},
+    parameters,
+    parameters::{ParameterMethod, Parameters},
+    points::{ControlPoints, DataPoints},
     types::MatD,
 };
 
-pub mod fixed;
-pub mod loose;
-
-pub enum Method {
-    FixedEnds,
-    LooseEnds,
-}
+pub(crate) mod fixed;
+pub(crate) mod loose;
 
 pub struct Penalization {
     pub lambda: f64,
@@ -24,6 +22,64 @@ pub struct Penalization {
     // an approximation of the (m + 1) data points with dimension N . The number of control points (n + 1)
     // can be specified but must be smaller then the number of data points and greater than the spline degree (m > n ≥
     // p).
+}
+
+/// Builds a least-squares fit of data points; created by [`Curve::fit`].
+pub struct FitBuilder<'a> {
+    data: &'a DataPoints,
+    degree: usize,
+    polygon_segments: Option<usize>,
+    ends: Ends,
+    penalization: Option<Penalization>,
+}
+
+enum Ends {
+    Fixed,
+    Loose,
+}
+
+impl<'a> FitBuilder<'a> {
+    pub(crate) fn new(data: &'a DataPoints, degree: usize) -> Self {
+        FitBuilder { data, degree, polygon_segments: None, ends: Ends::Fixed, penalization: None }
+    }
+
+    /// Sets the number of polygon segments `n` of the fitted curve.
+    /// It defaults to the polyline segments of the data.
+    pub fn polygon_segments(mut self, n: usize) -> Self {
+        self.polygon_segments = Some(n);
+        self
+    }
+
+    /// Fixes the curve ends to the first and last data point. This is the default.
+    pub fn fixed_ends(mut self) -> Self {
+        self.ends = Ends::Fixed;
+        self
+    }
+
+    /// Lets the curve ends float freely instead of fixing them to the end data points.
+    pub fn loose_ends(mut self) -> Self {
+        self.ends = Ends::Loose;
+        self
+    }
+
+    /// Penalizes the fit with the strength `lambda` and the difference order `kappa`, see `Eilers1996`.
+    pub fn penalized(mut self, lambda: f64, kappa: usize) -> Self {
+        self.penalization = Some(Penalization { lambda, kappa });
+        self
+    }
+
+    /// Performs the fit.
+    pub fn build(self) -> Result<Curve> {
+        let n = self.polygon_segments.unwrap_or_else(|| self.data.polyline_segments());
+        let params = parameters::generate(self.data, ParameterMethod::EquallySpaced);
+        let knots = knots::generate(self.degree, n, &params, KnotMethod::Uniform)?;
+
+        let points = match self.ends {
+            Ends::Fixed => fixed::fit(&knots, self.data, &params, self.penalization)?,
+            Ends::Loose => loose::fit(&knots, self.data, &params, self.penalization)?,
+        };
+        Curve::new(knots, ControlPoints::new_with_capacity(points, self.degree + 1))
+    }
 }
 
 fn input_checks(
@@ -51,7 +107,7 @@ fn input_checks(
     }
 }
 
-pub fn compute_svd(
+pub(crate) fn compute_svd(
     knots: &Knots,
     n_mat: &MatD,
     penalization: &Option<Penalization>,

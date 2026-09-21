@@ -23,39 +23,35 @@ use embed_doc_image::embed_doc_image;
 
 use crate::{
     error::{Error, Result},
-    knots::Knots,
+    fit::FitBuilder,
+    interpolation,
+    knots::{self, KnotMethod, Knots},
     manipulation::{
         insert::insert,
         merge::{ConstrainedCurve, Constraints, merge, merge_with_constraints},
         split::split,
     },
-    points::{ControlPoints, Points},
+    parameters::{self, ParameterMethod},
+    points::{ControlPoints, DataPoints, Points},
     types::VecD,
 };
 
 #[embed_doc_image("spline", "doc-images/plots/derivatives.svg")]
 #[derive(Debug, Clone)]
 pub struct Curve {
-    pub knots: Knots,
-    pub points: ControlPoints,
+    pub(crate) knots: Knots,
+    pub(crate) points: ControlPoints,
 }
 
 impl Curve {
-    /// Returns a B-Spline
-    ///
-    /// # Arguments
-    ///
-    /// * `degree` - The degree of the spline
+    /// Returns a curve defined by the given knot vector and control points.
     ///
     /// # Examples
     /// ```
-    /// use nalgebra::{dmatrix, dvector};
-    /// use bsplines::Curve;
-    /// use bsplines::generation::{generate, Generation::Manual};
-    /// use bsplines::knots;
-    /// use bsplines::points::ControlPoints;
+    /// use bsplines::{Curve, Knots, points::ControlPoints};
+    /// use nalgebra::dmatrix;
     ///
-    /// // Create a coordinate matrix containing with five 3D points.
+    /// // Create a coordinate matrix containing five 3D points.
     /// let points = ControlPoints::new(dmatrix![
     /// // 1    2    3    4    5
     ///  -2.0,-2.0,-1.0, 0.5, 1.5; // x
@@ -63,7 +59,7 @@ impl Curve {
     ///   0.0, 0.5, 1.5,-0.5,-1.0; // z
     /// ]);
     /// let degree = 2;
-    /// let knots = knots::methods::uniform(degree, points.polygon_segments()).unwrap();
+    /// let knots = Knots::uniform(degree, points.polygon_segments()).unwrap();
     /// let curve = Curve::new(knots, points).unwrap();
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
@@ -78,6 +74,81 @@ impl Curve {
                 Ok(c)
             }
         }
+    }
+
+    /// Returns a curve of the given degree using the points as control points,
+    /// on a clamped, uniform knot vector.
+    ///
+    /// # Examples
+    /// ```
+    /// use bsplines::{Curve, points::ControlPoints};
+    /// use nalgebra::dmatrix;
+    ///
+    /// let curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2.0,-1.0, 0.5, 1.5;])).unwrap();
+    /// ```
+    pub fn with_uniform_knots(degree: usize, points: ControlPoints) -> Result<Self> {
+        let knots = Knots::uniform(degree, points.polygon_segments())?;
+        Self::new(knots, points)
+    }
+
+    /// Returns a curve of the given degree interpolating the data points,
+    /// using equally spaced parameters and a uniform knot vector.
+    ///
+    /// # Examples
+    /// ```
+    /// use bsplines::{Curve, points::DataPoints};
+    /// use nalgebra::dmatrix;
+    ///
+    /// let data = DataPoints::new(dmatrix![
+    ///     1.0, 2.0, 3.0, 4.0;
+    ///     1.0, 2.0, 3.0, 4.0;
+    /// ]);
+    /// let curve = Curve::interpolate(&data, 2).unwrap();
+    /// ```
+    pub fn interpolate(data: &DataPoints, degree: usize) -> Result<Self> {
+        Self::interpolate_with(data, degree, ParameterMethod::EquallySpaced, KnotMethod::Uniform)
+    }
+
+    /// Returns a curve of the given degree interpolating the data points,
+    /// with explicitly chosen parameter and knot generation methods.
+    pub fn interpolate_with(
+        data: &DataPoints,
+        degree: usize,
+        parameter_method: ParameterMethod,
+        knot_method: KnotMethod,
+    ) -> Result<Self> {
+        let params = parameters::generate(data, parameter_method);
+        let knots = knots::generate(degree, data.polyline_segments(), &params, knot_method)?;
+        let points = ControlPoints::new_with_capacity(interpolation::interpolate(&knots, data, &params), degree + 1);
+        Self::new(knots, points)
+    }
+
+    /// Returns a builder for a least-squares fit of the data points
+    /// with a curve of the given degree.
+    ///
+    /// # Examples
+    /// ```
+    /// use bsplines::{Curve, fit::Penalization, points::DataPoints};
+    /// use nalgebra::dmatrix;
+    ///
+    /// let data = DataPoints::new(dmatrix![
+    ///     1.0, 2.0, 3.0, 4.0, 5.0;
+    ///     1.0, 2.0, 3.0, 4.0, 5.0;
+    /// ]);
+    /// let curve = Curve::fit(&data, 2).polygon_segments(3).loose_ends().build().unwrap();
+    /// ```
+    pub fn fit<'a>(data: &'a DataPoints, degree: usize) -> FitBuilder<'a> {
+        FitBuilder::new(data, degree)
+    }
+
+    /// Returns the knot vector and its derivatives.
+    pub fn knots(&self) -> &Knots {
+        &self.knots
+    }
+
+    /// Returns the control points and their derivatives.
+    pub fn points(&self) -> &ControlPoints {
+        &self.points
     }
 
     pub fn degree(&self) -> usize {
@@ -148,26 +219,14 @@ impl Curve {
     ///
     /// ```
     /// use approx::relative_eq;
+    /// use bsplines::{Curve, points::{ControlPoints, Points}};
     /// use nalgebra::dmatrix;
-    /// use bsplines::Curve;
-    /// use bsplines::generation::generate;
-    /// use bsplines::generation::Generation::Manual;
-    /// use bsplines::knots::KnotGeneration::Uniform;
-    /// use bsplines::points::{ControlPoints, Points};
     ///
-    /// let mut a = generate(Manual {
-    ///             degree: 2,
-    ///             points: ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;]),
-    ///             knots: Uniform,
-    ///         }).unwrap();
-    /// let b = generate(Manual {
-    ///             degree: 2,
-    ///             points: ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;]),
-    ///             knots: Uniform,
-    ///         }).unwrap();
-    ///  let c = a.prepend(&b).unwrap();
+    /// let mut a = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;])).unwrap();
+    /// let b = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;])).unwrap();
+    /// let c = a.prepend(&b).unwrap();
     ///
-    ///  relative_eq!(c.points.matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
+    /// relative_eq!(c.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
     /// ```
     pub fn prepend(&mut self, other: &Self) -> Result<&mut Self> {
         let c = merge(other, self)?;
@@ -203,27 +262,14 @@ impl Curve {
     ///
     /// ```
     /// use approx::relative_eq;
+    /// use bsplines::{Curve, points::{ControlPoints, Points}};
     /// use nalgebra::dmatrix;
-    /// use bsplines::Curve;
-    /// use bsplines::generation::generate;
-    /// use bsplines::generation::Generation::Manual;
-    /// use bsplines::knots::KnotGeneration::Uniform;
-    /// use bsplines::points::{ControlPoints, Points};
     ///
-    /// let mut a = generate(Manual {
-    ///             degree: 2,
-    ///             points: ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;]),
-    ///             knots: Uniform,
-    ///         }).unwrap();
-    /// let b = generate(Manual {
-    ///             degree: 2,
-    ///             points: ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;]),
-    ///             knots: Uniform,
-    ///         }).unwrap();
+    /// let mut a = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;])).unwrap();
+    /// let b = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;])).unwrap();
+    /// let c = a.append(&b).unwrap();
     ///
-    ///  let c = a.append(&b).unwrap();
-    ///
-    ///  relative_eq!(c.points.matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
+    /// relative_eq!(c.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
     /// ```
     pub fn append(&mut self, other: &Self) -> Result<&mut Self> {
         let c = merge(self, other)?;
@@ -301,27 +347,18 @@ mod tests {
 
     use crate::points::DataPoints;
 
-    use crate::{
-        generation::{
-            Generation::{Interpolation, Manual},
-            generate,
-        },
-        knots::KnotGeneration::Uniform,
-    };
-
     use super::*;
 
     #[fixture]
     /// A one-dimensional, linear test curve with default degree two.
     fn c(#[default(2)] degree: usize) -> Curve {
-        let c = generate(Manual {
+        let c = Curve::with_uniform_knots(
             degree,
-            points: ControlPoints::new(dmatrix![
+            ControlPoints::new(dmatrix![
                 1., 3., 5.;
                 2., 4., 6.;
             ]),
-            knots: Uniform,
-        })
+        )
         .unwrap();
         assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
         c
@@ -354,7 +391,7 @@ mod tests {
         fn derivative_out_of_bounds_error() {
             let p = 2;
             let points = dmatrix![1., 1., 1., 1.;];
-            let mut c = generate(Manual { degree: p, points: ControlPoints::new(points), knots: Uniform }).unwrap();
+            let mut c = Curve::with_uniform_knots(p, ControlPoints::new(points)).unwrap();
 
             c.insert(0.5).unwrap();
 
@@ -365,7 +402,7 @@ mod tests {
         fn evaluate_p_repeated_knots() {
             let p = 3;
             let points = dmatrix![-1., -0.5, 0.5, 1.;];
-            let mut c = generate(Manual { degree: p, points: ControlPoints::new(points), knots: Uniform }).unwrap();
+            let mut c = Curve::with_uniform_knots(p, ControlPoints::new(points)).unwrap();
             let u = 0.5;
             let expected_evaluation_result = dvector![0.0];
             assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0., 1., 1., 1., 1.]);
@@ -414,14 +451,13 @@ mod tests {
 
     #[test]
     fn reverse() {
-        let mut c = generate(Manual {
-            degree: 2,
-            points: ControlPoints::new(dmatrix![
+        let mut c = Curve::with_uniform_knots(
+            2,
+            ControlPoints::new(dmatrix![
                 1., 3., 5.;
                 2., 4., 6.;
             ]),
-            knots: Uniform,
-        })
+        )
         .unwrap();
 
         let knots_before = c.knots.vector().clone();
@@ -448,7 +484,7 @@ mod tests {
             1., 2., 3., 4.;
         ]);
 
-        let c = generate(Interpolation { degree: 1, points: &points }).unwrap();
+        let c = Curve::interpolate(&points, 1).unwrap();
 
         assert_eq!(c.evaluate(0.0).unwrap(), dvector![1., 1.]);
         assert_relative_eq!(c.evaluate(1. / 3.).unwrap(), dvector![2., 2.], epsilon = f64::EPSILON.sqrt());
