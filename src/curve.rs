@@ -36,7 +36,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Curve {
     pub(crate) knots: Knots,
-    pub(crate) points: ControlPoints,
+    pub(crate) control_points: ControlPoints,
 }
 
 impl Curve {
@@ -48,31 +48,31 @@ impl Curve {
     /// use nalgebra::dmatrix;
     ///
     /// // Create a coordinate matrix containing five 3D points.
-    /// let points = ControlPoints::new(dmatrix![
+    /// let control_points = ControlPoints::new(dmatrix![
     /// // 1    2    3    4    5
     ///  -2.0,-2.0,-1.0, 0.5, 1.5; // x
     ///  -1.0, 0.0, 1.0, 1.0, 2.0; // y
     ///   0.0, 0.5, 1.5,-0.5,-1.0; // z
     /// ]);
     /// let degree = 2;
-    /// let knots = Knots::uniform(degree, points.polygon_segments()).unwrap();
-    /// let curve = Curve::new(knots, points).unwrap();
+    /// let knots = Knots::uniform(degree, control_points.polygon_segments()).unwrap();
+    /// let curve = Curve::new(knots, control_points).unwrap();
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
-    pub fn new(knots: Knots, points: ControlPoints) -> Result<Self> {
-        match (knots.degree(), points.polygon_segments()) {
+    pub fn new(knots: Knots, control_points: ControlPoints) -> Result<Self> {
+        match (knots.degree(), control_points.polygon_segments()) {
             (degree, polygon_segments) if polygon_segments < degree => {
                 Err(Error::TooFewPolygonSegments { degree, polygon_segments })
             }
             _ => {
-                let mut curve = Self { knots, points };
+                let mut curve = Self { knots, control_points };
                 curve.calculate_derivatives();
                 Ok(curve)
             }
         }
     }
 
-    /// Returns a curve of the given degree using the points as control points,
+    /// Returns a curve of the given degree with the given control points
     /// on a clamped, uniform knot vector.
     ///
     /// # Examples
@@ -82,9 +82,9 @@ impl Curve {
     ///
     /// let curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2.0,-1.0, 0.5, 1.5;])).unwrap();
     /// ```
-    pub fn with_uniform_knots(degree: usize, points: ControlPoints) -> Result<Self> {
-        let knots = Knots::uniform(degree, points.polygon_segments())?;
-        Self::new(knots, points)
+    pub fn with_uniform_knots(degree: usize, control_points: ControlPoints) -> Result<Self> {
+        let knots = Knots::uniform(degree, control_points.polygon_segments())?;
+        Self::new(knots, control_points)
     }
 
     /// Returns a curve of the given degree interpolating the data points,
@@ -115,8 +115,8 @@ impl Curve {
     ) -> Result<Self> {
         let parameters = Parameters::generate(data, parameter_method);
         let knots = Knots::generate(degree, data.polyline_segments(), &parameters, knot_method)?;
-        let points = ControlPoints::new(interpolation::interpolate(&knots, data, &parameters));
-        Self::new(knots, points)
+        let control_points = ControlPoints::new(interpolation::interpolate(&knots, data, &parameters));
+        Self::new(knots, control_points)
     }
 
     /// Returns a builder for a least-squares fit of the data points
@@ -143,8 +143,8 @@ impl Curve {
     }
 
     /// Returns the control points and their derivatives.
-    pub fn points(&self) -> &ControlPoints {
-        &self.points
+    pub fn control_points(&self) -> &ControlPoints {
+        &self.control_points
     }
 
     /// Returns the degree p of the curve.
@@ -154,12 +154,12 @@ impl Curve {
 
     /// Returns the number of segments n of the control polygon.
     pub fn polygon_segments(&self) -> usize {
-        self.points.polygon_segments()
+        self.control_points.polygon_segments()
     }
 
     /// Returns the dimension of the curve.
     pub fn dimension(&self) -> usize {
-        self.points.dimension()
+        self.control_points.dimension()
     }
 
     /// Evaluates the curve at the parameter `u`.
@@ -184,7 +184,7 @@ impl Curve {
 
         let degree = self.degree();
 
-        let mut value = DVector::zeros(self.points.dimension());
+        let mut value = DVector::zeros(self.control_points.dimension());
 
         if derivative <= degree {
             let polygon_segments = self.polygon_segments();
@@ -192,7 +192,7 @@ impl Curve {
 
             for i in span - (degree - derivative)..=polygon_segments - derivative {
                 value += self.knots.basis_of_derivative_curve(derivative, i, u) *
-                    self.points.matrix_derivative(derivative).column(i);
+                    self.control_points.matrix_derivative(derivative).column(i);
             }
         }
         Ok(value)
@@ -207,7 +207,7 @@ impl Curve {
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("reverse-after", "doc-images/plots/manipulation/reverse-after.svg"))]
     pub fn reverse(&mut self) -> &mut Self {
         self.knots.reverse();
-        self.points.reverse();
+        self.control_points.reverse();
         self
     }
 
@@ -225,12 +225,12 @@ impl Curve {
     /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;])).unwrap();
     /// let merged = curve.prepend(&other).unwrap();
     ///
-    /// assert_relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
+    /// assert_relative_eq!(merged.control_points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn prepend(&mut self, other: &Self) -> Result<&mut Self> {
         let merged = merge(other, self, &Constraints::default())?;
         self.knots = merged.knots;
-        self.points = merged.points;
+        self.control_points = merged.control_points;
         Ok(self)
     }
 
@@ -239,7 +239,7 @@ impl Curve {
     pub fn prepend_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
         let merged = merge(other, self, &constraints)?;
         self.knots = merged.knots;
-        self.points = merged.points;
+        self.control_points = merged.control_points;
         Ok(self)
     }
 
@@ -263,14 +263,14 @@ impl Curve {
     /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;])).unwrap();
     /// let merged = curve.append(&other).unwrap();
     ///
-    /// assert_relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
+    /// assert_relative_eq!(merged.control_points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-before", "doc-images/plots/manipulation/merge-before.svg"))]
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-after", "doc-images/plots/manipulation/merge-after.svg"))]
     pub fn append(&mut self, other: &Self) -> Result<&mut Self> {
         let merged = merge(self, other, &Constraints::default())?;
         self.knots = merged.knots;
-        self.points = merged.points;
+        self.control_points = merged.control_points;
         Ok(self)
     }
 
@@ -296,7 +296,7 @@ impl Curve {
     pub fn append_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
         let merged = merge(self, other, &constraints)?;
         self.knots = merged.knots;
-        self.points = merged.points;
+        self.control_points = merged.control_points;
         Ok(self)
     }
 
@@ -337,14 +337,14 @@ impl Curve {
 
     pub(crate) fn calculate_derivatives(&mut self) {
         self.knots.derive();
-        self.points.derive(&self.knots);
+        self.control_points.derive(&self.knots);
     }
 
     /// Returns the curve describing the `k`-th derivative of this curve.
     pub fn derivative_curve(&self, derivative: usize) -> Self {
         let knots = Knots::new(self.degree() - derivative, self.knots.vector_derivative(derivative).clone());
-        let points = ControlPoints::new(self.points.matrix_derivative(derivative).clone());
-        Curve { knots, points }
+        let control_points = ControlPoints::new(self.control_points.matrix_derivative(derivative).clone());
+        Curve { knots, control_points }
     }
 }
 
@@ -420,21 +420,21 @@ mod tests {
 
             insert(&mut curve, u).unwrap();
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0., u, 1., 1., 1., 1.]);
-            assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.75, 0.0, 0.75, 1.;]);
+            assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.75, 0.0, 0.75, 1.;]);
             assert_eq!(curve.evaluate(u).unwrap(), expected_point);
             assert_eq!(curve.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(curve.evaluate(1.0).unwrap(), dvector![1.]);
 
             insert(&mut curve, u).unwrap();
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0., u, u, 1., 1., 1., 1.]);
-            assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.375, 0.75, 1.;]);
+            assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.375, 0.75, 1.;]);
             assert_eq!(curve.evaluate(u).unwrap(), expected_point);
             assert_eq!(curve.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(curve.evaluate(1.0).unwrap(), dvector![1.]);
 
             insert(&mut curve, u).unwrap();
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0., u, u, u, 1., 1., 1., 1.]);
-            assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.0, 0.375, 0.75, 1.;]);
+            assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.0, 0.375, 0.75, 1.;]);
             assert_eq!(curve.evaluate(u).unwrap(), expected_point);
             assert_eq!(curve.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(curve.evaluate(1.0).unwrap(), dvector![1.]);
@@ -468,7 +468,7 @@ mod tests {
         .unwrap();
 
         let knots_before = curve.knots.vector().clone();
-        let points_before = curve.points.matrix().clone();
+        let points_before = curve.control_points.matrix().clone();
         curve.reverse();
 
         let points_after = dmatrix![
@@ -476,12 +476,12 @@ mod tests {
                  6., 4., 2.;
         ];
         assert_eq!(curve.knots.vector(), &knots_before);
-        assert_eq!(curve.points.matrix(), &points_after);
+        assert_eq!(curve.control_points.matrix(), &points_after);
 
         curve.reverse();
 
         assert_eq!(curve.knots.vector(), &knots_before);
-        assert_eq!(curve.points.matrix(), &points_before);
+        assert_eq!(curve.control_points.matrix(), &points_before);
     }
 
     /// Two quadratic curves with a gap: the left curve ends at −0.5, the right curve starts at 0.5.

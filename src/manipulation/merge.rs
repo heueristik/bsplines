@@ -128,7 +128,7 @@ fn calculate_kv(curve: &Curve) -> DMatrix<f64> {
     let polygon_segments = curve.polygon_segments();
 
     let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.points.matrix();
+    let point_matrix = curve.control_points.matrix();
 
     let mut kv = DMatrix::zeros(degree, degree);
 
@@ -157,7 +157,7 @@ fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
     let polygon_segments = curve.polygon_segments();
     let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.points.matrix();
+    let point_matrix = curve.control_points.matrix();
 
     let mut kw = DMatrix::zeros(degree, degree);
 
@@ -188,7 +188,7 @@ fn calculate_iv(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
     let polygon_segments = curve.polygon_segments();
     let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.points.matrix();
+    let point_matrix = curve.control_points.matrix();
 
     let mut iv = DMatrix::zeros(degree, degree);
 
@@ -219,7 +219,7 @@ fn calculate_jw(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
     let polygon_segments = curve.polygon_segments();
     let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.points.matrix();
+    let point_matrix = curve.control_points.matrix();
 
     let mut jw = DMatrix::zeros(degree, degree);
 
@@ -322,8 +322,8 @@ fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
     let left_knot_derivatives = &left.knots.derivatives;
     let right_knot_derivatives = &right.knots.derivatives;
 
-    let left_points = left.points.matrix();
-    let right_points = right.points.matrix();
+    let left_points = left.control_points.matrix();
+    let right_points = right.control_points.matrix();
 
     for derivative in 0..=degree - 1 {
         sum.fill(0.0);
@@ -386,8 +386,8 @@ fn solve_linear_equation_system(left: &Curve, right: &Curve, constraints: &Const
 
 fn shift_boundary_control_points(left: &Curve, right: &Curve, shifts: &DMatrix<f64>) -> (DMatrix<f64>, DMatrix<f64>) {
     let degree = left.degree();
-    let mut left_shifted = left.points.matrix().clone();
-    let mut right_shifted = right.points.matrix().clone();
+    let mut left_shifted = left.control_points.matrix().clone();
+    let mut right_shifted = right.control_points.matrix().clone();
 
     left_shifted.columns_mut(left_shifted.ncols() - degree, degree).add_assign(shifts.columns(0, degree));
 
@@ -561,8 +561,8 @@ fn merge_control_points(
 ) -> DMatrix<f64> {
     let degree = left.degree();
     let dimension = left.dimension();
-    let left_count = left.points.count();
-    let right_count = right.points.count();
+    let left_count = left.control_points.count();
+    let right_count = right.control_points.count();
 
     let mut merged_points = DMatrix::zeros(dimension, left_count + right_count - degree);
 
@@ -657,7 +657,7 @@ mod tests {
             )
             .unwrap();
             assert_relative_eq!(
-                curve.points.matrix(),
+                curve.control_points.matrix(),
                 &dmatrix![
                     -2.,-1.,0.,1.,2.;
                     -2.,-1.,0.,1.,2.;
@@ -676,7 +676,11 @@ mod tests {
                 &Constraints::default(),
             )
             .unwrap();
-            assert_relative_eq!(curve.points.matrix(), &dmatrix![-2.,-1.,1.,2.;], epsilon = f64::EPSILON.sqrt());
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-1.,1.,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
 
         #[test]
@@ -689,7 +693,11 @@ mod tests {
                 &Constraints::default(),
             )
             .unwrap();
-            assert_relative_eq!(curve.points.matrix(), &dmatrix![-2.,-1.,0.,1.,2.;], epsilon = f64::EPSILON.sqrt());
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-1.,0.,1.,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
 
         #[test]
@@ -702,7 +710,11 @@ mod tests {
                 &Constraints::default(),
             )
             .unwrap();
-            assert_relative_eq!(curve.points.matrix(), &dmatrix![-2.,-1.,1.,2.;], epsilon = f64::EPSILON.sqrt());
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-1.,1.,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
 
         #[test]
@@ -718,7 +730,11 @@ mod tests {
 
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
 
-            assert_relative_eq!(curve.points.matrix(), &dmatrix![-2.,-1.5,0.5,2.;], epsilon = f64::EPSILON.sqrt());
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-1.5,0.5,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
 
         #[test]
@@ -734,7 +750,11 @@ mod tests {
 
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
 
-            assert_relative_eq!(curve.points.matrix(), &dmatrix![-2.,-0.5,1.5,2.;], epsilon = f64::EPSILON.sqrt());
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-0.5,1.5,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
     }
 }

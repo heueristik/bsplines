@@ -137,8 +137,8 @@ fn merge_plots() {
     let c = example_spline(2);
     let (l_unshifted, r_unshifted) = c.split(0.5).unwrap();
 
-    let mut points_a = l_unshifted.points().matrix().clone();
-    let mut points_b = r_unshifted.points().matrix().clone();
+    let mut points_a = l_unshifted.control_points().matrix().clone();
+    let mut points_b = r_unshifted.control_points().matrix().clone();
 
     // Shift points
     points_a.column_mut(points_a.ncols() - 1).add_assign(dvector![0.25, -0.25]);

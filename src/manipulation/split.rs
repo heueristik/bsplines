@@ -33,7 +33,7 @@ pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
     }
 
     let knots = inserted.knots.vector();
-    let points = inserted.points.matrix();
+    let points = inserted.control_points.matrix();
 
     if multiplicity > 0 {
         let left = {
@@ -127,10 +127,10 @@ mod tests {
         let (left, right) = split(&curve, 0.0 + eps).unwrap();
 
         assert_relative_eq!(left.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.], epsilon = eps.sqrt());
-        assert_relative_eq!(left.points.matrix(), &dmatrix![1., 1., 1.;], epsilon = eps.sqrt());
+        assert_relative_eq!(left.control_points.matrix(), &dmatrix![1., 1., 1.;], epsilon = eps.sqrt());
 
         assert_relative_eq!(right.knots.vector(), curve.knots.vector(), epsilon = eps.sqrt());
-        assert_relative_eq!(right.points.matrix(), curve.points.matrix(), epsilon = eps.sqrt());
+        assert_relative_eq!(right.control_points.matrix(), curve.control_points.matrix(), epsilon = eps.sqrt());
     }
 
     #[rstest]
@@ -139,19 +139,19 @@ mod tests {
         let (left, right) = split(&curve, 1.0 - eps).unwrap();
 
         assert_relative_eq!(left.knots.vector(), curve.knots.vector(), epsilon = eps.sqrt());
-        assert_relative_eq!(left.points.matrix(), curve.points.matrix(), epsilon = eps.sqrt());
+        assert_relative_eq!(left.control_points.matrix(), curve.control_points.matrix(), epsilon = eps.sqrt());
 
         assert_relative_eq!(right.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.], epsilon = eps.sqrt());
-        assert_relative_eq!(right.points.matrix(), &dmatrix![6., 6., 6.;], epsilon = eps.sqrt());
+        assert_relative_eq!(right.control_points.matrix(), &dmatrix![6., 6., 6.;], epsilon = eps.sqrt());
     }
 
     #[rstest]
     fn normalized(curve: Curve) {
         let (left, right) = split(&curve, 0.5).unwrap();
         assert_eq!(left.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
-        assert_eq!(left.points.matrix(), &dmatrix![1., 2., 3., 3.5;]);
+        assert_eq!(left.control_points.matrix(), &dmatrix![1., 2., 3., 3.5;]);
 
         assert_eq!(right.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
-        assert_eq!(right.points.matrix(), &dmatrix![3.5, 4., 5., 6.;]);
+        assert_eq!(right.control_points.matrix(), &dmatrix![3.5, 4., 5., 6.;]);
     }
 }

@@ -25,17 +25,17 @@ pub(crate) fn insert(curve: &mut Curve, u: f64) -> Result<()> {
         return Err(Error::MultiplicityExceedsDegree { u, multiplicity, degree });
     }
 
-    let dimension = curve.points.dimension();
+    let dimension = curve.control_points.dimension();
 
     let old_knots = curve.knots.vector();
-    let old_points = curve.points.matrix();
+    let old_points = curve.control_points.matrix();
 
     let span = curve.knots.find_span(u, 0);
 
     let new_knots = old_knots.clone().insert_row(span + 1, u);
 
     // Only the control points from `span - degree + 1` to `span` change.
-    let control_point_count = curve.points.count();
+    let control_point_count = curve.control_points.count();
 
     let mut new_points = DMatrix::zeros(dimension, control_point_count + 1);
 
@@ -55,7 +55,7 @@ pub(crate) fn insert(curve: &mut Curve, u: f64) -> Result<()> {
     }
 
     curve.knots.derivatives[0] = new_knots;
-    curve.points.derivatives[0] = new_points;
+    curve.control_points.derivatives[0] = new_points;
     curve.calculate_derivatives();
     Ok(())
 }
@@ -75,29 +75,29 @@ mod tests {
 
         insert(&mut curve, 0.5).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0.5, 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1., 0., 1.;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1., 0., 1.;]);
     }
 
     #[test]
     fn degree_2() {
         let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-1., 0., 1.;])).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1., 0., 1.;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1., 0., 1.;]);
 
         insert(&mut curve, 0.5).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.5, 0.5, 1.;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.5, 0.5, 1.;]);
     }
 
     #[test]
     fn degree_2_preexisting_knot() {
         let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-1.5, -0.5, 0.5, 1.5;])).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1.5, -0.5, 0.5, 1.5;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1.5, -0.5, 0.5, 1.5;]);
 
         insert(&mut curve, 0.5).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 0.5, 1., 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1.5, -0.5, 0.0, 0.5, 1.5;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1.5, -0.5, 0.0, 0.5, 1.5;]);
     }
 
     #[test]
@@ -107,11 +107,11 @@ mod tests {
 
         insert(&mut curve, 0.5).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0.5, 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1., 0., 1.;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1., 0., 1.;]);
 
         insert(&mut curve, 0.5).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0.5, 0.5, 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1., 0., 0., 1.;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1., 0., 0., 1.;]);
     }
 
     #[test]
@@ -121,21 +121,21 @@ mod tests {
         let expected_point = dvector![0.0];
 
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1., 0., 1.;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1., 0., 1.;]);
         assert_eq!(curve.evaluate(u).unwrap(), expected_point);
 
         insert(&mut curve, u).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., u, 1., 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.5, 0.5, 1.;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.5, 0.5, 1.;]);
         assert_eq!(curve.evaluate(u).unwrap(), expected_point);
 
         insert(&mut curve, u).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., u, u, 1., 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.5, 0.0, 0.5, 1.;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.5, 0.0, 0.5, 1.;]);
         assert_eq!(curve.evaluate(u).unwrap(), expected_point);
 
         insert(&mut curve, u).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., u, u, u, 1., 1., 1.]);
-        assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.5, 0.0, 0.0, 0.5, 1.;]);
+        assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.5, 0.0, 0.0, 0.5, 1.;]);
     }
 }
