@@ -232,7 +232,7 @@ impl Curve {
     /// # Examples
     ///
     /// ```
-    /// use approx::relative_eq;
+    /// use approx::assert_relative_eq;
     /// use bsplines::{Curve, points::{ControlPoints, Points}};
     /// use nalgebra::dmatrix;
     ///
@@ -240,7 +240,7 @@ impl Curve {
     /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;])).unwrap();
     /// let merged = curve.prepend(&other).unwrap();
     ///
-    /// relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
+    /// assert_relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn prepend(&mut self, other: &Self) -> Result<&mut Self> {
         let merged = merge(other, self)?;
@@ -275,7 +275,7 @@ impl Curve {
     /// # Examples
     ///
     /// ```
-    /// use approx::relative_eq;
+    /// use approx::assert_relative_eq;
     /// use bsplines::{Curve, points::{ControlPoints, Points}};
     /// use nalgebra::dmatrix;
     ///
@@ -283,7 +283,7 @@ impl Curve {
     /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;])).unwrap();
     /// let merged = curve.append(&other).unwrap();
     ///
-    /// relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
+    /// assert_relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn append(&mut self, other: &Self) -> Result<&mut Self> {
         let merged = merge(self, other)?;
