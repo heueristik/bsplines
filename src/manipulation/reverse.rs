@@ -8,15 +8,16 @@ doc = ::embed_doc_image::embed_image!("reverse-after", "doc-images/plots/manipul
 //! |:--------------------:|:-------------------:|
 //! | ![][reverse-before]  | ![][reverse-after]  |
 
-use crate::curve::Curve;
+use crate::Curve;
 
+/// Reverses the parametrization of the curve in place.
 pub fn reverse(curve: &mut Curve) -> &mut Curve {
     curve.knots.reverse();
     curve.points.reverse();
     curve
 }
 
-// TODO
+/// Returns a copy of the curve with reversed parametrization.
 pub fn reversed(curve: &Curve) -> Curve {
     let mut clone = curve.clone();
     clone.reverse();

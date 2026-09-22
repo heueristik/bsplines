@@ -1,49 +1,59 @@
-use nalgebra::{Dyn, Matrix, MatrixView, MatrixViewMut, OMatrix, OVector, Owned, U1};
+//! Numeric type aliases over [nalgebra] with dynamic dimensions and `f64` scalars.
 
+use nalgebra::{Dyn, MatrixView, MatrixViewMut, OMatrix, OVector, U1};
+
+/// A dynamically sized column vector.
 pub type VecD = OVector<f64, Dyn>;
-pub type RowVecD = Matrix<f64, U1, Dyn, Owned<f64, U1, Dyn>>;
 
+/// An immutable view into a [`VecD`].
 pub type VecDView<'a> = MatrixView<'a, f64, Dyn, U1, U1, Dyn>;
+/// A mutable view into a [`VecD`].
 pub type VecDViewMut<'a> = MatrixViewMut<'a, f64, Dyn, U1, U1, Dyn>;
 
+/// A dynamically sized matrix.
 pub type MatD = OMatrix<f64, Dyn, Dyn>;
-pub type MatDView<'a> = MatrixView<'a, f64, Dyn, Dyn>;
-pub type MatRowD = OMatrix<f64, U1, Dyn>;
 
+/// Eigen-style sub-vector accessors for [`VecD`].
 pub trait VecHelpers {
-    fn head(&self, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
-    fn head_mut(&mut self, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
+    /// Returns a view of the first `count` elements.
+    fn head(&self, count: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
+    /// Returns a mutable view of the first `count` elements.
+    fn head_mut(&mut self, count: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
 
-    fn segment(&self, i: usize, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
-    fn segment_mut(&mut self, i: usize, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
+    /// Returns a view of `count` elements starting at index `start`.
+    fn segment(&self, start: usize, count: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
+    /// Returns a mutable view of `count` elements starting at index `start`.
+    fn segment_mut(&mut self, start: usize, count: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
 
-    fn tail(&self, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
-    fn tail_mut(&mut self, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
+    /// Returns a view of the last `count` elements.
+    fn tail(&self, count: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
+    /// Returns a mutable view of the last `count` elements.
+    fn tail_mut(&mut self, count: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn>;
 }
 
 impl VecHelpers for VecD {
-    fn head(&self, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn> {
-        self.segment(0, n)
+    fn head(&self, count: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn> {
+        self.segment(0, count)
     }
 
-    fn head_mut(&mut self, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn> {
-        self.segment_mut(0, n)
+    fn head_mut(&mut self, count: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn> {
+        self.segment_mut(0, count)
     }
 
-    fn segment(&self, start: usize, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn> {
-        self.generic_view((start, 0), (Dyn(n), U1))
+    fn segment(&self, start: usize, count: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn> {
+        self.generic_view((start, 0), (Dyn(count), U1))
     }
 
-    fn segment_mut(&mut self, start: usize, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn> {
-        self.generic_view_mut((start, 0), (Dyn(n), U1))
+    fn segment_mut(&mut self, start: usize, count: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn> {
+        self.generic_view_mut((start, 0), (Dyn(count), U1))
     }
 
-    fn tail(&self, n: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn> {
-        self.segment(self.len() - n, n)
+    fn tail(&self, count: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn> {
+        self.segment(self.len() - count, count)
     }
 
-    fn tail_mut(&mut self, n: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn> {
-        self.segment_mut(self.len() - n, n)
+    fn tail_mut(&mut self, count: usize) -> MatrixViewMut<'_, f64, Dyn, U1, U1, Dyn> {
+        self.segment_mut(self.len() - count, count)
     }
 }
 

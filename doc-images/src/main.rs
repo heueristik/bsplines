@@ -4,22 +4,12 @@ use nalgebra::{dmatrix, dvector};
 use plotters::{prelude::*, style::full_palette::TEAL};
 
 use bsplines::{
-    curve::{
-        Curve,
-        generation::{
-            Generation::{Interpolation, LeastSquaresFit, Manual},
-            generate,
-        },
-        knots::Generation::Uniform,
-        points::{
-            ControlPoints, DataPoints, Points,
-            methods::fit::{Method::LooseEnds, Penalization},
-        },
-    },
+    Curve,
     manipulation::{
         merge::{merge, merge_from, merge_to},
         split::split_and_normalize,
     },
+    points::{ControlPoints, DataPoints, Points},
 };
 
 use crate::visualization::Limits;
@@ -45,46 +35,25 @@ fn scattered_data_points() -> DataPoints {
 }
 
 fn example_spline(p: usize) -> Curve {
-    generate(Manual {
-        degree: p,
-        points: ControlPoints::new(dmatrix![
+    Curve::with_uniform_knots(
+        p,
+        ControlPoints::new(dmatrix![
             -2.5,-1.5,-0.5, 1.0, 2.0, 0.0;
             -2.5, 1.0,-1.5,-2.0, 1.0, 2.0;
         ]),
-        knots: Uniform,
-    })
+    )
     .unwrap()
 }
 
 fn fit_plots() {
     let p = 2;
     let dp = scattered_data_points();
-    let bs_max = generate(LeastSquaresFit {
-        degree: p,
-        points: &dp,
-        intended_polygon_segments: dp.polyline_segments(),
-        method: LooseEnds,
-        penalization: None,
-    })
-    .unwrap();
+    let bs_max = Curve::fit(&dp, p).loose_ends().build().unwrap();
 
-    let bs_half = generate(LeastSquaresFit {
-        degree: p,
-        points: &dp,
-        intended_polygon_segments: dp.count() / 3,
-        method: LooseEnds,
-        penalization: None,
-    })
-    .unwrap();
+    let bs_half = Curve::fit(&dp, p).polygon_segments(dp.count() / 3).loose_ends().build().unwrap();
 
-    let bs_half_penalized = generate(LeastSquaresFit {
-        degree: p,
-        points: &dp,
-        intended_polygon_segments: dp.count() / 3,
-        method: LooseEnds,
-        penalization: Some(Penalization { lambda: 0.5, kappa: 2 }),
-    })
-    .unwrap();
+    let bs_half_penalized =
+        Curve::fit(&dp, p).polygon_segments(dp.count() / 3).loose_ends().penalized(0.5, 2).build().unwrap();
 
     visualization::generate_2d_plot("generation/points.svg", vec![], &limits(), Some(&dp));
     visualization::generate_2d_plot("generation/fit-loose-all.svg", vec![(&bs_max, RED_100)], &limits(), Some(&dp));
@@ -99,25 +68,24 @@ fn fit_plots() {
 
 fn interpolation_plot() {
     let dp = scattered_data_points();
-    let c = generate(Interpolation { degree: 2, points: &dp }).unwrap();
+    let c = Curve::interpolate(&dp, 2).unwrap();
 
     visualization::generate_2d_plot("generation/interpolation.svg", vec![(&c, RED_100)], &limits(), Some(&dp));
 }
 
 fn manual_plot() {
     let dp = scattered_data_points();
-    let c = generate(Manual { degree: 2, knots: Uniform, points: ControlPoints::new(dp.matrix().clone()) }).unwrap();
+    let c = Curve::with_uniform_knots(2, ControlPoints::new(dp.matrix().clone())).unwrap();
     visualization::generate_2d_plot("generation/manual.svg", vec![(&c, RED_100)], &limits(), Some(&dp));
 }
 
 fn derivatives_plot() {
-    let mut bs_k0 = generate(Manual {
-        degree: 3,
-        points: ControlPoints::new(dmatrix![
+    let mut bs_k0 = Curve::with_uniform_knots(
+        3,
+        ControlPoints::new(dmatrix![
             -0.25, -0.05, 0.0, 0.05, 0.25;
         ]),
-        knots: Uniform,
-    })
+    )
     .unwrap();
 
     let lim = Limits { min: vec![-4.4], max: vec![9.0] };
@@ -176,15 +144,15 @@ fn merge_plots() {
     let c = example_spline(2);
     let (l_unshifted, r_unshifted) = split_and_normalize(&c, 0.5, (true, true)).unwrap();
 
-    let mut points_a = l_unshifted.points.matrix().clone();
-    let mut points_b = r_unshifted.points.matrix().clone();
+    let mut points_a = l_unshifted.points().matrix().clone();
+    let mut points_b = r_unshifted.points().matrix().clone();
 
     // Shift points
     points_a.column_mut(points_a.ncols() - 1).add_assign(dvector![0.25, -0.25]);
     points_b.column_mut(0).add_assign(dvector![0.25, 0.25]);
 
-    let a = Curve::new(l_unshifted.knots.clone(), ControlPoints::new(points_a)).unwrap();
-    let b = Curve::new(r_unshifted.knots.clone(), ControlPoints::new(points_b)).unwrap();
+    let a = Curve::new(l_unshifted.knots().clone(), ControlPoints::new(points_a)).unwrap();
+    let b = Curve::new(r_unshifted.knots().clone(), ControlPoints::new(points_b)).unwrap();
 
     let lim = limits();
 

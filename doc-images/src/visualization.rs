@@ -1,7 +1,7 @@
 use plotters::{backend::SVGBackend, chart::ChartContext, coord::types::RangedCoordf64, prelude::*};
 use plotters_arrows::TriangleArrow;
 
-use bsplines::curve::{
+use bsplines::{
     Curve,
     points::{ControlPoints, DataPoints, Points},
 };
@@ -40,7 +40,7 @@ pub fn draw_parametrized_spline_2d(
     });
     chart_context.draw_series(LineSeries::new(data, color.filled().stroke_width(point_size)).point_size(0)).unwrap();
 
-    let mut knot_values = curve.knots.vector().data.as_vec().clone();
+    let mut knot_values = curve.knots().vector().data.as_vec().clone();
     knot_values.dedup();
     let knot_data = knot_values.iter().cloned().map(|u| {
         let v = &curve.evaluate_derivative(u, derivative).unwrap();
@@ -151,7 +151,7 @@ pub fn generate_2d_plot(filename: &str, splines: Vec<(&Curve, RGBAColor)>, limit
     }
 
     for (c, color) in splines {
-        draw_control_polygon_2d(&mut chart_context, &c.points, color);
+        draw_control_polygon_2d(&mut chart_context, c.points(), color);
         draw_parametrized_spline_2d(&mut chart_context, c, 0, color);
     }
 
