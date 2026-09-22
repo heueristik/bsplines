@@ -4,6 +4,7 @@ use nalgebra::DVector;
 
 /// Evaluates the `i`-th basis function of degree `p` at the parameter `u`
 /// by the Cox-de Boor-Mansfield recurrence — see [`Knots::basis`](crate::knots::Knots::basis).
+/// It evaluates the recurrence from degree 0 upward, so the time grows with p² and not with 2ᵖ.
 ///
 /// The derivative order `k` and the number of polygon segments `n` close the
 /// last interval, so the last basis function covers `u = 1`.
@@ -15,32 +16,49 @@ pub(crate) fn basis(
     polygon_segments: usize,
     u: f64,
 ) -> f64 {
-    if degree == 0 {
-        if (knots[index] <= u && u < knots[index + 1]) ||
-            (index == polygon_segments - derivative && u == knots[polygon_segments + 1 - derivative])
-        {
-            return 1.0;
-        }
-        return 0.0;
+    let last = polygon_segments - derivative;
+
+    // A stack buffer holds the values for the common low degrees, so they need no allocation.
+    let mut stack_buffer = [0.0; 16];
+    let mut heap_buffer = Vec::new();
+    let values: &mut [f64] = if degree < stack_buffer.len() {
+        &mut stack_buffer[..=degree]
+    } else {
+        heap_buffer.resize(degree + 1, 0.0);
+        &mut heap_buffer
+    };
+
+    // The basis functions of degree 0 from the index i to i + p.
+    for (offset, value) in values.iter_mut().enumerate() {
+        let j = index + offset;
+        let is_in_interval = knots[j] <= u && u < knots[j + 1];
+        let closes_last_interval = j == last && u == knots[last + 1];
+        *value = if is_in_interval || closes_last_interval { 1.0 } else { 0.0 };
     }
 
-    let summand1 = if knots[index + degree] == knots[index] {
-        0.0
-    } else {
-        (u - knots[index]) / (knots[index + degree] - knots[index]) *
-            basis(knots, index, degree - 1, derivative, polygon_segments, u)
-    };
+    // Each level raises the degree by one and keeps one basis function fewer.
+    for level in 1..=degree {
+        for offset in 0..=degree - level {
+            let j = index + offset;
 
-    let summand2 = if knots[index + degree + 1] == knots[index + 1] {
-        0.0
-    } else {
-        // This form is numerically more stable than the algebraically equal
-        // `(1.0 - (u - knots[index + 1]) / (knots[index + degree + 1] - knots[index + 1])) * basis(…)`.
-        (knots[index + degree + 1] - u) / (knots[index + degree + 1] - knots[index + 1]) *
-            basis(knots, index + 1, degree - 1, derivative, polygon_segments, u)
-    };
+            let summand1 = if knots[j + level] == knots[j] {
+                0.0
+            } else {
+                (u - knots[j]) / (knots[j + level] - knots[j]) * values[offset]
+            };
 
-    summand1 + summand2
+            let summand2 = if knots[j + level + 1] == knots[j + 1] {
+                0.0
+            } else {
+                // This form is numerically more stable than the algebraically equal
+                // `(1.0 - (u - knots[j + 1]) / (knots[j + level + 1] - knots[j + 1])) * values[offset + 1]`.
+                (knots[j + level + 1] - u) / (knots[j + level + 1] - knots[j + 1]) * values[offset + 1]
+            };
+
+            values[offset] = summand1 + summand2;
+        }
+    }
+    values[0]
 }
 
 #[cfg(test)]
@@ -109,6 +127,17 @@ mod tests {
         assert_eq!(basis(i, 2. / 3.), 0.0);
         assert_relative_eq!(basis(i, 5. / 6.), 1. / 8., epsilon = f64::EPSILON.sqrt());
         assert_eq!(basis(i, 1.), 1.0);
+    }
+
+    #[test]
+    fn basis_functions_of_degree_40_sum_to_one() {
+        let degree = 40;
+        let knots = Knots::uniform(degree, degree + 5).unwrap();
+
+        for u in [0.0, 0.3, 0.7, 1.0] {
+            let sum: f64 = (0..=knots.polygon_segments()).map(|index| knots.basis(index, u).unwrap()).sum();
+            assert_relative_eq!(sum, 1.0, epsilon = 1e-9);
+        }
     }
 
     #[test]
