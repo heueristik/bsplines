@@ -7,6 +7,7 @@ use nalgebra::{DMatrix, DVector};
 use crate::{
     Curve,
     basis::basis,
+    buffer::with_buffer,
     error::{Error, Result},
     knots::{Knots, reversed},
     points,
@@ -580,7 +581,8 @@ fn kronecker_delta(i: usize, j: usize) -> bool {
 }
 
 /// Returns the factor that ties a control point of the `k`-th derivative curve
-/// to a zero-order control point — see `Tai2003`.
+/// to a zero-order control point — see `Tai2003`. It evaluates the orders from 0 upward,
+/// so the time grows with k² and not with 2ᵏ.
 fn prefactor(
     degree: usize,
     index: usize,
@@ -591,19 +593,28 @@ fn prefactor(
 ) -> f64 {
     let polygon_segments = points.ncols() - 1;
 
-    if index <= polygon_segments - derivative {
-        if derivative == 0 {
-            if kronecker_delta(index, zero_order_index) { 1. } else { 0. }
-        } else if knot_values[index + degree + 1] == knot_values[index + derivative] {
-            0.
-        } else {
-            (degree + 1 - derivative) as f64 / (knot_values[index + degree + 1] - knot_values[index + derivative]) *
-                (prefactor(degree, index + 1, zero_order_index, derivative - 1, points, knot_values) -
-                    prefactor(degree, index, zero_order_index, derivative - 1, points, knot_values))
+    with_buffer(derivative + 1, |factors| {
+        // The factors of order 0 from the index i to i + k.
+        for (offset, factor) in factors.iter_mut().enumerate() {
+            let j = index + offset;
+            *factor = if j <= polygon_segments && kronecker_delta(j, zero_order_index) { 1. } else { 0. };
         }
-    } else {
-        0.
-    }
+
+        // Each order combines two neighbors of the order below and keeps one factor fewer.
+        for order in 1..=derivative {
+            for offset in 0..=derivative - order {
+                let j = index + offset;
+                factors[offset] =
+                    if j + order > polygon_segments || knot_values[j + degree + 1] == knot_values[j + order] {
+                        0.
+                    } else {
+                        (degree + 1 - order) as f64 / (knot_values[j + degree + 1] - knot_values[j + order]) *
+                            (factors[offset + 1] - factors[offset])
+                    };
+            }
+        }
+        factors[0]
+    })
 }
 
 #[cfg(test)]
@@ -616,6 +627,19 @@ mod tests {
 
     fn test_curve(degree: usize, points: DMatrix<f64>) -> Curve {
         Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap()
+    }
+
+    #[test]
+    fn merge_of_degree_20_keeps_the_outer_end_points() {
+        let degree = 20;
+        let count = degree + 2;
+        let left = test_curve(degree, DMatrix::from_fn(1, count, |_, column| column as f64));
+        let right = test_curve(degree, DMatrix::from_fn(1, count, |_, column| (count + column) as f64));
+
+        let merged = merge(&left, &right, &Constraints::default()).unwrap();
+
+        assert_eq!(merged.evaluate(0.0).unwrap(), left.evaluate(0.0).unwrap());
+        assert_eq!(merged.evaluate(1.0).unwrap(), right.evaluate(1.0).unwrap());
     }
 
     #[test]
