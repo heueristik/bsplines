@@ -26,7 +26,7 @@ use crate::{
     knots::{self, KnotMethod, Knots},
     manipulation::{
         insert::insert,
-        merge::{Constraints, merge, merge_with_constraints},
+        merge::{Constraints, merge},
         split::split,
     },
     parameters::{self, ParameterMethod},
@@ -215,7 +215,13 @@ impl Curve {
         knots_max
     }
 
-    /// Reverses the curve.
+    /// Reverses the direction of the curve: the point at the parameter u moves to 1 − u.
+    ///
+    /// | The curve.          | The reversed curve. |
+    /// |:-------------------:|:-------------------:|
+    /// | ![][reverse-before] | ![][reverse-after]  |
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("reverse-before", "doc-images/plots/manipulation/reverse-before.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("reverse-after", "doc-images/plots/manipulation/reverse-after.svg"))]
     pub fn reverse(&mut self) -> &mut Self {
         self.knots.reverse();
         self.points.reverse();
@@ -243,7 +249,7 @@ impl Curve {
     /// assert_relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn prepend(&mut self, other: &Self) -> Result<&mut Self> {
-        let merged = merge(other, self)?;
+        let merged = merge(other, self, &Constraints::default())?;
         self.knots = merged.knots;
         self.points = merged.points;
         Ok(self)
@@ -252,7 +258,7 @@ impl Curve {
     /// Prepends another curve like [`Curve::prepend`], but keeps the points at the constrained
     /// parameters fixed. The other curve is the left one, this curve is the right one.
     pub fn prepend_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
-        let merged = merge_with_constraints(other, self, &constraints)?;
+        let merged = merge(other, self, &constraints)?;
         self.knots = merged.knots;
         self.points = merged.points;
         Ok(self)
@@ -279,7 +285,7 @@ impl Curve {
     /// assert_relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn append(&mut self, other: &Self) -> Result<&mut Self> {
-        let merged = merge(self, other)?;
+        let merged = merge(self, other, &Constraints::default())?;
         self.knots = merged.knots;
         self.points = merged.points;
         Ok(self)
@@ -305,7 +311,7 @@ impl Curve {
     /// assert_relative_eq!(curve.evaluate(0.5).unwrap(), end, epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn append_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
-        let merged = merge_with_constraints(self, other, &constraints)?;
+        let merged = merge(self, other, &constraints)?;
         self.knots = merged.knots;
         self.points = merged.points;
         Ok(self)
@@ -314,12 +320,24 @@ impl Curve {
     /// Splits the curve into two independent curves at the parameter `u`,
     /// normalizing both knot vectors to the domain [0, 1].
     /// The parameter must lie in the domain interior (0, 1).
+    ///
+    /// | The curve.        | The two curves after the split at u = 1/2. |
+    /// |:-----------------:|:------------------------------------------:|
+    /// | ![][split-before] | ![][split-after]                           |
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("split-before", "doc-images/plots/manipulation/split-before.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulation/split-after.svg"))]
     pub fn split(&self, u: f64) -> Result<(Self, Self)> {
         split(self, u)
     }
 
     /// Inserts a knot at the parameter `u` without changing the curve shape.
     /// The parameter must lie in the domain interior (0, 1).
+    ///
+    /// | The curve.         | The curve after the insertion at u = 4/5. |
+    /// |:------------------:|:-----------------------------------------:|
+    /// | ![][insert-before] | ![][insert-after]                         |
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("insert-before", "doc-images/plots/manipulation/insert-before.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("insert-after", "doc-images/plots/manipulation/insert-after.svg"))]
     pub fn insert(&mut self, u: f64) -> Result<&mut Self> {
         self.insert_times(u, 1)?;
         Ok(self)

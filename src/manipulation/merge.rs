@@ -48,23 +48,9 @@ impl Constraints {
     }
 }
 
-/// Merges two curves, keeping the end of the left curve fixed.
-pub fn merge_from(left: &Curve, right: &Curve) -> Result<Curve> {
-    merge_with_constraints(left, right, &Constraints { left: vec![1.], right: vec![] })
-}
-
-/// Merges two curves, keeping the start of the right curve fixed.
-pub fn merge_to(left: &Curve, right: &Curve) -> Result<Curve> {
-    merge_with_constraints(left, right, &Constraints { left: vec![], right: vec![0.] })
-}
-
 /// Merges two curves into one, attaching the end of the left curve to the start
 /// of the right one while maintaining continuity of all derivatives — see `Tai2003`.
-pub fn merge(left: &Curve, right: &Curve) -> Result<Curve> {
-    merge_with_constraints(left, right, &Constraints::default())
-}
-
-pub(crate) fn merge_with_constraints(left: &Curve, right: &Curve, constraints: &Constraints) -> Result<Curve> {
+pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> Result<Curve> {
     let left_degree = left.degree();
     let right_degree = right.degree();
 
@@ -633,7 +619,12 @@ mod tests {
 
         #[test]
         fn merge_concatenates_the_knot_vectors() {
-            let curve = merge(&test_curve(1, dmatrix![-2.,-1.,0.;]), &test_curve(1, dmatrix![0.,1.,2.;])).unwrap();
+            let curve = merge(
+                &test_curve(1, dmatrix![-2.,-1.,0.;]),
+                &test_curve(1, dmatrix![0.,1.,2.;]),
+                &Constraints::default(),
+            )
+            .unwrap();
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0.25, 0.5, 0.75, 1., 1.]);
         }
     }
@@ -654,8 +645,12 @@ mod tests {
                 0.,1.,2.;
                 0.,1.,2.;
             ];
-            let curve =
-                merge(&test_curve(degree, points::reversed(&points).mul(-1.)), &test_curve(degree, points)).unwrap();
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints::default(),
+            )
+            .unwrap();
             assert_relative_eq!(
                 curve.points.matrix(),
                 &dmatrix![
@@ -670,8 +665,12 @@ mod tests {
         fn no_shift_degree_2() {
             let degree = 2;
             let points = dmatrix![0.,1.,2.;];
-            let curve =
-                merge(&test_curve(degree, points::reversed(&points).mul(-1.)), &test_curve(degree, points)).unwrap();
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints::default(),
+            )
+            .unwrap();
             assert_relative_eq!(curve.points.matrix(), &dmatrix![-2.,-1.,1.,2.;], epsilon = f64::EPSILON.sqrt());
         }
 
@@ -679,8 +678,12 @@ mod tests {
         fn shift_degree_1() {
             let degree = 1;
             let points = dmatrix![0.5,1.,2.;];
-            let curve =
-                merge(&test_curve(degree, points::reversed(&points).mul(-1.)), &test_curve(degree, points)).unwrap();
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints::default(),
+            )
+            .unwrap();
             assert_relative_eq!(curve.points.matrix(), &dmatrix![-2.,-1.,0.,1.,2.;], epsilon = f64::EPSILON.sqrt());
         }
 
@@ -688,8 +691,12 @@ mod tests {
         fn shift_degree_2() {
             let degree = 2;
             let points = dmatrix![0.5,1.,2.;];
-            let curve =
-                merge(&test_curve(degree, points::reversed(&points).mul(-1.)), &test_curve(degree, points)).unwrap();
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints::default(),
+            )
+            .unwrap();
             assert_relative_eq!(curve.points.matrix(), &dmatrix![-2.,-1.,1.,2.;], epsilon = f64::EPSILON.sqrt());
         }
 
@@ -697,9 +704,12 @@ mod tests {
         fn shift_constrain_left_degree_2() {
             let degree = 2;
             let points = dmatrix![0.5,1.,2.;];
-            let curve =
-                merge_from(&test_curve(degree, points::reversed(&points).mul(-1.)), &test_curve(degree, points))
-                    .unwrap();
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints { left: vec![1.], right: vec![] },
+            )
+            .unwrap();
 
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
 
@@ -710,8 +720,12 @@ mod tests {
         fn shift_constrain_right_degree_2() {
             let degree = 2;
             let points = dmatrix![0.5,1.,2.;];
-            let curve =
-                merge_to(&test_curve(degree, points::reversed(&points).mul(-1.)), &test_curve(degree, points)).unwrap();
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints { left: vec![], right: vec![0.] },
+            )
+            .unwrap();
 
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
 

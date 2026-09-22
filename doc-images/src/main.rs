@@ -5,10 +5,7 @@ use plotters::{prelude::*, style::full_palette::TEAL};
 
 use bsplines::{
     Curve,
-    manipulation::{
-        merge::{merge, merge_from, merge_to},
-        split::split_and_normalize,
-    },
+    manipulation::merge::Constraints,
     points::{ControlPoints, DataPoints, Points},
 };
 
@@ -128,7 +125,7 @@ fn split_plots() {
     let c = example_spline(2);
     let lim = Limits { min: vec![-3., -3.], max: vec![3., 3.] };
     visualization::generate_2d_plot("manipulation/split-before.svg", vec![(&c, PURPLE_100)], &lim, None);
-    let (a, b) = split_and_normalize(&c, 0.5, (true, true)).unwrap();
+    let (a, b) = c.split(0.5).unwrap();
     visualization::generate_2d_plot("manipulation/split-after.svg", vec![(&a, RED_100), (&b, BLUE_100)], &lim, None);
 }
 
@@ -142,7 +139,7 @@ fn reverse_plots() {
 
 fn merge_plots() {
     let c = example_spline(2);
-    let (l_unshifted, r_unshifted) = split_and_normalize(&c, 0.5, (true, true)).unwrap();
+    let (l_unshifted, r_unshifted) = c.split(0.5).unwrap();
 
     let mut points_a = l_unshifted.points().matrix().clone();
     let mut points_b = r_unshifted.points().matrix().clone();
@@ -154,24 +151,28 @@ fn merge_plots() {
     let a = Curve::new(l_unshifted.knots().clone(), ControlPoints::new(points_a)).unwrap();
     let b = Curve::new(r_unshifted.knots().clone(), ControlPoints::new(points_b)).unwrap();
 
+    let mut merged = a.clone();
+    merged.append(&b).unwrap();
+
+    let mut left_end_constrained = a.clone();
+    left_end_constrained.append_constrained(&b, Constraints { left: vec![1.0], right: vec![] }).unwrap();
+
+    let mut right_start_constrained = a.clone();
+    right_start_constrained.append_constrained(&b, Constraints { left: vec![], right: vec![0.0] }).unwrap();
+
     let lim = limits();
 
     visualization::generate_2d_plot("manipulation/merge-before.svg", vec![(&a, RED_100), (&b, BLUE_100)], &lim, None);
-    visualization::generate_2d_plot(
-        "manipulation/merge-after.svg",
-        vec![(&merge(&a, &b).unwrap(), PURPLE_100)],
-        &lim,
-        None,
-    );
+    visualization::generate_2d_plot("manipulation/merge-after.svg", vec![(&merged, PURPLE_100)], &lim, None);
     visualization::generate_2d_plot(
         "manipulation/merge-after-left-end-constrained.svg",
-        vec![(&merge_from(&a, &b).unwrap(), PURPLE_100)],
+        vec![(&left_end_constrained, PURPLE_100)],
         &lim,
         None,
     );
     visualization::generate_2d_plot(
         "manipulation/merge-after-right-start-constrained.svg",
-        vec![(&merge_to(&a, &b).unwrap(), PURPLE_100)],
+        vec![(&right_start_constrained, PURPLE_100)],
         &lim,
         None,
     );

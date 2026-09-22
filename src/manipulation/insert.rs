@@ -1,12 +1,4 @@
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("insert-before", "doc-images/plots/manipulation/insert-before.svg"),
-doc = ::embed_doc_image::embed_image!("insert-after", "doc-images/plots/manipulation/insert-after.svg")))]
-//! Inserts an additional knot into the curve.
-//!
-//! | A curve before knot insertion. | The curve after knot insertion at `u=4/5`. |
-//! |:------------------------------:|:--------------------------------------------:|
-//! | ![][insert-before]             | ![][insert-after]                            |
+//! Inserts a knot into a curve.
 
 use std::ops::AddAssign;
 
@@ -20,7 +12,7 @@ use crate::{
 /// Inserts the knot `u` into the curve by Boehm's algorithm, keeping the curve shape unchanged.
 /// The parameter must lie in the domain interior (0, 1), and the multiplicity of `u`
 /// must not already exceed the degree.
-pub fn insert(curve: &mut Curve, u: f64) -> Result<()> {
+pub(crate) fn insert(curve: &mut Curve, u: f64) -> Result<()> {
     if u <= 0.0 || u >= 1.0 {
         return Err(Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
     }

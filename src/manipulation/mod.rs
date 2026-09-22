@@ -1,6 +1,5 @@
 //! Implements different curve manipulation methods.
 
-pub mod insert;
+pub(crate) mod insert;
 pub mod merge;
-pub mod reverse;
-pub mod split;
+pub(crate) mod split;
