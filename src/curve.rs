@@ -341,7 +341,7 @@ impl Curve {
 
         let knots = Knots::new(degree - derivative, self.knots.vector_derivative(derivative).clone());
         let control_points = ControlPoints::new(self.control_points.matrix_derivative(derivative).clone());
-        Ok(Curve { knots, control_points })
+        Curve::new(knots, control_points)
     }
 }
 
@@ -466,6 +466,17 @@ mod tests {
                 curve.derivative_curve(derivative).err(),
                 Some(Error::DerivativeExceedsDegree { derivative, degree })
             );
+        }
+
+        #[test]
+        fn derivative_curve_carries_the_higher_derivatives_of_the_curve() {
+            let curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-1., -0.5, 0.5, 2., 1.;]), 3).unwrap();
+            let u = 0.25;
+            assert_ne!(curve.evaluate_derivative(u, 2).unwrap(), dvector![0.], "the second derivative is not zero");
+
+            let first_derivative = curve.derivative_curve(1).unwrap();
+
+            assert_eq!(first_derivative.evaluate_derivative(u, 1), curve.evaluate_derivative(u, 2));
         }
     }
 
