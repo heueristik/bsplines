@@ -81,11 +81,11 @@ pub enum Error {
 
     /// The knot vector must be clamped.
     #[error("the knot vector must be clamped")]
-    UnclampedCurve,
+    UnclampedKnots,
 
     /// The knot vector must be normalized to the domain [0, 1].
     #[error("the knot vector must be normalized to the domain [0, 1]")]
-    UnnormalizedCurve,
+    UnnormalizedKnots,
 
     /// Merging supports at most p - 1 constrained points in total.
     #[error(

@@ -53,11 +53,11 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
     }
 
     if !left.knots.is_clamped() || !right.knots.is_clamped() {
-        return Err(Error::UnclampedCurve);
+        return Err(Error::UnclampedKnots);
     }
 
     if !left.knots.is_normalized() || !right.knots.is_normalized() {
-        return Err(Error::UnnormalizedCurve);
+        return Err(Error::UnnormalizedKnots);
     }
 
     let total_constraints = constraints.count();
