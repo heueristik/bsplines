@@ -2,7 +2,7 @@
 
 use std::ops::MulAssign;
 
-use nalgebra::{DMatrix, DVector, DVectorView, DVectorViewMut};
+use nalgebra::{DMatrix, DVectorView, DVectorViewMut};
 
 use crate::knots::Knots;
 
@@ -121,32 +121,24 @@ impl ControlPoints {
     pub(crate) fn derive(&mut self, knots: &Knots) {
         let degree = knots.degree();
         let polygon_segments = self.polygon_segments();
+        let knot_values = knots.vector();
 
         self.derivatives.truncate(1);
         for derivative in 1..=degree {
+            let previous = &self.derivatives[derivative - 1];
             let mut new_points = DMatrix::zeros(self.dimension(), polygon_segments - derivative + 1);
             for (i, mut column) in new_points.column_iter_mut().enumerate() {
-                column.copy_from(&self.derive_single_point(i, derivative, knots));
+                // Equal knots give a zero control point instead of a division by zero.
+                if knot_values[i + degree + 1] != knot_values[i + derivative] {
+                    column.copy_from(
+                        &((degree - derivative + 1) as f64 /
+                            (knot_values[i + degree + 1] - knot_values[i + derivative]) *
+                            (previous.column(i + 1) - previous.column(i))),
+                    );
+                }
             }
             self.derivatives.push(new_points);
         }
-    }
-
-    fn derive_single_point(&self, index: usize, derivative: usize, knots: &Knots) -> DVector<f64> {
-        let degree = knots.degree();
-
-        if derivative == 0 {
-            return self.derivatives[0].column(index).clone_owned();
-        }
-
-        let knot_values = knots.vector();
-        if knot_values[index + degree + 1] == knot_values[index + derivative] {
-            return DVector::zeros(self.dimension());
-        }
-
-        (degree - derivative + 1) as f64 / (knot_values[index + degree + 1] - knot_values[index + derivative]) *
-            (self.derive_single_point(index + 1, derivative - 1, knots) -
-                self.derive_single_point(index, derivative - 1, knots))
     }
 
     /// Reverses the order of the points of all derivative orders.

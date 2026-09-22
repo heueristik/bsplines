@@ -599,6 +599,17 @@ mod tests {
     }
 
     #[test]
+    fn curve_of_degree_40_starts_and_ends_at_its_end_control_points() {
+        let degree = 40;
+        let points = DMatrix::from_fn(1, degree + 5, |_, column| column as f64);
+        let last = points.ncols() - 1;
+        let curve = Curve::with_uniform_knots(ControlPoints::new(points.clone()), degree).unwrap();
+
+        assert_relative_eq!(curve.evaluate(0.0).unwrap()[0], points[0], epsilon = 1e-9);
+        assert_relative_eq!(curve.evaluate(1.0).unwrap()[0], points[last], epsilon = 1e-9);
+    }
+
+    #[test]
     fn interpolate_errors_for_no_data_points() {
         assert!(Curve::interpolate(&DataPoints::new(DMatrix::zeros(2, 0)), 2).is_err());
     }
