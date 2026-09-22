@@ -45,7 +45,6 @@ pub fn fit(
 /// Returns the residual vectors R: the internal data points reduced by the contributions
 /// of the two fixed end control points.
 fn calculate_residuals(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
-    let degree = knots.degree();
     let polygon_segments = knots.polygon_segments();
     let polyline_segments = points.polyline_segments();
     let dimension = points.dimension();
@@ -58,10 +57,8 @@ fn calculate_residuals(knots: &Knots, points: &DataPoints, parameters: &Paramete
         residuals.column_mut(g).copy_from(&points.get(g));
         let u = u_bar[g];
 
-        residuals.column_mut(g).sub_assign(knots.evaluate(0, 0, degree, u) * points.get(0));
-        residuals
-            .column_mut(g)
-            .sub_assign(knots.evaluate(0, polygon_segments, degree, u) * points.get(polyline_segments));
+        residuals.column_mut(g).sub_assign(knots.basis(0, u) * points.get(0));
+        residuals.column_mut(g).sub_assign(knots.basis(polygon_segments, u) * points.get(polyline_segments));
     }
 
     residuals
@@ -73,7 +70,6 @@ fn calculate_constant_terms_matrix(
     parameters: &Parameters,
     residuals: &MatD,
 ) -> MatD {
-    let degree = knots.degree();
     let polygon_segments = knots.polygon_segments();
     let polyline_segments = points.polyline_segments();
     let dimension = points.dimension();
@@ -88,7 +84,7 @@ fn calculate_constant_terms_matrix(
 
         for g in 1..=polyline_segments - 1 {
             let u = u_bar[g];
-            sum += knots.evaluate(0, i, degree, u) * residuals.column(g);
+            sum += knots.basis(i, u) * residuals.column(g);
         }
         constant_terms.column_mut(i - 1).copy_from(&sum);
     }
@@ -97,7 +93,6 @@ fn calculate_constant_terms_matrix(
 }
 
 fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
-    let degree = knots.degree();
     let polygon_segments = knots.polygon_segments();
     let polyline_segments = points.polyline_segments();
 
@@ -107,7 +102,7 @@ fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Param
     for g in 1..=polyline_segments - 1 {
         let u = u_bar[g];
         for i in 1..=polygon_segments - 1 {
-            basis_matrix[(g - 1, i - 1)] = knots.evaluate(0, i, degree, u);
+            basis_matrix[(g - 1, i - 1)] = knots.basis(i, u);
         }
     }
     basis_matrix

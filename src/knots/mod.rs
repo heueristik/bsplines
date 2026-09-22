@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "doc-images",
 cfg_attr(all(),
 doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.svg")))]
-//! Implements the knot vector defining the [spline basis functions][basis].
+//! Implements the knot vector defining the [basis functions][Knots::basis].
 //!
 //! The knot vector parametrizing the `k`-th degree curve is composed of `n+p+2 - 2k` scalar values
 //! in ascending order, called 'knots'.
@@ -211,14 +211,36 @@ impl Knots {
         span
     }
 
-    /// Evaluates the `i`-th basis function of the `k`-th derivative knot vector at the parameter `u`,
-    /// where `p` is the degree of the curve itself, so the basis degree is p − k.
-    pub fn evaluate(&self, derivative: usize, index: usize, degree: usize, u: f64) -> f64 {
-        let knots = &self.derivatives[derivative];
-        let polygon_segments = self.polygon_segments();
-        let basis_degree = degree - derivative;
+    /// Evaluates the `i`-th basis function of degree p at the parameter `u`
+    /// by the Cox-de Boor-Mansfield recurrence:
+    ///
+    /// ![The Cox-de Boor-Mansfield recurrence relation][eq-basis-function]
+    ///
+    /// with the basis functions of degree 0
+    ///
+    /// ![Basis function of degree zero][eq-basis-function-zero]
+    ///
+    /// and the prefactors
+    ///
+    /// ![Prefactors][eq-basis-prefactor]
+    ///
+    /// with the knots U, the degree p, the number of polygon segments n, and the derivative order k,
+    /// which is 0 for the curve itself. The condition ⋁ (i = n − k ⋀ u = Uₙ₊₁₋ₖ) closes the last
+    /// interval, so the last basis function covers u = 1.
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-function", "doc-images/equations/basis-function.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-function-zero", "doc-images/equations/basis-function-zero.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-prefactor", "doc-images/equations/basis-prefactor.svg"))]
+    pub fn basis(&self, index: usize, u: f64) -> f64 {
+        self.basis_of_derivative_curve(0, index, u)
+    }
 
-        basis::basis(knots, index, basis_degree, derivative, polygon_segments, u)
+    /// Evaluates the `i`-th basis function of the `k`-th derivative curve at the parameter `u`:
+    /// the basis function of degree p − k on the knot vector of that derivative.
+    pub(crate) fn basis_of_derivative_curve(&self, derivative: usize, index: usize, u: f64) -> f64 {
+        let knots = &self.derivatives[derivative];
+        let basis_degree = self.degree - derivative;
+
+        basis::basis(knots, index, basis_degree, derivative, self.polygon_segments(), u)
     }
 
     /// Returns whether the first and last knot value are each repeated p + 1 times,

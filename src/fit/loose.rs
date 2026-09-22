@@ -26,7 +26,6 @@ pub fn fit(
 }
 
 fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
-    let degree = knots.degree();
     let polygon_segments = knots.polygon_segments();
     let polyline_segments = points.polyline_segments();
 
@@ -36,7 +35,7 @@ fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Param
     for g in 0..=polyline_segments {
         let u = u_bar[g];
         for i in 0..=polygon_segments {
-            basis_matrix[(g, i)] = knots.evaluate(0, i, degree, u);
+            basis_matrix[(g, i)] = knots.basis(i, u);
         }
     }
     basis_matrix

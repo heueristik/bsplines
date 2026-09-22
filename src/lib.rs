@@ -47,7 +47,7 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //!
 //! ## What are B-Splines?
 //!
-//! B-splines are parametric functions composed of piecewise, polynomial [basis functions][basis] of degree `p >
+//! B-splines are parametric functions composed of piecewise, polynomial [basis functions][Knots::basis] of degree `p >
 //! 0`. These piecewise polynomials are joined so that the parametric function is `p-1` times continuously
 //! differentiable. The overall functions are parametrized over finite domains with a so-called [knot
 //! vector][knots] with the co-domain being an `N`-dimensional vector space, that is defined by [control
@@ -72,7 +72,7 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //! | Eilers1996 | Eilers, P. H. C., Marx, B. D., Flexible smoothing with B -splines and penalties, Stat. Sci., 11(2) (1996) 89–121.                                                  |
 //! | Tai2003    | Tai, C.-L., Hu, S.-M., Huang, Q.-X., Approximate merging of B-spline curves via knot adjustment and constrained optimization, Comput. Des., 35(10) (2003) 893–899. |
 
-pub mod basis;
+mod basis;
 pub mod curve;
 pub mod error;
 pub mod fit;

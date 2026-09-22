@@ -8,7 +8,6 @@ use crate::{
 };
 
 pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
-    let degree = knots.degree();
     let polyline_segments = points.polyline_segments();
 
     let u_bar = parameters.vector();
@@ -17,7 +16,7 @@ pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) 
     let mut basis_matrix = MatD::zeros(points.count(), points.count());
     for i in 0..=polyline_segments {
         for g in 0..=polyline_segments {
-            basis_matrix[(g, i)] = knots.evaluate(0, i, degree, u_bar[g]);
+            basis_matrix[(g, i)] = knots.basis(i, u_bar[g]);
         }
     }
 

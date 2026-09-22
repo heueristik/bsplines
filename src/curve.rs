@@ -13,7 +13,7 @@ doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.sv
 //! - number of control polygon segments `n`,
 //! - spline degree `p`,
 //! - `k`-th derivative [knot vector][crate::knots] `U`,
-//! - `n+1-k` [spline basis function][crate::basis] `N` of degree `p-k` defined by the [knot vector][crate::knots] `U`,
+//! - `n+1-k` [basis functions][crate::Knots::basis] `N` of degree `p-k` defined by the [knot vector][crate::knots] `U`,
 //!   and
 //! - `n+1-k`, `N`-dimensional [control points][crate::points] `P`.
 
@@ -194,8 +194,8 @@ impl Curve {
             let span = self.knots.find_span(u, derivative);
 
             for i in span - (degree - derivative)..=polygon_segments - derivative {
-                value +=
-                    self.knots.evaluate(derivative, i, degree, u) * self.points.matrix_derivative(derivative).column(i);
+                value += self.knots.basis_of_derivative_curve(derivative, i, u) *
+                    self.points.matrix_derivative(derivative).column(i);
             }
         }
         Ok(value)
