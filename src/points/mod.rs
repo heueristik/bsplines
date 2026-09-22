@@ -82,9 +82,10 @@ impl DataPoints {
         self
     }
 
-    /// Returns the number of chords m of the data polyline — one less than the number of points.
+    /// Returns the number of chords m of the data polyline: one less than the number of points,
+    /// and zero without points.
     pub fn polyline_segments(&self) -> usize {
-        self.count() - 1
+        self.count().saturating_sub(1)
     }
 }
 
@@ -104,9 +105,10 @@ impl ControlPoints {
         ControlPoints { derivatives: vec![points] }
     }
 
-    /// Returns the number of segments n of the control polygon — one less than the number of points.
+    /// Returns the number of segments n of the control polygon: one less than the number of points,
+    /// and zero without points.
     pub fn polygon_segments(&self) -> usize {
-        self.count() - 1
+        self.count().saturating_sub(1)
     }
 
     /// Returns the control point matrix of the `k`-th derivative curve.
@@ -211,6 +213,12 @@ mod tests {
     #[test]
     fn polygon_segments() {
         assert_eq!(control_points_example().polygon_segments(), 3);
+    }
+
+    #[test]
+    fn segments_of_no_points_are_zero() {
+        assert_eq!(ControlPoints::new(DMatrix::zeros(2, 0)).polygon_segments(), 0);
+        assert_eq!(DataPoints::new(DMatrix::zeros(2, 0)).polyline_segments(), 0);
     }
 
     #[test]

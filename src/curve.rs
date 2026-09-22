@@ -343,7 +343,7 @@ impl Curve {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use nalgebra::{dmatrix, dvector};
+    use nalgebra::{DMatrix, dmatrix, dvector};
     use rstest::fixture;
 
     use crate::points::DataPoints;
@@ -548,6 +548,11 @@ mod tests {
         curve.append_constrained(&right, Constraints { left: vec![1.0], right: vec![] }).unwrap();
 
         assert_relative_eq!(curve.evaluate(joint).unwrap(), end, epsilon = f64::EPSILON.sqrt());
+    }
+
+    #[test]
+    fn interpolate_errors_for_no_data_points() {
+        assert!(Curve::interpolate(&DataPoints::new(DMatrix::zeros(2, 0)), 2).is_err());
     }
 
     #[test]
