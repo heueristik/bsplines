@@ -45,7 +45,7 @@ pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
             let point_count = left_knots.len() - (degree + 2) + 1;
             let left_points: DMatrix<f64> = points.columns(0, point_count).into();
 
-            Curve::new(Knots::new(degree, left_knots), ControlPoints::new(left_points))?
+            Curve::new(Knots::new(degree, left_knots)?, ControlPoints::new(left_points))?
         };
 
         let right = {
@@ -57,7 +57,7 @@ pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
             let point_count = right_knots.len() - (degree + 2) + 1;
             let right_points: DMatrix<f64> = points.columns(points.ncols() - point_count, point_count).into();
 
-            Curve::new(Knots::new(degree, right_knots), ControlPoints::new(right_points))?
+            Curve::new(Knots::new(degree, right_knots)?, ControlPoints::new(right_points))?
         };
         Ok((left, right))
     } else {
@@ -71,7 +71,7 @@ pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
             let point_count = left_knots.len() + 1 - (degree + 2);
             let left_points: DMatrix<f64> = points.columns(0, point_count).into();
 
-            Curve::new(Knots::new(degree, left_knots), ControlPoints::new(left_points))?
+            Curve::new(Knots::new(degree, left_knots)?, ControlPoints::new(left_points))?
         };
 
         let right = {
@@ -83,7 +83,7 @@ pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
             let point_count = right_knots.len() + 1 - (degree + 2);
             let right_points: DMatrix<f64> = points.columns(points.ncols() - point_count, point_count).into();
 
-            Curve::new(Knots::new(degree, right_knots), ControlPoints::new(right_points))?
+            Curve::new(Knots::new(degree, right_knots)?, ControlPoints::new(right_points))?
         };
         Ok((left, right))
     }

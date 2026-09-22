@@ -82,7 +82,7 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
 
     let merged_points = merge_control_points(left, right, &left_points, &right_points);
 
-    Curve::new(Knots::new(left_degree, merged_knots), ControlPoints::new(merged_points))
+    Curve::new(Knots::new(left_degree, merged_knots)?, ControlPoints::new(merged_points))
 }
 
 // The names of the block matrices (kv, kw, iv, jw, gv, hw, ipv, jppw, kconst) follow the notation in `Tai2003`.

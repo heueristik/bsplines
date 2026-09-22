@@ -67,14 +67,19 @@ impl Knots {
     }
 
     /// Returns knots for a curve of the given degree from the given knot values,
-    /// deriving the knot vectors of all derivative orders.
-    pub fn new(degree: usize, knots: DVector<f64>) -> Self {
+    /// deriving the knot vectors of all derivative orders. The degree p needs at least 2p + 2 knots.
+    pub fn new(degree: usize, knots: DVector<f64>) -> Result<Self> {
+        let count = knots.len();
+        if count < degree.saturating_mul(2).saturating_add(2) {
+            return Err(Error::TooFewKnots { count, degree });
+        }
+
         let mut derivatives: Vec<DVector<f64>> = Vec::with_capacity(degree + 1);
         derivatives.push(knots);
 
         let mut knots = Knots { derivatives, degree };
         knots.derive();
-        knots
+        Ok(knots)
     }
 
     /// Returns the knot vector of the curve.
@@ -222,7 +227,7 @@ impl Knots {
             return Err(Error::DerivativeExceedsDegree { derivative, degree });
         }
 
-        Ok(Knots::new(degree - derivative, self.derivatives[derivative].clone()))
+        Knots::new(degree - derivative, self.derivatives[derivative].clone())
     }
 
     /// Evaluates the `i`-th basis function of the `k`-th derivative curve at the parameter `u`:
@@ -376,8 +381,20 @@ mod tests {
     }
 
     #[test]
+    fn new_errors_for_too_few_knots() {
+        let degree = 2;
+        let smallest = dvector![0., 0., 0., 1., 1., 1.];
+        assert_eq!(smallest.len(), 2 * degree + 2, "p + 1 control points need 2p + 2 knots");
+        assert!(Knots::new(degree, smallest).is_ok());
+
+        let too_short = dvector![0., 0., 0., 1., 1.];
+        let count = too_short.len();
+        assert_eq!(Knots::new(degree, too_short).err(), Some(Error::TooFewKnots { count, degree }));
+    }
+
+    #[test]
     fn multiplicity() {
-        let knots = Knots::new(2, dvector![0., 0., 0., 0.25, 0.5, 0.5, 0.75, 1., 1., 1.]);
+        let knots = Knots::new(2, dvector![0., 0., 0., 0.25, 0.5, 0.5, 0.75, 1., 1., 1.]).unwrap();
 
         assert_eq!(knots.multiplicity(0.2), 0);
         assert_eq!(knots.multiplicity(0.25), 1);
@@ -404,7 +421,7 @@ mod tests {
 
     #[test]
     fn derivative_knots_carry_the_basis_functions_of_the_derivative_curve() {
-        let knots = Knots::new(3, dvector![0., 0., 0., 0., 0.25, 0.5, 0.5, 1., 1., 1., 1.]);
+        let knots = Knots::new(3, dvector![0., 0., 0., 0., 0.25, 0.5, 0.5, 1., 1., 1., 1.]).unwrap();
 
         for derivative in 0..=knots.degree() {
             let derivative_knots = knots.derivative_knots(derivative).unwrap();
@@ -443,40 +460,40 @@ mod tests {
 
     #[test]
     fn normalize() {
-        let mut knots = Knots::new(1, dvector![1.0, 1.0, 1.5, 2.0, 2.0]);
+        let mut knots = Knots::new(1, dvector![1.0, 1.0, 1.5, 2.0, 2.0]).unwrap();
         knots.normalize();
         assert_eq!(knots.vector(), &dvector![0.0, 0.0, 0.5, 1.0, 1.0]);
     }
 
     #[test]
     fn reverse() {
-        let mut knots = Knots::new(1, dvector![0.0, 0.0, 0.6, 1.0, 1.0]);
+        let mut knots = Knots::new(1, dvector![0.0, 0.0, 0.6, 1.0, 1.0]).unwrap();
         knots.reverse();
         assert_eq!(knots.vector(), &dvector![0.0, 0.0, 0.4, 1.0, 1.0]);
     }
 
     #[test]
     fn is_sorted_test() {
-        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_sorted());
-        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).is_sorted());
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_sorted());
+        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).unwrap().is_sorted());
     }
 
     #[test]
     fn is_clamped_test() {
-        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_clamped());
-        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).is_clamped());
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_clamped());
+        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).unwrap().is_clamped());
     }
 
     #[test]
     fn is_normalized_test() {
-        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_normalized());
-        assert!(!Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0]).is_normalized());
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_normalized());
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0]).unwrap().is_normalized());
     }
 
     #[test]
     fn is_uniform_test() {
-        assert!(Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).is_uniform());
-        assert!(!Knots::new(1, dvector![0.0, 0.0, 0.25, 0.75, 1.0, 1.0]).is_uniform());
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap().is_uniform());
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 0.25, 0.75, 1.0, 1.0]).unwrap().is_uniform());
     }
 
     #[rstest(u, expected, case(0.24, 1), case(0.25, 2), case(0.26, 2), case(0.74, 3), case(0.75, 4), case(0.76, 4))]

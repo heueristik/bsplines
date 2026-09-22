@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn basis_functions_degree_3() {
         let degree = 3;
-        let knots = Knots::new(degree, dvector![0., 0., 0., 0., 1. / 3., 2. / 3., 1., 1., 1., 1.]);
+        let knots = Knots::new(degree, dvector![0., 0., 0., 0., 1. / 3., 2. / 3., 1., 1., 1., 1.]).unwrap();
         let basis = |index, u| knots.basis(index, u).unwrap();
 
         let mut i = 0;
@@ -115,7 +115,7 @@ mod tests {
     fn basis_functions_degree_4_derivative_1() {
         let derivative = 1;
         let degree = 4;
-        let knots = Knots::new(degree, dvector![0., 0., 0., 0., 0., 1. / 3., 2. / 3., 1., 1., 1., 1., 1.]);
+        let knots = Knots::new(degree, dvector![0., 0., 0., 0., 0., 1. / 3., 2. / 3., 1., 1., 1., 1., 1.]).unwrap();
 
         let mut i = 0;
         assert_eq!(knots.basis_of_derivative_curve(derivative, i, 0.0), 1.0);

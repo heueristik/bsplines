@@ -80,7 +80,7 @@ mod tests {
 
     #[test]
     fn finite_difference_matrix_order_1() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]);
+        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
         let matrix = calculate_finite_difference_matrix(1, &knots);
         let expected = dmatrix![
             -1.0, 1.0, 0.0, 0.0, 0.0;
@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn finite_difference_matrix_order_2() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]);
+        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
         let matrix = calculate_finite_difference_matrix(2, &knots);
         let expected = dmatrix![
              1.0,-2.0, 1.0, 0.0, 0.0;

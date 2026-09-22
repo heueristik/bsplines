@@ -50,6 +50,15 @@ pub enum Error {
         polygon_segments: usize,
     },
 
+    /// A knot vector of degree p needs at least 2p + 2 knots: the smallest curve of degree p has p + 1 control points.
+    #[error("the knot vector holds {count} knots, but the degree p = {degree} needs at least 2p + 2 knots")]
+    TooFewKnots {
+        /// The number of knots.
+        count: usize,
+        /// The degree of the curve.
+        degree: usize,
+    },
+
     /// The multiplicity of a knot would exceed the degree.
     #[error("the knot u = {u} has multiplicity {multiplicity}, which exceeds the degree p = {degree}")]
     MultiplicityExceedsDegree {

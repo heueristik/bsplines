@@ -38,7 +38,7 @@ pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
         knots[i] = 1.;
     }
 
-    Ok(Knots::new(degree, knots))
+    Knots::new(degree, knots)
 }
 
 /// Generates the knot vector by averaging consecutive parameters — eq. (9.8) in `Piegl1997`:
@@ -69,7 +69,7 @@ pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters
         knots[j] = 1.;
     }
 
-    Ok(Knots::new(degree, knots))
+    Knots::new(degree, knots)
 }
 
 /// Generates the knot vector by de Boor's averaging over parameter spans — eqs. (9.68) and (9.69) in `Piegl1997`:
@@ -111,7 +111,7 @@ pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) 
         knots[j] = 1.;
     }
 
-    Ok(Knots::new(degree, knots))
+    Knots::new(degree, knots)
 }
 
 #[cfg(test)]
