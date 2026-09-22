@@ -109,20 +109,20 @@ fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Param
     basis_matrix
 }
 
-fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> DMatrix<f64> {
+fn calculate_finite_difference_matrix(difference_order: usize, knots: &Knots) -> DMatrix<f64> {
     let polygon_segments = knots.polygon_segments();
     assert!(
-        kappa <= polygon_segments - 2,
-        "the difference order kappa = {} must not exceed n - 2 = {}",
-        kappa,
+        difference_order <= polygon_segments - 2,
+        "the difference order {} must not exceed n - 2 = {}",
+        difference_order,
         polygon_segments - 2
     );
 
-    let mut difference_matrix = DMatrix::zeros(polygon_segments - 1 - kappa, polygon_segments - 1);
+    let mut difference_matrix = DMatrix::zeros(polygon_segments - 1 - difference_order, polygon_segments - 1);
 
-    for i in 0..=polygon_segments - kappa - 2 {
+    for i in 0..=polygon_segments - difference_order - 2 {
         for j in 0..=polygon_segments - 2 {
-            difference_matrix[(i, j)] = difference_operator(i, j, kappa) as f64;
+            difference_matrix[(i, j)] = difference_operator(i, j, difference_order) as f64;
         }
     }
 
@@ -145,7 +145,7 @@ mod tests {
     use crate::fit::test_data_points;
 
     #[test]
-    fn finite_difference_matrix_kappa_1() {
+    fn finite_difference_matrix_order_1() {
         let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]);
         let matrix = calculate_finite_difference_matrix(1, &knots);
         let expected = dmatrix![
@@ -156,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn finite_difference_matrix_kappa_2() {
+    fn finite_difference_matrix_order_2() {
         let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]);
         let matrix = calculate_finite_difference_matrix(2, &knots);
         let expected = dmatrix![
@@ -187,7 +187,7 @@ mod tests {
         let parameters = Parameters::generate(&points, ChordLength);
         let knots = Knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
         assert_relative_eq!(
-            fit(&knots, &points, &parameters, Some(Penalization { lambda: 0.5, kappa: 2 })).unwrap(),
+            fit(&knots, &points, &parameters, Some(Penalization { strength: 0.5, difference_order: 2 })).unwrap(),
             points.matrix(),
             epsilon = f64::EPSILON.sqrt()
         );
@@ -216,7 +216,8 @@ mod tests {
 
         let parameters = Parameters::generate(&data_points, EquallySpaced);
         let knots = Knots::generate(degree, data_points.polyline_segments(), &parameters, Uniform).unwrap();
-        let points = fit(&knots, &data_points, &parameters, Some(Penalization { lambda: 1.0, kappa: 2 })).unwrap();
+        let points =
+            fit(&knots, &data_points, &parameters, Some(Penalization { strength: 1.0, difference_order: 2 })).unwrap();
         let curve = Curve::new(knots, ControlPoints::new(points)).unwrap();
 
         assert_relative_eq!(curve.evaluate(0.5).unwrap(), dvector![0.0, 0.0], epsilon = f64::EPSILON.sqrt());

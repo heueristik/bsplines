@@ -16,9 +16,9 @@ pub(crate) mod loose;
 /// The penalization of a least-squares fit, see `Eilers1996`.
 pub(crate) struct Penalization {
     /// The penalization strength λ ≥ 0.
-    pub lambda: f64,
+    pub strength: f64,
     /// The finite-difference order κ of the penalty term.
-    pub kappa: usize,
+    pub difference_order: usize,
 }
 
 /// Builds a least-squares fit of data points, with fixed or loose ends and an optional penalization;
@@ -60,9 +60,9 @@ impl<'a> FitBuilder<'a> {
         self
     }
 
-    /// Penalizes the fit with the strength `lambda` and the difference order `kappa`, see `Eilers1996`.
-    pub fn penalized(mut self, lambda: f64, kappa: usize) -> Self {
-        self.penalization = Some(Penalization { lambda, kappa });
+    /// Penalizes the fit with the strength λ and the difference order κ of the penalty term — see `Eilers1996`.
+    pub fn penalized(mut self, strength: f64, difference_order: usize) -> Self {
+        self.penalization = Some(Penalization { strength, difference_order });
         self
     }
 
@@ -99,8 +99,8 @@ fn input_checks(
         (polygon_segments, _, degree, _) if polygon_segments < degree => {
             Err(Error::TooFewPolygonSegments { degree, polygon_segments })
         }
-        (polygon_segments, _, _, Some(penalization)) if polygon_segments - 1 < penalization.kappa => {
-            Err(Error::KappaTooLarge { kappa: penalization.kappa, polygon_segments })
+        (polygon_segments, _, _, Some(penalization)) if polygon_segments - 1 < penalization.difference_order => {
+            Err(Error::DifferenceOrderTooLarge { difference_order: penalization.difference_order, polygon_segments })
         }
         _ => Ok(()),
     }
@@ -115,25 +115,25 @@ pub(crate) fn compute_svd(
     let mut normal_matrix = basis_matrix.transpose() * basis_matrix;
 
     if let Some(penalization) = penalization {
-        let lambda = penalization.lambda;
-        if lambda < 0.0 {
-            return Err(Error::NegativeLambda { lambda });
+        let strength = penalization.strength;
+        if strength < 0.0 {
+            return Err(Error::NegativePenalizationStrength { strength });
         }
-        if lambda > 0.0 {
+        if strength > 0.0 {
             if !knots.is_uniform() {
                 return Err(Error::NonUniformKnots);
             }
-            let difference_matrix = calculate_finite_difference_matrix(penalization.kappa, knots);
-            normal_matrix += lambda * (difference_matrix.transpose() * difference_matrix);
+            let difference_matrix = calculate_finite_difference_matrix(penalization.difference_order, knots);
+            normal_matrix += strength * (difference_matrix.transpose() * difference_matrix);
         }
     }
 
     Ok(SVD::new(normal_matrix, true, true))
 }
 
-/// Returns one entry of the finite-difference operator matrix of order `kappa` — see `Eilers1996`.
-fn difference_operator(i: usize, j: usize, kappa: usize) -> isize {
-    match kappa {
+/// Returns one entry of the finite-difference operator matrix of the given order — see `Eilers1996`.
+fn difference_operator(i: usize, j: usize, difference_order: usize) -> isize {
+    match difference_order {
         1 => {
             if i == j {
                 return -1;
@@ -143,7 +143,9 @@ fn difference_operator(i: usize, j: usize, kappa: usize) -> isize {
             }
             0
         }
-        kappa if kappa > 1 => difference_operator(i + 1, j, kappa - 1) - difference_operator(i, j, kappa - 1),
+        difference_order if difference_order > 1 => {
+            difference_operator(i + 1, j, difference_order - 1) - difference_operator(i, j, difference_order - 1)
+        }
         _ => 0,
     }
 }
