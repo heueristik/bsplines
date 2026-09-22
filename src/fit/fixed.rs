@@ -18,6 +18,18 @@ pub fn fit(
 ) -> Result<DMatrix<f64>> {
     check_input(knots, points, parameters, &penalization, knots.polygon_segments().saturating_sub(1))?;
 
+    let polygon_segments = knots.polygon_segments();
+    let polyline_segments = points.polyline_segments();
+    let mut control_points = DMatrix::zeros(points.dimension(), polygon_segments + 1);
+
+    // Fix the first and last control point to the end data points.
+    control_points.column_mut(0).copy_from(&points.matrix().column(0));
+    control_points.column_mut(polygon_segments).copy_from(&points.matrix().column(polyline_segments));
+
+    if polygon_segments == 1 {
+        return Ok(control_points);
+    }
+
     let residuals = calculate_residuals(knots, points, parameters);
     let constant_terms = calculate_constant_terms(knots, points, parameters, &residuals);
     let basis_matrix = calculate_basis_matrix(knots, points, parameters);
@@ -28,14 +40,6 @@ pub fn fit(
         .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
         .expect("the SVD was computed with both U and V^T")
         .transpose();
-
-    let polygon_segments = knots.polygon_segments();
-    let polyline_segments = points.polyline_segments();
-    let mut control_points = DMatrix::zeros(points.dimension(), polygon_segments + 1);
-
-    // Fix the first and last control point to the end data points.
-    control_points.column_mut(0).copy_from(&points.matrix().column(0));
-    control_points.column_mut(polygon_segments).copy_from(&points.matrix().column(polyline_segments));
 
     for i in 1..=polygon_segments - 1 {
         control_points.column_mut(i).copy_from(&internal_control_points.column(i - 1));

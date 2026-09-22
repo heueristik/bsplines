@@ -162,6 +162,8 @@ pub(crate) fn test_data_points(count: usize) -> DataPoints {
 
 #[cfg(test)]
 mod tests {
+    use crate::points::Points;
+
     use super::*;
 
     #[test]
@@ -171,6 +173,16 @@ mod tests {
             let result = Curve::fit(&data, 2).polygon_segments(4).penalized(strength, 2).build();
             assert!(matches!(result, Err(Error::InvalidPenalizationStrength { .. })), "the strength {strength}");
         }
+    }
+
+    #[test]
+    fn fixed_ends_with_one_polygon_segment_connect_the_end_data_points() {
+        let data = test_data_points(5);
+        let curve = Curve::fit(&data, 1).polygon_segments(1).build().unwrap();
+
+        let last = data.polyline_segments();
+        let expected = DMatrix::from_columns(&[data.matrix().column(0), data.matrix().column(last)]);
+        assert_eq!(curve.control_points().matrix(), &expected);
     }
 
     #[test]
