@@ -14,7 +14,7 @@ pub type VecDViewMut<'a> = MatrixViewMut<'a, f64, Dyn, U1, U1, Dyn>;
 pub type MatD = OMatrix<f64, Dyn, Dyn>;
 
 /// Eigen-style sub-vector accessors for [`VecD`].
-pub trait VecHelpers {
+pub(crate) trait VecHelpers {
     /// Returns a view of the first `count` elements.
     fn head(&self, count: usize) -> MatrixView<'_, f64, Dyn, U1, U1, Dyn>;
     /// Returns a mutable view of the first `count` elements.

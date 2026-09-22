@@ -31,7 +31,6 @@ pub struct Knots {
     /// The knot vectors of the curve and of its derivatives, indexed by derivative order.
     pub(crate) derivatives: Vec<VecD>,
     pub(crate) degree: usize,
-    pub(crate) max_derivative: usize,
 }
 
 /// The method generating a clamped knot vector for a curve of degree p with n polygon segments.
@@ -74,7 +73,7 @@ impl Knots {
         let mut derivatives: Vec<VecD> = Vec::with_capacity(degree + 1);
         derivatives.push(knots);
 
-        let mut knots = Knots { derivatives, degree, max_derivative: 0 };
+        let mut knots = Knots { derivatives, degree };
         knots.derive();
         knots
     }
@@ -84,20 +83,9 @@ impl Knots {
         &self.derivatives[0]
     }
 
-    /// Returns the mutable knot vector of the curve.
-    /// Call [`Knots::derive`] afterwards to refresh the derivative knot vectors.
-    pub fn vector_mut(&mut self) -> &mut VecD {
-        &mut self.derivatives[0]
-    }
-
     /// Returns the knot vector of the `k`-th derivative curve.
-    pub fn vector_derivative(&self, derivative: usize) -> &VecD {
+    pub(crate) fn vector_derivative(&self, derivative: usize) -> &VecD {
         &self.derivatives[derivative]
-    }
-
-    /// Returns the mutable knot vector of the `k`-th derivative curve.
-    pub fn vector_derivative_mut(&mut self, derivative: usize) -> &mut VecD {
-        &mut self.derivatives[derivative]
     }
 
     /// Returns the degree p of the curve the knots parametrize.
@@ -110,13 +98,7 @@ impl Knots {
         self.derivatives[0].len() - (self.degree + 2)
     }
 
-    /// Returns the number of knots of the `k`-th derivative knot vector.
-    pub fn len(&self, derivative: usize) -> usize {
-        self.derivatives[derivative].len()
-    }
-
-    /// Returns the number of internal knots, i.e. those between the clamps.
-    pub fn internal_count(&self) -> usize {
+    fn internal_count(&self) -> usize {
         self.polygon_segments() - self.degree
     }
 
@@ -125,13 +107,7 @@ impl Knots {
         self.derivatives[0].segment(self.degree + 1, self.internal_count())
     }
 
-    /// Returns the `i`-th internal knot.
-    pub fn internal_knot(&self, index: usize) -> f64 {
-        self.internal()[index]
-    }
-
-    /// Returns the number of knots in the domain.
-    pub fn domain_count(&self) -> usize {
+    fn domain_count(&self) -> usize {
         self.polygon_segments() - self.degree + 2
     }
 
@@ -140,14 +116,8 @@ impl Knots {
         self.domain_derivative(0)
     }
 
-    /// Returns a view of the domain knots of the `k`-th derivative knot vector.
-    pub fn domain_derivative(&self, derivative: usize) -> VecDView<'_> {
+    fn domain_derivative(&self, derivative: usize) -> VecDView<'_> {
         self.derivatives[derivative].segment(self.degree - derivative, self.domain_count())
-    }
-
-    /// Returns the `i`-th domain knot.
-    pub fn domain_knot(&self, index: usize) -> f64 {
-        self.domain()[index]
     }
 
     /// Returns how often the knot value `u` occurs in the domain.
@@ -170,28 +140,16 @@ impl Knots {
         self
     }
 
-    /// Rescales all knot vectors from the limits `old_lim` to `new_lim`.
-    pub fn rescale(&mut self, old_lim: (f64, f64), new_lim: (f64, f64)) {
-        for knots in self.derivatives.iter_mut() {
-            rescale(knots, old_lim, new_lim);
-        }
-    }
-
-    /// Returns the highest derivative order for which a knot vector is available.
-    pub fn max_derivative(&self) -> usize {
-        self.max_derivative
-    }
-
     /// Derives the knot vectors of all derivative orders from the curve's knot vector.
     /// The `k`-th derivative knot vector drops the first and last knot of the previous order.
-    pub fn derive(&mut self) {
+    pub(crate) fn derive(&mut self) {
         self.derivatives.truncate(1);
         for derivative in 1..=self.degree {
-            let trimmed = self.derivatives[derivative - 1].segment(1, self.len(derivative - 1) - 2).clone_owned();
+            let previous = &self.derivatives[derivative - 1];
+            let trimmed = previous.segment(1, previous.len() - 2).clone_owned();
 
             self.derivatives.push(trimmed);
         }
-        self.max_derivative = self.degree;
     }
 
     /// Returns the index `i` of the last domain knot on the interval

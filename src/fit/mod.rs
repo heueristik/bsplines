@@ -15,7 +15,7 @@ pub(crate) mod fixed;
 pub(crate) mod loose;
 
 /// The penalization of a least-squares fit, see `Eilers1996`.
-pub struct Penalization {
+pub(crate) struct Penalization {
     /// The penalization strength λ ≥ 0.
     pub lambda: f64,
     /// The finite-difference order κ of the penalty term.
@@ -76,7 +76,7 @@ impl<'a> FitBuilder<'a> {
             Ends::Fixed => fixed::fit(&knots, self.data, &parameters, self.penalization)?,
             Ends::Loose => loose::fit(&knots, self.data, &parameters, self.penalization)?,
         };
-        Curve::new(knots, ControlPoints::new_with_capacity(points, self.degree + 1))
+        Curve::new(knots, ControlPoints::new(points))
     }
 }
 

@@ -23,7 +23,6 @@ use crate::{
 pub struct ControlPoints {
     /// The control point matrices of the curve and of its derivatives, indexed by derivative order.
     pub(crate) derivatives: Vec<MatD>,
-    max_derivative: usize,
 }
 
 /// Input points that a curve is interpolated through or fitted to.
@@ -107,16 +106,7 @@ impl Points for ControlPoints {
 impl ControlPoints {
     /// Returns control points from a coordinate matrix holding one point per column.
     pub fn new(points: MatD) -> Self {
-        ControlPoints { derivatives: vec![points], max_derivative: 0 }
-    }
-
-    /// Returns control points from a coordinate matrix, reserving capacity
-    /// for the control point matrices of `capacity` derivative orders.
-    pub fn new_with_capacity(points: MatD, capacity: usize) -> ControlPoints {
-        let mut derivatives: Vec<MatD> = Vec::with_capacity(capacity);
-        derivatives.push(points);
-
-        ControlPoints { derivatives, max_derivative: 0 }
+        ControlPoints { derivatives: vec![points] }
     }
 
     /// Returns the number of segments n of the control polygon — one less than the number of points.
@@ -125,41 +115,13 @@ impl ControlPoints {
     }
 
     /// Returns the control point matrix of the `k`-th derivative curve.
-    ///
-    /// # Panics
-    /// Panics if the requested derivative has not been calculated via [`ControlPoints::derive`].
-    pub fn matrix_derivative(&self, derivative: usize) -> &MatD {
-        assert!(derivative <= self.max_derivative, "derivative {} is not calculated", derivative);
+    pub(crate) fn matrix_derivative(&self, derivative: usize) -> &MatD {
         &self.derivatives[derivative]
-    }
-
-    /// Returns the mutable control point matrix of the `k`-th derivative curve.
-    ///
-    /// # Panics
-    /// Panics if the requested derivative has not been calculated via [`ControlPoints::derive`].
-    pub fn matrix_derivative_mut(&mut self, derivative: usize) -> &mut MatD {
-        assert!(derivative <= self.max_derivative, "derivative {} is not calculated", derivative);
-        &mut self.derivatives[derivative]
-    }
-
-    /// Returns the number of control points.
-    pub fn count(&self) -> usize {
-        self.count_derivative(0)
-    }
-
-    /// Returns the number of control points of the `k`-th derivative curve.
-    pub fn count_derivative(&self, derivative: usize) -> usize {
-        self.derivatives[derivative].ncols()
-    }
-
-    /// Returns the highest derivative order for which control points are available.
-    pub fn max_derivative(&self) -> usize {
-        self.max_derivative
     }
 
     /// Derives the control points of all derivative orders from the curve's control points —
     /// see the formula in the [module documentation][self].
-    pub fn derive(&mut self, knots: &Knots) {
+    pub(crate) fn derive(&mut self, knots: &Knots) {
         let degree = knots.degree();
         let polygon_segments = self.polygon_segments();
 
@@ -171,7 +133,6 @@ impl ControlPoints {
             }
             self.derivatives.push(new_points);
         }
-        self.max_derivative = degree;
     }
 
     fn derive_single_point(&self, index: usize, derivative: usize, knots: &Knots) -> VecD {
@@ -193,9 +154,8 @@ impl ControlPoints {
 
     /// Reverses the order of the points of all derivative orders.
     /// The odd derivative matrices also change their sign.
-    pub fn reverse(&mut self) -> &mut Self {
-        for derivative in 0..=self.max_derivative {
-            let matrix = self.matrix_derivative_mut(derivative);
+    pub(crate) fn reverse(&mut self) -> &mut Self {
+        for (derivative, matrix) in self.derivatives.iter_mut().enumerate() {
             reverse(matrix);
 
             if derivative % 2 == 1 {

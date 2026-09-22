@@ -117,8 +117,7 @@ impl Curve {
     ) -> Result<Self> {
         let parameters = Parameters::generate(data, parameter_method);
         let knots = Knots::generate(degree, data.polyline_segments(), &parameters, knot_method)?;
-        let points =
-            ControlPoints::new_with_capacity(interpolation::interpolate(&knots, data, &parameters), degree + 1);
+        let points = ControlPoints::new(interpolation::interpolate(&knots, data, &parameters));
         Self::new(knots, points)
     }
 
@@ -127,7 +126,7 @@ impl Curve {
     ///
     /// # Examples
     /// ```
-    /// use bsplines::{Curve, fit::Penalization, points::DataPoints};
+    /// use bsplines::{Curve, points::DataPoints};
     /// use nalgebra::dmatrix;
     ///
     /// let data = DataPoints::new(dmatrix![
@@ -199,20 +198,6 @@ impl Curve {
             }
         }
         Ok(value)
-    }
-
-    /// Returns the highest derivative order for which knots and control points are available.
-    pub fn max_derivative(&self) -> usize {
-        let knots_max = self.knots.max_derivative();
-        let points_max = self.points.max_derivative();
-
-        assert_eq!(
-            knots_max, points_max,
-            "the available derivatives of the knots and control points differ: {} != {}",
-            knots_max, points_max
-        );
-
-        knots_max
     }
 
     /// Reverses the direction of the curve: the point at the parameter u moves to 1 − u.
