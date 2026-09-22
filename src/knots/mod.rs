@@ -47,12 +47,18 @@ pub enum KnotMethod {
 
 impl Knots {
     /// Generates a clamped knot vector with the given method from the parameters ū.
+    /// The parameters must belong to at least n + 1 data points.
     pub fn generate(
         degree: usize,
         polygon_segments: usize,
         parameters: &Parameters,
         method: KnotMethod,
     ) -> Result<Self> {
+        let polyline_segments = parameters.polyline_segments();
+        if polygon_segments > polyline_segments {
+            return Err(Error::TooFewPolylineSegments { polygon_segments, polyline_segments });
+        }
+
         match method {
             KnotMethod::Uniform => methods::uniform(degree, polygon_segments),
             KnotMethod::DeBoor => methods::de_boor(degree, polygon_segments, parameters),
@@ -457,6 +463,17 @@ mod tests {
         let mut knots = Knots::new(1, dvector![0.0, 0.0, 0.6, 1.0, 1.0]).unwrap();
         knots.reverse();
         assert_eq!(knots.vector(), &dvector![0.0, 0.0, 0.4, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn generate_errors_for_fewer_data_points_than_control_points() {
+        let parameters = Parameters::new(dvector![0.0, 0.5, 1.0]).unwrap();
+        let polyline_segments = parameters.polyline_segments();
+        let polygon_segments = polyline_segments + 1;
+        assert_eq!(
+            Knots::generate(2, polygon_segments, &parameters, KnotMethod::Averaging).err(),
+            Some(Error::TooFewPolylineSegments { polygon_segments, polyline_segments })
+        );
     }
 
     #[test]
