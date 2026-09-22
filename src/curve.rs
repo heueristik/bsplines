@@ -257,8 +257,8 @@ impl Curve {
         constraints_other: Constraints,
     ) -> Result<&mut Self> {
         let merged = merge_with_constraints(
-            &ConstrainedCurve { curve: other, constraints: constraints_self },
-            &ConstrainedCurve { curve: self, constraints: constraints_other },
+            &ConstrainedCurve { curve: other, constraints: constraints_other },
+            &ConstrainedCurve { curve: self, constraints: constraints_self },
         )?;
         self.knots = merged.knots;
         self.points = merged.points;
@@ -478,6 +478,57 @@ mod tests {
 
         assert_eq!(curve.knots.vector(), &knots_before);
         assert_eq!(curve.points.matrix(), &points_before);
+    }
+
+    /// Two quadratic curves with a gap: the left curve ends at −0.5, the right curve starts at 0.5.
+    fn curves_with_a_gap() -> (Curve, Curve) {
+        let left = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2., -1., -0.5;])).unwrap();
+        let right = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![0.5, 1., 2.;])).unwrap();
+        (left, right)
+    }
+
+    #[test]
+    fn prepend_constrained_keeps_the_constrained_start_of_self_fixed() {
+        let (left, mut curve) = curves_with_a_gap();
+        let start = curve.evaluate(0.0).unwrap();
+        let joint = 0.5;
+
+        let mut unconstrained = curve.clone();
+        unconstrained.prepend(&left).unwrap();
+        assert_eq!(
+            unconstrained.knots.vector(),
+            &dvector![0., 0., 0., joint, 1., 1., 1.],
+            "the joint is the internal knot"
+        );
+        assert_ne!(unconstrained.evaluate(joint).unwrap(), start, "the unconstrained merge moves the joint");
+
+        curve
+            .prepend_constrained(Constraints { parameters: vec![0.0] }, &left, Constraints { parameters: vec![] })
+            .unwrap();
+
+        assert_relative_eq!(curve.evaluate(joint).unwrap(), start, epsilon = f64::EPSILON.sqrt());
+    }
+
+    #[test]
+    fn append_constrained_keeps_the_constrained_end_of_self_fixed() {
+        let (mut curve, right) = curves_with_a_gap();
+        let end = curve.evaluate(1.0).unwrap();
+        let joint = 0.5;
+
+        let mut unconstrained = curve.clone();
+        unconstrained.append(&right).unwrap();
+        assert_eq!(
+            unconstrained.knots.vector(),
+            &dvector![0., 0., 0., joint, 1., 1., 1.],
+            "the joint is the internal knot"
+        );
+        assert_ne!(unconstrained.evaluate(joint).unwrap(), end, "the unconstrained merge moves the joint");
+
+        curve
+            .append_constrained(Constraints { parameters: vec![1.0] }, &right, Constraints { parameters: vec![] })
+            .unwrap();
+
+        assert_relative_eq!(curve.evaluate(joint).unwrap(), end, epsilon = f64::EPSILON.sqrt());
     }
 
     #[test]
