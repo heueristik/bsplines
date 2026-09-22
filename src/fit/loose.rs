@@ -54,7 +54,7 @@ fn calculate_finite_difference_matrix(difference_order: usize, knots: &Knots) ->
 
     for i in 0..=polygon_segments - difference_order {
         for j in 0..=polygon_segments {
-            difference_matrix[(i, j)] = difference_operator(i, j, difference_order) as f64;
+            difference_matrix[(i, j)] = difference_operator(i, j, difference_order);
         }
     }
 
@@ -82,6 +82,17 @@ mod tests {
         let control_point_count = knots.polygon_segments() + 1;
         let matrix = calculate_finite_difference_matrix(0, &knots);
         assert_eq!(matrix, DMatrix::identity(control_point_count, control_point_count));
+    }
+
+    #[test]
+    fn finite_difference_matrix_rows_of_order_40_sum_to_zero() {
+        let difference_order = 40;
+        let knots = Knots::uniform(1, difference_order + 4).unwrap();
+        let matrix = calculate_finite_difference_matrix(difference_order, &knots);
+
+        for row in matrix.row_iter() {
+            assert_eq!(row.sum(), 0.0, "the differences of a constant vanish");
+        }
     }
 
     #[test]

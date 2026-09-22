@@ -127,7 +127,7 @@ fn calculate_finite_difference_matrix(difference_order: usize, knots: &Knots) ->
 
     for i in 0..=polygon_segments - difference_order - 2 {
         for j in 0..=polygon_segments - 2 {
-            difference_matrix[(i, j)] = difference_operator(i, j, difference_order) as f64;
+            difference_matrix[(i, j)] = difference_operator(i, j, difference_order);
         }
     }
 

@@ -136,13 +136,18 @@ pub(crate) fn decompose_normal_matrix(
 
 /// Returns one entry of the finite-difference operator matrix of the order κ — see `Eilers1996`:
 ///
-/// D(0)ᵢⱼ = δᵢⱼ,   D(κ)ᵢⱼ = D(κ − 1)ᵢ₊₁,ⱼ − D(κ − 1)ᵢⱼ
+/// D(κ)ᵢⱼ = (−1)^(κ − j + i) · C(κ, j − i)   for 0 ≤ j − i ≤ κ,   and 0 otherwise
 ///
-/// with the difference order κ and the Kronecker delta δ.
-fn difference_operator(i: usize, j: usize, difference_order: usize) -> isize {
-    match difference_order {
-        0 => isize::from(i == j),
-        _ => difference_operator(i + 1, j, difference_order - 1) - difference_operator(i, j, difference_order - 1),
+/// with the difference order κ and the binomial coefficient C. The order 0 is the identity,
+/// and each order takes the first differences of the order below.
+fn difference_operator(i: usize, j: usize, difference_order: usize) -> f64 {
+    match j.checked_sub(i) {
+        Some(offset) if offset <= difference_order => {
+            let binomial =
+                (0..offset).fold(1.0, |binomial, m| binomial * (difference_order - m) as f64 / (m + 1) as f64);
+            if (difference_order - offset).is_multiple_of(2) { binomial } else { -binomial }
+        }
+        _ => 0.0,
     }
 }
 
