@@ -86,7 +86,7 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
 }
 
 // The names of the block matrices (kv, kw, iv, jw, gv, hw, ipv, jppw, kconst) follow the notation in `Tai2003`.
-fn construct_system_matrix(left: &Curve, right: &Curve, constraints: &Constraints) -> DMatrix<f64> {
+fn calculate_system_matrix(left: &Curve, right: &Curve, constraints: &Constraints) -> DMatrix<f64> {
     let degree = left.degree();
 
     let left_constraints = constraints.left.len();
@@ -362,7 +362,7 @@ fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
     kconst
 }
 
-fn construct_constant_terms(left: &Curve, right: &Curve, total_constraints: usize) -> DMatrix<f64> {
+fn calculate_constant_terms(left: &Curve, right: &Curve, total_constraints: usize) -> DMatrix<f64> {
     let degree = left.degree();
     let dimension = left.dimension();
 
@@ -375,8 +375,8 @@ fn construct_constant_terms(left: &Curve, right: &Curve, total_constraints: usiz
 }
 
 fn solve_linear_equation_system(left: &Curve, right: &Curve, constraints: &Constraints) -> DMatrix<f64> {
-    let system_matrix = construct_system_matrix(left, right, constraints);
-    let constant_terms = construct_constant_terms(left, right, constraints.count());
+    let system_matrix = calculate_system_matrix(left, right, constraints);
+    let constant_terms = calculate_constant_terms(left, right, constraints.count());
 
     SVD::new(system_matrix, true, true)
         .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
@@ -450,7 +450,7 @@ fn merge_knot_vectors(
     merged_knots
 }
 
-fn generate_derivative_control_point(
+fn calculate_derivative_control_point(
     index: usize,
     derivative: usize,
     points: &DMatrix<f64>,
@@ -491,7 +491,7 @@ fn adjust_shifted_control_points(
     }
 
     for derivative in 0..=degree - 1 {
-        let derivative_point = generate_derivative_control_point(
+        let derivative_point = calculate_derivative_control_point(
             polygon_segments - degree + 1,
             derivative,
             points,

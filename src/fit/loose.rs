@@ -2,7 +2,7 @@ use nalgebra::DMatrix;
 
 use crate::{
     error::Result,
-    fit::{Penalization, compute_svd, difference_operator, input_checks},
+    fit::{Penalization, check_input, decompose_normal_matrix, difference_operator},
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
@@ -14,11 +14,12 @@ pub fn fit(
     parameters: &Parameters,
     penalization: Option<Penalization>,
 ) -> Result<DMatrix<f64>> {
-    input_checks(knots, points, parameters, &penalization)?;
+    check_input(knots, points, parameters, &penalization)?;
 
     let basis_matrix = calculate_basis_matrix(knots, points, parameters);
 
-    let svd = compute_svd(knots, &basis_matrix, &penalization, Box::new(calculate_finite_difference_matrix))?;
+    let svd =
+        decompose_normal_matrix(knots, &basis_matrix, &penalization, Box::new(calculate_finite_difference_matrix))?;
     let constant_terms = basis_matrix.transpose() * points.matrix().transpose();
     let control_points =
         svd.solve(&constant_terms, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T").transpose();

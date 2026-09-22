@@ -56,7 +56,7 @@ pub(crate) fn insert(curve: &mut Curve, u: f64) -> Result<()> {
 
     curve.knots.derivatives[0] = new_knots;
     curve.control_points.derivatives[0] = new_points;
-    curve.calculate_derivatives();
+    curve.derive();
     Ok(())
 }
 

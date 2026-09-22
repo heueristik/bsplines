@@ -80,7 +80,7 @@ impl<'a> FitBuilder<'a> {
     }
 }
 
-fn input_checks(
+fn check_input(
     knots: &Knots,
     points: &DataPoints,
     parameters: &Parameters,
@@ -106,7 +106,7 @@ fn input_checks(
     }
 }
 
-pub(crate) fn compute_svd(
+pub(crate) fn decompose_normal_matrix(
     knots: &Knots,
     basis_matrix: &DMatrix<f64>,
     penalization: &Option<Penalization>,

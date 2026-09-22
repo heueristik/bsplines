@@ -66,7 +66,7 @@ impl Curve {
             }
             _ => {
                 let mut curve = Self { knots, control_points };
-                curve.calculate_derivatives();
+                curve.derive();
                 Ok(curve)
             }
         }
@@ -326,7 +326,7 @@ impl Curve {
         Ok(self)
     }
 
-    pub(crate) fn calculate_derivatives(&mut self) {
+    pub(crate) fn derive(&mut self) {
         self.knots.derive();
         self.control_points.derive(&self.knots);
     }

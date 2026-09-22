@@ -6,7 +6,7 @@ use crate::{
     parameters::Parameters,
 };
 
-fn input_check(degree: usize, polygon_segments: usize) -> Result<()> {
+fn check_input(degree: usize, polygon_segments: usize) -> Result<()> {
     match degree {
         0 => Err(Error::DegreeTooLow { degree }),
         degree if degree > polygon_segments => Err(Error::TooFewPolygonSegments { degree, polygon_segments }),
@@ -23,7 +23,7 @@ fn input_check(degree: usize, polygon_segments: usize) -> Result<()> {
 /// ## Note
 /// Use this method only if the control points are evenly distributed.
 pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
-    input_check(degree, polygon_segments)?;
+    check_input(degree, polygon_segments)?;
 
     let internal_knot_count = polygon_segments - degree;
 
@@ -47,7 +47,7 @@ pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
 ///
 /// with the knots u, the parameters ū, the degree p, and the number of polygon segments n.
 pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots> {
-    input_check(degree, polygon_segments)?;
+    check_input(degree, polygon_segments)?;
 
     let internal_knot_count = polygon_segments - degree;
 
@@ -86,7 +86,7 @@ pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters
 /// According to de Boor, this ensures that the coefficient matrix is positive definite and
 /// well-conditioned, which is important for the least-squares fitting and interpolation of data points.
 pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots> {
-    input_check(degree, polygon_segments)?;
+    check_input(degree, polygon_segments)?;
 
     let u_bar = parameters.vector();
 
