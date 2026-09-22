@@ -77,6 +77,14 @@ mod tests {
     use crate::fit::test_data_points;
 
     #[test]
+    fn finite_difference_matrix_order_0_is_the_identity() {
+        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
+        let control_point_count = knots.polygon_segments() + 1;
+        let matrix = calculate_finite_difference_matrix(0, &knots);
+        assert_eq!(matrix, DMatrix::identity(control_point_count, control_point_count));
+    }
+
+    #[test]
     fn finite_difference_matrix_order_1() {
         let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
         let matrix = calculate_finite_difference_matrix(1, &knots);

@@ -133,22 +133,15 @@ pub(crate) fn decompose_normal_matrix(
     Ok(SVD::new(normal_matrix, true, true))
 }
 
-/// Returns one entry of the finite-difference operator matrix of the given order — see `Eilers1996`.
+/// Returns one entry of the finite-difference operator matrix of the order κ — see `Eilers1996`:
+///
+/// D(0)ᵢⱼ = δᵢⱼ,   D(κ)ᵢⱼ = D(κ − 1)ᵢ₊₁,ⱼ − D(κ − 1)ᵢⱼ
+///
+/// with the difference order κ and the Kronecker delta δ.
 fn difference_operator(i: usize, j: usize, difference_order: usize) -> isize {
     match difference_order {
-        1 => {
-            if i == j {
-                return -1;
-            }
-            if i + 1 == j {
-                return 1;
-            }
-            0
-        }
-        difference_order if difference_order > 1 => {
-            difference_operator(i + 1, j, difference_order - 1) - difference_operator(i, j, difference_order - 1)
-        }
-        _ => 0,
+        0 => isize::from(i == j),
+        _ => difference_operator(i + 1, j, difference_order - 1) - difference_operator(i, j, difference_order - 1),
     }
 }
 
