@@ -73,6 +73,7 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
 
     let (left_points, right_points) = adjust_control_points_of_both_curves(
         left,
+        right,
         &left_shifted,
         &right_shifted,
         &left_adjusted,
@@ -523,6 +524,7 @@ fn adjust_shifted_control_points(
 
 fn adjust_control_points_of_both_curves(
     left: &Curve,
+    right: &Curve,
     left_shifted: &DMatrix<f64>,
     right_shifted: &DMatrix<f64>,
     left_adjusted: &DVector<f64>,
@@ -530,13 +532,16 @@ fn adjust_control_points_of_both_curves(
     right_adjusted: &DVector<f64>,
 ) -> (DMatrix<f64>, DMatrix<f64>) {
     let degree = left.degree();
-    let polygon_segments = left.polygon_segments();
     let dimension = left.dimension();
 
-    let left_knots = left.knots.vector();
-
-    let left_points =
-        adjust_shifted_control_points(left_shifted, left_knots, left_adjusted, degree, polygon_segments, dimension);
+    let left_points = adjust_shifted_control_points(
+        left_shifted,
+        left.knots.vector(),
+        left_adjusted,
+        degree,
+        left.polygon_segments(),
+        dimension,
+    );
 
     // The right curve is adjusted in its reversed orientation and then reversed back.
     let right_shifted_reversed = points::reversed(right_shifted);
@@ -545,7 +550,7 @@ fn adjust_control_points_of_both_curves(
         right_reversed,
         right_adjusted,
         degree,
-        polygon_segments,
+        right.polygon_segments(),
         dimension,
     );
     let right_points = points::reversed(&right_points_reversed);
@@ -640,6 +645,22 @@ mod tests {
 
         assert_eq!(merged.evaluate(0.0).unwrap(), left.evaluate(0.0).unwrap());
         assert_eq!(merged.evaluate(1.0).unwrap(), right.evaluate(1.0).unwrap());
+    }
+
+    #[test]
+    fn merge_accepts_curves_with_different_numbers_of_control_points() {
+        let degree = 2;
+        let long = test_curve(degree, dmatrix![-6., -5., -4., -3., -2., -1.;]);
+        let short = test_curve(degree, dmatrix![1., 2., 3.;]);
+
+        for (left, right) in [(&long, &short), (&short, &long)] {
+            let merged = merge(left, right, &Constraints::default()).unwrap();
+
+            let expected_count = left.control_points.count() + right.control_points.count() - degree;
+            assert_eq!(merged.control_points.count(), expected_count);
+            assert_eq!(merged.evaluate(0.0).unwrap(), left.evaluate(0.0).unwrap());
+            assert_eq!(merged.evaluate(1.0).unwrap(), right.evaluate(1.0).unwrap());
+        }
     }
 
     #[test]
