@@ -52,14 +52,6 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
         return Err(Error::DimensionMismatch { left: left.dimension(), right: right.dimension() });
     }
 
-    if !left.knots.is_clamped() || !right.knots.is_clamped() {
-        return Err(Error::UnclampedKnots);
-    }
-
-    if !left.knots.is_normalized() || !right.knots.is_normalized() {
-        return Err(Error::UnnormalizedKnots);
-    }
-
     let total_constraints = constraints.count();
     if total_constraints >= left_degree {
         return Err(Error::TooManyConstraints { total: total_constraints, degree: left_degree });

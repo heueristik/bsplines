@@ -40,7 +40,9 @@ pub struct Curve {
 }
 
 impl Curve {
-    /// Returns a curve defined by the given knot vector and control points.
+    /// Returns a curve defined by the given knot vector and control points. The knot vector must be
+    /// clamped and normalized to [0, 1], and its n + p + 2 knots need n + 1 control points with finite
+    /// coordinates.
     ///
     /// # Examples
     /// ```
@@ -60,16 +62,26 @@ impl Curve {
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
     pub fn new(knots: Knots, control_points: ControlPoints) -> Result<Self> {
-        match (knots.degree(), control_points.polygon_segments()) {
-            (degree, polygon_segments) if polygon_segments < degree => {
-                Err(Error::TooFewPolygonSegments { degree, polygon_segments })
-            }
-            _ => {
-                let mut curve = Self { knots, control_points };
-                curve.derive();
-                Ok(curve)
-            }
+        if !knots.is_clamped() {
+            return Err(Error::UnclampedKnots);
         }
+        if !knots.is_normalized() {
+            return Err(Error::UnnormalizedKnots);
+        }
+
+        let expected = knots.polygon_segments() + 1;
+        let count = control_points.count();
+        if count != expected {
+            return Err(Error::ControlPointCountMismatch { expected, count });
+        }
+        let points = control_points.matrix();
+        if let Some(index) = points.column_iter().position(|point| point.iter().any(|x| !x.is_finite())) {
+            return Err(Error::NonFiniteControlPoint { index });
+        }
+
+        let mut curve = Self { knots, control_points };
+        curve.derive();
+        Ok(curve)
     }
 
     /// Returns a curve of the given degree with the given control points
@@ -363,6 +375,42 @@ mod tests {
         .unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
         curve
+    }
+
+    #[test]
+    fn new_errors_for_a_control_point_count_that_does_not_match_the_knots() {
+        let knots = Knots::uniform(2, 2).unwrap();
+        let expected = knots.polygon_segments() + 1;
+        let count = expected + 2;
+        assert_eq!(
+            Curve::new(knots, ControlPoints::new(DMatrix::zeros(1, count))).err(),
+            Some(Error::ControlPointCountMismatch { expected, count })
+        );
+    }
+
+    #[test]
+    fn new_errors_for_a_control_point_that_is_not_finite() {
+        let index = 1;
+        let mut points = dmatrix![0.0, 1.0, 2.0;];
+        points[(0, index)] = f64::INFINITY;
+        assert_eq!(
+            Curve::new(Knots::uniform(2, 2).unwrap(), ControlPoints::new(points)).err(),
+            Some(Error::NonFiniteControlPoint { index })
+        );
+    }
+
+    #[test]
+    fn new_errors_for_unclamped_knots() {
+        let knots = Knots::new(2, dvector![0.0, 0.1, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0]).unwrap();
+        let points = DMatrix::zeros(1, knots.polygon_segments() + 1);
+        assert_eq!(Curve::new(knots, ControlPoints::new(points)).err(), Some(Error::UnclampedKnots));
+    }
+
+    #[test]
+    fn new_errors_for_unnormalized_knots() {
+        let knots = Knots::new(1, dvector![0.0, 0.0, 1.0, 2.0, 2.0]).unwrap();
+        let points = DMatrix::zeros(1, knots.polygon_segments() + 1);
+        assert_eq!(Curve::new(knots, ControlPoints::new(points)).err(), Some(Error::UnnormalizedKnots));
     }
 
     mod evaluate {

@@ -115,6 +115,22 @@ pub enum Error {
         right: usize,
     },
 
+    /// A curve with n + p + 2 knots needs n + 1 control points: one for each basis function.
+    #[error("the knot vector needs {expected} control points, but there are {count}")]
+    ControlPointCountMismatch {
+        /// The number of basis functions of the knot vector.
+        expected: usize,
+        /// The number of control points.
+        count: usize,
+    },
+
+    /// A control point has a coordinate that is NaN or infinite.
+    #[error("the control point at index {index} has a coordinate that is not finite")]
+    NonFiniteControlPoint {
+        /// The index of the control point.
+        index: usize,
+    },
+
     /// The knot vector must be clamped.
     #[error("the knot vector must be clamped")]
     UnclampedKnots,
