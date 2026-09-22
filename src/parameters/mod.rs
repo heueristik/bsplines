@@ -13,7 +13,6 @@ pub(crate) mod methods;
 #[derive(Debug, Clone)]
 pub struct Parameters {
     vector: VecD,
-    polyline_segments: usize,
 }
 
 impl Parameters {
@@ -26,9 +25,9 @@ impl Parameters {
         }
     }
 
-    /// Returns parameters from the given values, associated with a data polyline of `m` segments.
-    pub fn new(vector: VecD, polyline_segments: usize) -> Self {
-        Parameters { vector, polyline_segments }
+    /// Returns parameters from the given values, one per data point.
+    pub fn new(vector: VecD) -> Self {
+        Parameters { vector }
     }
 
     /// Returns the parameter values ū.
@@ -36,9 +35,10 @@ impl Parameters {
         &self.vector
     }
 
-    /// Returns the number of polyline segments `m` of the data the parameters belong to.
+    /// Returns the number of polyline segments m of the data the parameters belong to —
+    /// one less than the number of parameters.
     pub fn polyline_segments(&self) -> usize {
-        self.polyline_segments
+        self.vector.len() - 1
     }
 }
 

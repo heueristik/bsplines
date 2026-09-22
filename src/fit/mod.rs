@@ -86,23 +86,20 @@ fn input_checks(
     parameters: &Parameters,
     penalization: &Option<Penalization>,
 ) -> Result<()> {
-    match (
-        knots.polygon_segments(),
-        points.polyline_segments(),
+    debug_assert_eq!(
         parameters.polyline_segments(),
-        knots.degree(),
-        penalization,
-    ) {
-        (polygon_segments, polyline_segments, _, _, _) if polygon_segments > polyline_segments => {
+        points.polyline_segments(),
+        "each data point must have one parameter"
+    );
+
+    match (knots.polygon_segments(), points.polyline_segments(), knots.degree(), penalization) {
+        (polygon_segments, polyline_segments, _, _) if polygon_segments > polyline_segments => {
             Err(Error::TooFewPolylineSegments { polygon_segments, polyline_segments })
         }
-        (_, polyline_segments, parameter_segments, _, _) if polyline_segments != parameter_segments => {
-            Err(Error::ParameterSegmentsMismatch { polyline_segments, parameter_segments })
-        }
-        (polygon_segments, _, _, degree, _) if polygon_segments < degree => {
+        (polygon_segments, _, degree, _) if polygon_segments < degree => {
             Err(Error::TooFewPolygonSegments { degree, polygon_segments })
         }
-        (polygon_segments, _, _, _, Some(penalization)) if polygon_segments - 1 < penalization.kappa => {
+        (polygon_segments, _, _, Some(penalization)) if polygon_segments - 1 < penalization.kappa => {
             Err(Error::KappaTooLarge { kappa: penalization.kappa, polygon_segments })
         }
         _ => Ok(()),

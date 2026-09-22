@@ -118,18 +118,6 @@ pub enum Error {
         polyline_segments: usize,
     },
 
-    /// The number of parameters must match the number of data points.
-    #[error(
-        "the m = {polyline_segments} polyline segments of the data must equal \
-         the {parameter_segments} segments of the parameters"
-    )]
-    ParameterSegmentsMismatch {
-        /// The polyline segments of the data.
-        polyline_segments: usize,
-        /// The segments of the parameter vector.
-        parameter_segments: usize,
-    },
-
     /// The penalization difference order must stay below the polygon segments.
     #[error(
         "the penalization difference order kappa = {kappa} must be smaller than the n = {polygon_segments} polygon segments"
