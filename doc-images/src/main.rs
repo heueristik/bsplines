@@ -3,11 +3,7 @@ use std::ops::AddAssign;
 use nalgebra::{dmatrix, dvector};
 use plotters::{prelude::*, style::full_palette::TEAL};
 
-use bsplines::{
-    Curve,
-    manipulation::merge::Constraints,
-    points::{ControlPoints, DataPoints, Points},
-};
+use bsplines::{Constraints, ControlPoints, Curve, DataPoints, Points};
 
 use crate::visualization::Limits;
 

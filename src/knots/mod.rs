@@ -1,18 +1,4 @@
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.svg")))]
-//! Implements the knot vector defining the [basis functions][Knots::basis].
-//!
-//! The knot vector parametrizing the `k`-th degree curve is composed of `n+p+2 - 2k` scalar values
-//! in ascending order, called 'knots'.
-//!
-//! ![The knot vector][eq-knots]
-//!
-//! The head and tail contains of `p-k+1` knots of value `0` and `1`, respectively.
-//! This leaves `n-p` internal knots in the center.
-//! The interval from index `i = p-k,..., n+1-k` is called 'domain'.
-//!
-//! Different knot vector generation methods are available via [KnotMethod].
+//! Implements the knot vector.
 
 use std::ops::MulAssign;
 
@@ -23,6 +9,16 @@ use crate::{basis, error::Result, parameters::Parameters, vector_views::VectorVi
 pub(crate) mod methods;
 
 /// The knot vector U of a curve and the knot vectors of its derivatives.
+///
+/// The knot vector of the k-th derivative curve holds n + p + 2 − 2k knots in non-decreasing order:
+///
+/// ![The knot vector][eq-knots]
+///
+/// with the number of polygon segments n, the degree p, and the derivative order k. The first
+/// p − k + 1 knots are 0 and the last p − k + 1 knots are 1, which leaves the n − p internal knots
+/// between them. The knots from index p − k to n + 1 − k span the domain. [`KnotMethod`] lists
+/// the methods that generate a knot vector.
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.svg"))]
 #[derive(Debug, Clone)]
 pub struct Knots {
     /// The knot vectors of the curve and of its derivatives, indexed by derivative order.

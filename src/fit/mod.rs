@@ -21,7 +21,8 @@ pub(crate) struct Penalization {
     pub kappa: usize,
 }
 
-/// Builds a least-squares fit of data points; created by [`Curve::fit`].
+/// Builds a least-squares fit of data points, with fixed or loose ends and an optional penalization;
+/// created by [`Curve::fit`].
 pub struct FitBuilder<'a> {
     data: &'a DataPoints,
     degree: usize,

@@ -1,20 +1,4 @@
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("merge-before", "doc-images/plots/manipulation/merge-before.svg"),
-doc = ::embed_doc_image::embed_image!("merge-after", "doc-images/plots/manipulation/merge-after.svg"),
-doc = ::embed_doc_image::embed_image!("merge-after-left-end-constrained", "doc-images/plots/manipulation/merge-after-left-end-constrained.svg"),
-doc = ::embed_doc_image::embed_image!("merge-after-right-start-constrained", "doc-images/plots/manipulation/merge-after-right-start-constrained.svg")))]
-//! Combines two independent curves into one.
-//!
-//! | Two curves before merging.                   | The resulting curve after merging.              |
-//! |:--------------------------------------------:|:-----------------------------------------------:|
-//! | ![][merge-before]                            | ![][merge-after]                                |
-//!
-//! Constraints can be set so that certain points on the curve stay fixed.
-//!
-//! | After merging with the left end constrained. | After merging with the right start constrained. |
-//! |:--------------------------------------------:|:-----------------------------------------------:|
-//! | ![][merge-after-left-end-constrained]        | ![][merge-after-right-start-constrained]        |
+//! Merges two curves into one — see `Tai2003`.
 
 use std::ops::{AddAssign, DivAssign, SubAssign};
 
@@ -34,6 +18,12 @@ use crate::{
 ///
 /// The fields name the side of the joint, for [`Curve::append_constrained`] and
 /// [`Curve::prepend_constrained`] alike. Both curves together take fewer than p constraints.
+///
+/// | The end of the left curve fixed.      | The start of the right curve fixed.      |
+/// |:-------------------------------------:|:----------------------------------------:|
+/// | ![][merge-after-left-end-constrained] | ![][merge-after-right-start-constrained] |
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-after-left-end-constrained", "doc-images/plots/manipulation/merge-after-left-end-constrained.svg"))]
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-after-right-start-constrained", "doc-images/plots/manipulation/merge-after-right-start-constrained.svg"))]
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Constraints {
     /// The parameters of the left curve whose points stay fixed.

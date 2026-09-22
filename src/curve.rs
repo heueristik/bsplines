@@ -1,23 +1,4 @@
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg")))]
 //! Implements the B-spline curve.
-//!
-//! A B-spline curve can be defined by
-//!
-//! ![B-spline curve][eq-curve]
-//!
-//! with the
-//! - parameter `u ∈ [0,1]` defining a point on the curve,
-//! - derivative order `k`,
-//! - number of control polygon segments `n`,
-//! - spline degree `p`,
-//! - `k`-th derivative [knot vector][crate::knots] `U`,
-//! - `n+1-k` [basis functions][crate::Knots::basis] `N` of degree `p-k` defined by the [knot vector][crate::knots] `U`,
-//!   and
-//! - `n+1-k`, `N`-dimensional [control points][crate::points] `P`.
-
-use embed_doc_image::embed_doc_image;
 
 use nalgebra::DVector;
 
@@ -35,7 +16,23 @@ use crate::{
     points::{ControlPoints, DataPoints, Points},
 };
 
-#[embed_doc_image("spline", "doc-images/plots/derivatives.svg")]
+/// A B-spline curve: a parametric function that maps the domain [0, 1] into N-dimensional space.
+///
+/// The curve and its derivatives follow from
+///
+/// ![B-spline curve][eq-curve]
+///
+/// with the parameter u ∈ [0, 1], the derivative order k, the number of polygon segments n,
+/// the degree p, the knot vector U of the k-th derivative (see [`Knots`]), the n + 1 − k
+/// [basis functions][Knots::basis] N of degree p − k, and the n + 1 − k control points P
+/// of the k-th derivative (see [`ControlPoints`]).
+///
+/// The plot shows a cubic curve in red and its first, second, and third derivative
+/// in purple, blue, and teal.
+///
+/// ![A cubic curve and its derivatives][curve-derivatives]
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg"))]
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("curve-derivatives", "doc-images/plots/derivatives.svg"))]
 #[derive(Debug, Clone)]
 pub struct Curve {
     pub(crate) knots: Knots,
@@ -47,7 +44,7 @@ impl Curve {
     ///
     /// # Examples
     /// ```
-    /// use bsplines::{Curve, Knots, points::ControlPoints};
+    /// use bsplines::{ControlPoints, Curve, Knots};
     /// use nalgebra::dmatrix;
     ///
     /// // Create a coordinate matrix containing five 3D points.
@@ -80,7 +77,7 @@ impl Curve {
     ///
     /// # Examples
     /// ```
-    /// use bsplines::{Curve, points::ControlPoints};
+    /// use bsplines::{ControlPoints, Curve};
     /// use nalgebra::dmatrix;
     ///
     /// let curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2.0,-1.0, 0.5, 1.5;])).unwrap();
@@ -95,7 +92,7 @@ impl Curve {
     ///
     /// # Examples
     /// ```
-    /// use bsplines::{Curve, points::DataPoints};
+    /// use bsplines::{Curve, DataPoints};
     /// use nalgebra::dmatrix;
     ///
     /// let data = DataPoints::new(dmatrix![
@@ -127,7 +124,7 @@ impl Curve {
     ///
     /// # Examples
     /// ```
-    /// use bsplines::{Curve, points::DataPoints};
+    /// use bsplines::{Curve, DataPoints};
     /// use nalgebra::dmatrix;
     ///
     /// let data = DataPoints::new(dmatrix![
@@ -214,18 +211,14 @@ impl Curve {
         self
     }
 
-    /// Prepends another curve.
-    ///
-    /// The end of the other curve is attached to the beginning of this curve,
-    /// while maintaining continuity of all derivatives.
-    /// This affects the first and last `p` control points of the two curves, respectively,
-    /// and removes `p` control points in total.
+    /// Prepends another curve: attaches the end of the other curve to the start of this curve
+    /// and keeps all derivatives continuous at the joint — see [`Curve::append`].
     ///
     /// # Examples
     ///
     /// ```
     /// use approx::assert_relative_eq;
-    /// use bsplines::{Curve, points::{ControlPoints, Points}};
+    /// use bsplines::{ControlPoints, Curve, Points};
     /// use nalgebra::dmatrix;
     ///
     /// let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;])).unwrap();
@@ -250,18 +243,20 @@ impl Curve {
         Ok(self)
     }
 
-    /// Appends another curve.
+    /// Appends another curve: attaches the end of this curve to the start of the other curve
+    /// and keeps all derivatives continuous at the joint — see `Tai2003`. The merge moves the last
+    /// p control points of this curve and the first p control points of the other curve, and it
+    /// removes p control points in total.
     ///
-    /// The end of this curve is attached to the beginning of the other curve,
-    /// while maintaining continuity of all derivatives.
-    /// This affects the first and last `p` control points of the two curves, respectively,
-    /// and removes `p` control points in total.
+    /// | Two curves.       | The merged curve. |
+    /// |:-----------------:|:-----------------:|
+    /// | ![][merge-before] | ![][merge-after]  |
     ///
     /// # Examples
     ///
     /// ```
     /// use approx::assert_relative_eq;
-    /// use bsplines::{Curve, points::{ControlPoints, Points}};
+    /// use bsplines::{ControlPoints, Curve, Points};
     /// use nalgebra::dmatrix;
     ///
     /// let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;])).unwrap();
@@ -270,6 +265,8 @@ impl Curve {
     ///
     /// assert_relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-before", "doc-images/plots/manipulation/merge-before.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-after", "doc-images/plots/manipulation/merge-after.svg"))]
     pub fn append(&mut self, other: &Self) -> Result<&mut Self> {
         let merged = merge(self, other, &Constraints::default())?;
         self.knots = merged.knots;
@@ -284,7 +281,7 @@ impl Curve {
     ///
     /// ```
     /// use approx::assert_relative_eq;
-    /// use bsplines::{Curve, manipulation::merge::Constraints, points::ControlPoints};
+    /// use bsplines::{Constraints, ControlPoints, Curve};
     /// use nalgebra::dmatrix;
     ///
     /// let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2.0,-1.0,-0.5;])).unwrap();

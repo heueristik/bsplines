@@ -10,13 +10,13 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //!
 //! ## Features
 //! - Create `N`-dimensional (`N = 1, 2, 3,...`) curves of arbitrary polynomial degree `p`.
-//! - Efficient [curve evaluation][curve::Curve] for all available derivatives `k = 0, 1,... , p`.
+//! - Efficient [curve evaluation][Curve::evaluate] for all available derivatives `k = 0, 1,... , p`.
 //! - Built with [nalgebra](https://crates.io/crates/nalgebra) to store point data in contiguous arrays
 //! - Multiple methods for
 //!   - [curve generation][Curve]
-//!   - [curve parametrization][parameters]
-//!   - [knot generation][knots]
-//!   - [curve manipulation][manipulation]
+//!   - [curve parametrization][ParameterMethod]
+//!   - [knot generation][KnotMethod]
+//!   - curve manipulation
 //!     - [knot insertion][Curve::insert]
 //!     - [reversing][Curve::reverse]
 //!     - [splitting][Curve::split]
@@ -24,7 +24,7 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //!
 //! ## Example
 //! ```
-//! use bsplines::{Curve, points::DataPoints};
+//! use bsplines::{Curve, DataPoints};
 //! use nalgebra::dmatrix;
 //!
 //! # fn main() -> bsplines::Result<()> {
@@ -50,8 +50,8 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //! B-splines are parametric functions composed of piecewise, polynomial [basis functions][Knots::basis] of degree `p >
 //! 0`. These piecewise polynomials are joined so that the parametric function is `p-1` times continuously
 //! differentiable. The overall functions are parametrized over finite domains with a so-called [knot
-//! vector][knots] with the co-domain being an `N`-dimensional vector space, that is defined by [control
-//! points][points]. They can describe [curves][curve], but also surfaces.
+//! vector][Knots] with the co-domain being an `N`-dimensional vector space, that is defined by [control
+//! points][ControlPoints]. They can describe [curves][Curve], but also surfaces.
 
 //! These characteristics lead to many desirable properties.
 //! The piecewise definition makes B-spline functions versatile allowing to interpolate or approximate
@@ -73,18 +73,20 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //! | Tai2003    | Tai, C.-L., Hu, S.-M., Huang, Q.-X., Approximate merging of B-spline curves via knot adjustment and constrained optimization, Comput. Des., 35(10) (2003) 893–899. |
 
 mod basis;
-pub mod curve;
-pub mod error;
-pub mod fit;
-pub(crate) mod interpolation;
-pub mod knots;
-pub mod manipulation;
-pub mod parameters;
-pub mod points;
+mod curve;
+mod error;
+mod fit;
+mod interpolation;
+mod knots;
+mod manipulation;
+mod parameters;
+mod points;
 mod vector_views;
 
 pub use curve::Curve;
 pub use error::{Error, Result};
+pub use fit::FitBuilder;
 pub use knots::{KnotMethod, Knots};
+pub use manipulation::merge::Constraints;
 pub use parameters::{ParameterMethod, Parameters};
 pub use points::{ControlPoints, DataPoints, Points};

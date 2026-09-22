@@ -1,15 +1,4 @@
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("eq-control-points", "doc-images/equations/control-points.svg")))]
-//! Implements the control points constituting the control polygon of the curve.
-//!
-//! The control points of the `k`-th derivative B-spline curve can be derived
-//! from the zeroth order control points
-//!
-//! ![The control points][eq-control-points]
-//!
-//! Control points are generated and manipulated as part of different curve generation
-//! and curve manipulation methods.
+//! Implements the control points and the data points.
 
 use std::ops::MulAssign;
 
@@ -18,6 +7,13 @@ use nalgebra::{DMatrix, DVector, DVectorView, DVectorViewMut};
 use crate::knots::Knots;
 
 /// The control points P of a curve and of its derivatives; together they form the control polygon.
+///
+/// The control points of the k-th derivative curve follow from those of the curve itself:
+///
+/// ![The control points][eq-control-points]
+///
+/// with the control points P, the degree p, the derivative order k, and the knots u.
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-control-points", "doc-images/equations/control-points.svg"))]
 #[derive(PartialEq, Debug, Clone)]
 pub struct ControlPoints {
     /// The control point matrices of the curve and of its derivatives, indexed by derivative order.
@@ -119,7 +115,7 @@ impl ControlPoints {
     }
 
     /// Derives the control points of all derivative orders from the curve's control points —
-    /// see the formula in the [module documentation][self].
+    /// see the formula in the [`ControlPoints`] documentation.
     pub(crate) fn derive(&mut self, knots: &Knots) {
         let degree = knots.degree();
         let polygon_segments = self.polygon_segments();

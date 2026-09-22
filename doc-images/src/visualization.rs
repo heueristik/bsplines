@@ -1,10 +1,7 @@
 use plotters::{backend::SVGBackend, chart::ChartContext, coord::types::RangedCoordf64, prelude::*};
 use plotters_arrows::TriangleArrow;
 
-use bsplines::{
-    Curve,
-    points::{ControlPoints, DataPoints, Points},
-};
+use bsplines::{ControlPoints, Curve, DataPoints, Points};
 
 use crate::PLOTS_DIR;
 

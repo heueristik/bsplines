@@ -10,7 +10,7 @@ on [nalgebra](https://docs.rs/nalgebra/latest/nalgebra/).
 ## Usage
 
 ```rust
-use bsplines::{Curve, points::DataPoints};
+use bsplines::{Curve, DataPoints};
 use nalgebra::dmatrix;
 
 // Five 2D data points, one column per point.
