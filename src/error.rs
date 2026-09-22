@@ -170,16 +170,17 @@ pub enum Error {
         polyline_segments: usize,
     },
 
-    /// The penalization difference order must stay below the polygon segments.
+    /// The penalty needs at least one difference: the difference order must be smaller than the number
+    /// of control points that the fit places, n + 1 with loose ends and n − 1 with fixed ends.
     #[error(
         "the difference order {difference_order} of the penalization must be smaller than \
-         the n = {polygon_segments} polygon segments"
+         the {free_control_points} control points that the fit places"
     )]
     DifferenceOrderTooLarge {
         /// The offending difference order.
         difference_order: usize,
-        /// The requested polygon segments of the fitted curve.
-        polygon_segments: usize,
+        /// The number of control points that the fit places.
+        free_control_points: usize,
     },
 
     /// Penalized fitting requires a uniform knot vector (see `Eilers1996`).

@@ -80,11 +80,13 @@ impl<'a> FitBuilder<'a> {
     }
 }
 
+/// Checks the fit input. The free control points are the control points that the fit places.
 fn check_input(
     knots: &Knots,
     points: &DataPoints,
     parameters: &Parameters,
     penalization: &Option<Penalization>,
+    free_control_points: usize,
 ) -> Result<()> {
     debug_assert_eq!(
         parameters.polyline_segments(),
@@ -102,8 +104,8 @@ fn check_input(
         (_, _, _, Some(penalization)) if !(0.0..f64::INFINITY).contains(&penalization.strength) => {
             Err(Error::InvalidPenalizationStrength { strength: penalization.strength })
         }
-        (polygon_segments, _, _, Some(penalization)) if polygon_segments - 1 < penalization.difference_order => {
-            Err(Error::DifferenceOrderTooLarge { difference_order: penalization.difference_order, polygon_segments })
+        (_, _, _, Some(penalization)) if penalization.difference_order >= free_control_points => {
+            Err(Error::DifferenceOrderTooLarge { difference_order: penalization.difference_order, free_control_points })
         }
         _ => Ok(()),
     }
@@ -176,5 +178,41 @@ mod tests {
             let result = Curve::fit(&data, 2).polygon_segments(4).penalized(strength, 2).build();
             assert!(matches!(result, Err(Error::InvalidPenalizationStrength { .. })), "the strength {strength}");
         }
+    }
+
+    #[test]
+    fn fixed_ends_allow_difference_orders_below_the_internal_control_points() {
+        let data = test_data_points(8);
+        let polygon_segments = 3;
+        let free_control_points = polygon_segments - 1;
+        let fit = |difference_order| {
+            Curve::fit(&data, 2).polygon_segments(polygon_segments).penalized(1.0, difference_order).build()
+        };
+
+        assert!(fit(free_control_points - 1).is_ok());
+        assert_eq!(
+            fit(free_control_points).err(),
+            Some(Error::DifferenceOrderTooLarge { difference_order: free_control_points, free_control_points })
+        );
+    }
+
+    #[test]
+    fn loose_ends_allow_difference_orders_below_all_control_points() {
+        let data = test_data_points(8);
+        let polygon_segments = 3;
+        let free_control_points = polygon_segments + 1;
+        let fit = |difference_order| {
+            Curve::fit(&data, 2)
+                .polygon_segments(polygon_segments)
+                .loose_ends()
+                .penalized(1.0, difference_order)
+                .build()
+        };
+
+        assert!(fit(free_control_points - 1).is_ok());
+        assert_eq!(
+            fit(free_control_points).err(),
+            Some(Error::DifferenceOrderTooLarge { difference_order: free_control_points, free_control_points })
+        );
     }
 }

@@ -14,7 +14,7 @@ pub fn fit(
     parameters: &Parameters,
     penalization: Option<Penalization>,
 ) -> Result<DMatrix<f64>> {
-    check_input(knots, points, parameters, &penalization)?;
+    check_input(knots, points, parameters, &penalization, knots.polygon_segments() + 1)?;
 
     let basis_matrix = calculate_basis_matrix(knots, points, parameters);
 
@@ -45,11 +45,9 @@ fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Param
 
 fn calculate_finite_difference_matrix(difference_order: usize, knots: &Knots) -> DMatrix<f64> {
     let polygon_segments = knots.polygon_segments();
-    assert!(
+    debug_assert!(
         difference_order <= polygon_segments,
-        "the difference order {} must not exceed n = {}",
-        difference_order,
-        polygon_segments
+        "the difference order must be smaller than the n + 1 control points"
     );
 
     let mut difference_matrix = DMatrix::zeros(polygon_segments + 1 - difference_order, polygon_segments + 1);
