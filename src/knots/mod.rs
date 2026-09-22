@@ -4,7 +4,12 @@ use std::ops::MulAssign;
 
 use nalgebra::{DVector, DVectorView};
 
-use crate::{basis, error::Result, parameters::Parameters, vector_views::VectorViews};
+use crate::{
+    basis,
+    error::{Error, Result},
+    parameters::Parameters,
+    vector_views::VectorViews,
+};
 
 pub(crate) mod methods;
 
@@ -179,11 +184,44 @@ impl Knots {
     /// with the knots U, the degree p, the number of polygon segments n, and the derivative order k,
     /// which is 0 for the curve itself. The condition ⋁ (i = n − k ⋀ u = Uₙ₊₁₋ₖ) closes the last
     /// interval, so the last basis function covers u = 1.
+    ///
+    /// Call it on [`Knots::derivative_knots`] to evaluate the basis functions of a derivative curve.
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-function", "doc-images/equations/basis-function.svg"))]
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-function-zero", "doc-images/equations/basis-function-zero.svg"))]
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-prefactor", "doc-images/equations/basis-prefactor.svg"))]
     pub fn basis(&self, index: usize, u: f64) -> f64 {
         self.basis_of_derivative_curve(0, index, u)
+    }
+
+    /// Returns the knot vector of the `k`-th derivative curve: this knot vector without its first
+    /// and last k knots, with the degree p − k. Its [basis functions][Knots::basis] are the basis
+    /// functions of the derivative curve. The derivative order must not exceed the degree p.
+    ///
+    /// # Examples
+    /// ```
+    /// use bsplines::Knots;
+    ///
+    /// let degree = 3;
+    /// let polygon_segments = 4;
+    /// let knots = Knots::uniform(degree, polygon_segments).unwrap();
+    ///
+    /// let first_derivative = knots.derivative_knots(1).unwrap();
+    /// assert_eq!(first_derivative.degree(), degree - 1);
+    /// assert_eq!(first_derivative.polygon_segments(), polygon_segments - 1);
+    ///
+    /// // The basis functions sum to one at every parameter of the domain.
+    /// let sum: f64 = (0..=first_derivative.polygon_segments())
+    ///     .map(|index| first_derivative.basis(index, 0.25))
+    ///     .sum();
+    /// assert_eq!(sum, 1.0);
+    /// ```
+    pub fn derivative_knots(&self, derivative: usize) -> Result<Self> {
+        let degree = self.degree;
+        if derivative > degree {
+            return Err(Error::DerivativeExceedsDegree { derivative, degree });
+        }
+
+        Ok(Knots::new(degree - derivative, self.derivatives[derivative].clone()))
     }
 
     /// Evaluates the `i`-th basis function of the `k`-th derivative curve at the parameter `u`:
@@ -360,6 +398,33 @@ mod tests {
         assert_eq!(knots.vector_derivative(1), &u1);
         assert_eq!(knots.vector_derivative(2), &u2);
         assert_eq!(knots.vector_derivative(3), &u3);
+    }
+
+    #[test]
+    fn derivative_knots_carry_the_basis_functions_of_the_derivative_curve() {
+        let knots = Knots::new(3, dvector![0., 0., 0., 0., 0.25, 0.5, 0.5, 1., 1., 1., 1.]);
+
+        for derivative in 0..=knots.degree() {
+            let derivative_knots = knots.derivative_knots(derivative).unwrap();
+            assert_eq!(derivative_knots.vector(), knots.vector_derivative(derivative));
+
+            for index in 0..=derivative_knots.polygon_segments() {
+                for u in (0..=8).map(|eighth| f64::from(eighth) / 8.0) {
+                    assert_eq!(derivative_knots.basis(index, u), knots.basis_of_derivative_curve(derivative, index, u));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn derivative_knots_errors_above_the_degree() {
+        let knots = knots_example(2);
+        let degree = knots.degree();
+        let derivative = degree + 1;
+        assert_eq!(
+            knots.derivative_knots(derivative).err(),
+            Some(Error::DerivativeExceedsDegree { derivative, degree })
+        );
     }
 
     #[test]

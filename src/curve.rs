@@ -334,12 +334,7 @@ impl Curve {
     /// Returns the curve describing the `k`-th derivative of this curve.
     /// The derivative order must not exceed the degree p.
     pub fn derivative_curve(&self, derivative: usize) -> Result<Self> {
-        let degree = self.degree();
-        if derivative > degree {
-            return Err(Error::DerivativeExceedsDegree { derivative, degree });
-        }
-
-        let knots = Knots::new(degree - derivative, self.knots.vector_derivative(derivative).clone());
+        let knots = self.knots.derivative_knots(derivative)?;
         let control_points = ControlPoints::new(self.control_points.matrix_derivative(derivative).clone());
         Curve::new(knots, control_points)
     }
