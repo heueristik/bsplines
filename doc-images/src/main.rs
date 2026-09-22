@@ -29,11 +29,11 @@ fn scattered_data_points() -> DataPoints {
 
 fn example_spline(p: usize) -> Curve {
     Curve::with_uniform_knots(
-        p,
         ControlPoints::new(dmatrix![
             -2.5,-1.5,-0.5, 1.0, 2.0, 0.0;
             -2.5, 1.0,-1.5,-2.0, 1.0, 2.0;
         ]),
+        p,
     )
     .unwrap()
 }
@@ -68,16 +68,16 @@ fn interpolation_plot() {
 
 fn manual_plot() {
     let dp = scattered_data_points();
-    let c = Curve::with_uniform_knots(2, ControlPoints::new(dp.matrix().clone())).unwrap();
+    let c = Curve::with_uniform_knots(ControlPoints::new(dp.matrix().clone()), 2).unwrap();
     visualization::generate_2d_plot("generation/manual.svg", vec![(&c, RED_100)], &limits(), Some(&dp));
 }
 
 fn derivatives_plot() {
     let mut bs_k0 = Curve::with_uniform_knots(
-        3,
         ControlPoints::new(dmatrix![
             -0.25, -0.05, 0.0, 0.05, 0.25;
         ]),
+        3,
     )
     .unwrap();
 

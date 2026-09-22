@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn degree_1() {
-        let mut curve = Curve::with_uniform_knots(1, ControlPoints::new(dmatrix![-1., 1.;])).unwrap();
+        let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-1., 1.;]), 1).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 1., 1.]);
 
         insert(&mut curve, 0.5).unwrap();
@@ -80,7 +80,7 @@ mod tests {
 
     #[test]
     fn degree_2() {
-        let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-1., 0., 1.;])).unwrap();
+        let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-1., 0., 1.;]), 2).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
         assert_eq!(curve.control_points.matrix(), &dmatrix![-1., 0., 1.;]);
 
@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn degree_2_preexisting_knot() {
-        let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-1.5, -0.5, 0.5, 1.5;])).unwrap();
+        let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-1.5, -0.5, 0.5, 1.5;]), 2).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
         assert_eq!(curve.control_points.matrix(), &dmatrix![-1.5, -0.5, 0.5, 1.5;]);
 
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn degree_1_repeated_knot() {
-        let mut curve = Curve::with_uniform_knots(1, ControlPoints::new(dmatrix![-1., 1.;])).unwrap();
+        let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-1., 1.;]), 1).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 1., 1.]);
 
         insert(&mut curve, 0.5).unwrap();
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn degree_2_repeated_knots() {
-        let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-1., 0., 1.;])).unwrap();
+        let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-1., 0., 1.;]), 2).unwrap();
         let u = 0.5;
         let expected_point = dvector![0.0];
 

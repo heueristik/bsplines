@@ -100,7 +100,7 @@ mod tests {
     #[fixture]
     /// A one-dimensional, linear test curve with default degree two.
     fn curve(#[default(2)] degree: usize) -> Curve {
-        let curve = Curve::with_uniform_knots(degree, ControlPoints::new(dmatrix![1., 2., 3., 4., 5., 6.;])).unwrap();
+        let curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![1., 2., 3., 4., 5., 6.;]), degree).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.25, 0.5, 0.75, 1., 1., 1.]);
         curve
     }

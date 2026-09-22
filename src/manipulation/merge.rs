@@ -616,7 +616,7 @@ mod tests {
     use super::*;
 
     fn test_curve(degree: usize, points: DMatrix<f64>) -> Curve {
-        Curve::with_uniform_knots(degree, ControlPoints::new(points)).unwrap()
+        Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap()
     }
 
     mod knots {

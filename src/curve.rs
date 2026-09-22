@@ -80,9 +80,9 @@ impl Curve {
     /// use bsplines::{ControlPoints, Curve};
     /// use nalgebra::dmatrix;
     ///
-    /// let curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2.0,-1.0, 0.5, 1.5;])).unwrap();
+    /// let curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-2.0,-1.0, 0.5, 1.5;]), 2).unwrap();
     /// ```
-    pub fn with_uniform_knots(degree: usize, control_points: ControlPoints) -> Result<Self> {
+    pub fn with_uniform_knots(control_points: ControlPoints, degree: usize) -> Result<Self> {
         let knots = Knots::uniform(degree, control_points.polygon_segments())?;
         Self::new(knots, control_points)
     }
@@ -221,8 +221,8 @@ impl Curve {
     /// use bsplines::{ControlPoints, Curve, Points};
     /// use nalgebra::dmatrix;
     ///
-    /// let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;])).unwrap();
-    /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;])).unwrap();
+    /// let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;]), 2).unwrap();
+    /// let other = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;]), 2).unwrap();
     /// let merged = curve.prepend(&other).unwrap();
     ///
     /// assert_relative_eq!(merged.control_points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
@@ -259,8 +259,8 @@ impl Curve {
     /// use bsplines::{ControlPoints, Curve, Points};
     /// use nalgebra::dmatrix;
     ///
-    /// let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;])).unwrap();
-    /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;])).unwrap();
+    /// let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;]), 2).unwrap();
+    /// let other = Curve::with_uniform_knots(ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;]), 2).unwrap();
     /// let merged = curve.append(&other).unwrap();
     ///
     /// assert_relative_eq!(merged.control_points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
@@ -284,8 +284,8 @@ impl Curve {
     /// use bsplines::{Constraints, ControlPoints, Curve};
     /// use nalgebra::dmatrix;
     ///
-    /// let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2.0,-1.0,-0.5;])).unwrap();
-    /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 0.5, 1.0, 2.0;])).unwrap();
+    /// let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-2.0,-1.0,-0.5;]), 2).unwrap();
+    /// let other = Curve::with_uniform_knots(ControlPoints::new(dmatrix![ 0.5, 1.0, 2.0;]), 2).unwrap();
     /// let end = curve.evaluate(1.0).unwrap();
     ///
     /// // Keep the end of this curve fixed, so the joint at u = 0.5 stays at its old end point.
@@ -353,11 +353,11 @@ mod tests {
     /// A two-dimensional, linear test curve with default degree two.
     fn curve(#[default(2)] degree: usize) -> Curve {
         let curve = Curve::with_uniform_knots(
-            degree,
             ControlPoints::new(dmatrix![
                 1., 3., 5.;
                 2., 4., 6.;
             ]),
+            degree,
         )
         .unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
@@ -391,7 +391,7 @@ mod tests {
         fn evaluate_derivative_succeeds_near_the_end_after_insertion() {
             let degree = 2;
             let points = dmatrix![1., 1., 1., 1.;];
-            let mut curve = Curve::with_uniform_knots(degree, ControlPoints::new(points)).unwrap();
+            let mut curve = Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap();
 
             curve.insert_knot(0.5).unwrap();
 
@@ -402,7 +402,7 @@ mod tests {
         fn evaluate_is_unchanged_by_repeated_insertion() {
             let degree = 3;
             let points = dmatrix![-1., -0.5, 0.5, 1.;];
-            let mut curve = Curve::with_uniform_knots(degree, ControlPoints::new(points)).unwrap();
+            let mut curve = Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap();
             let u = 0.5;
             let expected_point = dvector![0.0];
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0., 1., 1., 1., 1.]);
@@ -450,11 +450,11 @@ mod tests {
     #[test]
     fn reverse() {
         let mut curve = Curve::with_uniform_knots(
-            2,
             ControlPoints::new(dmatrix![
                 1., 3., 5.;
                 2., 4., 6.;
             ]),
+            2,
         )
         .unwrap();
 
@@ -477,8 +477,8 @@ mod tests {
 
     /// Two quadratic curves with a gap: the left curve ends at −0.5, the right curve starts at 0.5.
     fn curves_with_a_gap() -> (Curve, Curve) {
-        let left = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2., -1., -0.5;])).unwrap();
-        let right = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![0.5, 1., 2.;])).unwrap();
+        let left = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-2., -1., -0.5;]), 2).unwrap();
+        let right = Curve::with_uniform_knots(ControlPoints::new(dmatrix![0.5, 1., 2.;]), 2).unwrap();
         (left, right)
     }
 
