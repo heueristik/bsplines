@@ -59,6 +59,24 @@ pub enum Error {
         degree: usize,
     },
 
+    /// A knot is NaN or infinite.
+    #[error("the knot at index {index} is not finite")]
+    NonFiniteKnot {
+        /// The index of the knot.
+        index: usize,
+    },
+
+    /// Knots must be in non-decreasing order.
+    #[error("the knot at index {index} is smaller than the knot before it")]
+    DecreasingKnots {
+        /// The index of the smaller knot.
+        index: usize,
+    },
+
+    /// The domain of a knot vector runs from knot p to knot n + 1 and needs a positive length.
+    #[error("the knots p and n + 1 are equal, so the domain of the knot vector has length zero")]
+    ZeroLengthDomain,
+
     /// The multiplicity of a knot would exceed the degree.
     #[error("the knot u = {u} has multiplicity {multiplicity}, which exceeds the degree p = {degree}")]
     MultiplicityExceedsDegree {

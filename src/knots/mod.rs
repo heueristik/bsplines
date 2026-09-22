@@ -67,11 +67,21 @@ impl Knots {
     }
 
     /// Returns knots for a curve of the given degree from the given knot values,
-    /// deriving the knot vectors of all derivative orders. The degree p needs at least 2p + 2 knots.
+    /// deriving the knot vectors of all derivative orders. The degree p needs at least 2p + 2 finite
+    /// knots in non-decreasing order, and the domain from knot p to knot n + 1 must not have length zero.
     pub fn new(degree: usize, knots: DVector<f64>) -> Result<Self> {
         let count = knots.len();
         if count < degree.saturating_mul(2).saturating_add(2) {
             return Err(Error::TooFewKnots { count, degree });
+        }
+        if let Some(index) = knots.iter().position(|u| !u.is_finite()) {
+            return Err(Error::NonFiniteKnot { index });
+        }
+        if let Some(index) = (1..count).find(|&index| knots[index] < knots[index - 1]) {
+            return Err(Error::DecreasingKnots { index });
+        }
+        if knots[degree] == knots[count - degree - 1] {
+            return Err(Error::ZeroLengthDomain);
         }
 
         let mut derivatives: Vec<DVector<f64>> = Vec::with_capacity(degree + 1);
@@ -255,26 +265,7 @@ impl Knots {
     /// Returns whether the knot values span exactly the domain [0, 1].
     pub fn is_normalized(&self) -> bool {
         let knot_values = self.vector();
-
-        let is_min_zero = knot_values.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
-        let is_max_unity = knot_values.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
-
-        is_min_zero && is_max_unity
-    }
-
-    /// Returns whether the knot values are in non-decreasing order.
-    pub fn is_sorted(&self) -> bool {
-        let mut values = self.derivatives[0].iter();
-        match values.next() {
-            None => true,
-            Some(first) => values
-                .scan(first, |state, next| {
-                    let cmp = *state <= next;
-                    *state = next;
-                    Some(cmp)
-                })
-                .all(|b| b),
-        }
+        knot_values[0] == 0.0 && knot_values[knot_values.len() - 1] == 1.0
     }
 
     /// Returns whether the knot values equal the clamped, uniform knot vector
@@ -473,21 +464,40 @@ mod tests {
     }
 
     #[test]
-    fn is_sorted_test() {
-        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_sorted());
-        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).unwrap().is_sorted());
+    fn new_errors_for_a_knot_that_is_not_finite() {
+        let index = 2;
+        let mut knot_values = dvector![0.0, 0.0, 0.5, 1.0, 1.0];
+        knot_values[index] = f64::NAN;
+        assert_eq!(Knots::new(1, knot_values).err(), Some(Error::NonFiniteKnot { index }));
+    }
+
+    #[test]
+    fn new_errors_for_a_decreasing_knot() {
+        assert_eq!(
+            Knots::new(1, dvector![0.0, 0.0, 0.6, 0.4, 1.0, 1.0]).err(),
+            Some(Error::DecreasingKnots { index: 3 })
+        );
+    }
+
+    #[test]
+    fn new_errors_for_a_domain_of_length_zero() {
+        let degree = 1;
+        let knot_values = dvector![0.0, 0.5, 0.5, 1.0];
+        let last_domain_knot = knot_values.len() - degree - 1;
+        assert_eq!(knot_values[degree], knot_values[last_domain_knot], "the domain starts and ends at 0.5");
+        assert_eq!(Knots::new(degree, knot_values).err(), Some(Error::ZeroLengthDomain));
     }
 
     #[test]
     fn is_clamped_test() {
         assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_clamped());
-        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).unwrap().is_clamped());
+        assert!(!Knots::new(1, dvector![0.0, 0.25, 0.5, 1.0, 1.0]).unwrap().is_clamped());
     }
 
     #[test]
     fn is_normalized_test() {
         assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_normalized());
-        assert!(!Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0]).unwrap().is_normalized());
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 1.0, 1.5, 1.5]).unwrap().is_normalized());
     }
 
     #[test]
