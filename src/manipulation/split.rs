@@ -13,7 +13,8 @@ use crate::{
 
 /// Splits the curve into two independent curves at the parameter `u` and normalizes both knot vectors.
 pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
-    if u <= 0.0 || u >= 1.0 {
+    // The negated form also rejects NaN.
+    if !(u > 0.0 && u < 1.0) {
         return Err(Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
     }
 
@@ -119,6 +120,11 @@ mod tests {
         let result = split(&curve, u);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
+    }
+
+    #[rstest]
+    fn split_errors_for_a_nan_parameter(curve: Curve) {
+        assert!(matches!(split(&curve, f64::NAN), Err(Error::OutsideDomainInterior { .. })));
     }
 
     #[rstest]

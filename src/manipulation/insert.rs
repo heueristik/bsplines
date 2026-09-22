@@ -14,7 +14,8 @@ use crate::{
 /// The parameter must lie in the domain interior (0, 1), and the multiplicity of `u`
 /// must not already exceed the degree.
 pub(crate) fn insert(curve: &mut Curve, u: f64) -> Result<()> {
-    if u <= 0.0 || u >= 1.0 {
+    // The negated form also rejects NaN.
+    if !(u > 0.0 && u < 1.0) {
         return Err(Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
     }
 
@@ -67,6 +68,15 @@ mod tests {
     use crate::points::ControlPoints;
 
     use super::*;
+
+    #[test]
+    fn insert_errors_for_a_nan_parameter() {
+        let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-1., 0., 1.;]), 2).unwrap();
+        let knots_before = curve.knots.vector().clone();
+
+        assert!(matches!(insert(&mut curve, f64::NAN), Err(Error::OutsideDomainInterior { .. })));
+        assert_eq!(curve.knots.vector(), &knots_before);
+    }
 
     #[test]
     fn degree_1() {
