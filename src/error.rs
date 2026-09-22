@@ -61,6 +61,15 @@ pub enum Error {
         degree: usize,
     },
 
+    /// The derivative order exceeds the degree: the k-th derivative curve would have the negative degree p − k.
+    #[error("the derivative order k = {derivative} exceeds the degree p = {degree}")]
+    DerivativeExceedsDegree {
+        /// The requested derivative order.
+        derivative: usize,
+        /// The degree of the curve.
+        degree: usize,
+    },
+
     /// Two curves to be merged have different degrees.
     #[error("the degrees of the two curves differ: p = {left} vs. p = {right}")]
     DegreeMismatch {

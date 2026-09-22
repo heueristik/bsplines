@@ -332,10 +332,16 @@ impl Curve {
     }
 
     /// Returns the curve describing the `k`-th derivative of this curve.
-    pub fn derivative_curve(&self, derivative: usize) -> Self {
-        let knots = Knots::new(self.degree() - derivative, self.knots.vector_derivative(derivative).clone());
+    /// The derivative order must not exceed the degree p.
+    pub fn derivative_curve(&self, derivative: usize) -> Result<Self> {
+        let degree = self.degree();
+        if derivative > degree {
+            return Err(Error::DerivativeExceedsDegree { derivative, degree });
+        }
+
+        let knots = Knots::new(degree - derivative, self.knots.vector_derivative(derivative).clone());
         let control_points = ControlPoints::new(self.control_points.matrix_derivative(derivative).clone());
-        Curve { knots, control_points }
+        Ok(Curve { knots, control_points })
     }
 }
 
@@ -444,6 +450,22 @@ mod tests {
         #[rstest]
         fn end(curve: Curve) {
             assert_eq!(curve.evaluate_derivative(1., 0).unwrap(), dvector![5., 6.])
+        }
+    }
+
+    mod derivative_curve {
+        use rstest::rstest;
+
+        use super::*;
+
+        #[rstest]
+        fn derivative_curve_errors_above_the_degree(curve: Curve) {
+            let degree = curve.degree();
+            let derivative = degree + 1;
+            assert_eq!(
+                curve.derivative_curve(derivative).err(),
+                Some(Error::DerivativeExceedsDegree { derivative, degree })
+            );
         }
     }
 

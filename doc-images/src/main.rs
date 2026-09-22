@@ -83,9 +83,9 @@ fn derivatives_plot() {
 
     let lim = Limits { min: vec![-4.4], max: vec![9.0] };
 
-    let bs_k1 = bs_k0.derivative_curve(1);
-    let bs_k2 = bs_k0.derivative_curve(2);
-    let bs_k3 = bs_k0.derivative_curve(3);
+    let bs_k1 = bs_k0.derivative_curve(1).unwrap();
+    let bs_k2 = bs_k0.derivative_curve(2).unwrap();
+    let bs_k3 = bs_k0.derivative_curve(3).unwrap();
 
     visualization::generate_1d_plot(
         "derivatives.svg",
@@ -94,9 +94,9 @@ fn derivatives_plot() {
     );
 
     bs_k0.reverse(); // p = 3 CORRECT
-    let bs_k1_rev = bs_k0.derivative_curve(1); // p = 2 WRONG
-    let bs_k2_rev = bs_k0.derivative_curve(2); // p = 1 CORRECT
-    let bs_k3_rev = bs_k0.derivative_curve(3); // p = 0 WRONG
+    let bs_k1_rev = bs_k0.derivative_curve(1).unwrap(); // p = 2 WRONG
+    let bs_k2_rev = bs_k0.derivative_curve(2).unwrap(); // p = 1 CORRECT
+    let bs_k3_rev = bs_k0.derivative_curve(3).unwrap(); // p = 0 WRONG
 
     visualization::generate_1d_plot(
         "derivatives-reversed.svg",
