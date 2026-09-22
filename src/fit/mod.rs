@@ -5,9 +5,7 @@ use nalgebra::{Dyn, SVD};
 use crate::{
     Curve,
     error::{Error, Result},
-    knots,
-    knots::{KnotMethod, Knots, is_uniform},
-    parameters,
+    knots::{KnotMethod, Knots},
     parameters::{ParameterMethod, Parameters},
     points::{ControlPoints, DataPoints},
     types::MatD,
@@ -71,8 +69,8 @@ impl<'a> FitBuilder<'a> {
     /// Performs the fit.
     pub fn build(self) -> Result<Curve> {
         let polygon_segments = self.polygon_segments.unwrap_or_else(|| self.data.polyline_segments());
-        let parameters = parameters::generate(self.data, ParameterMethod::EquallySpaced);
-        let knots = knots::generate(self.degree, polygon_segments, &parameters, KnotMethod::Uniform)?;
+        let parameters = Parameters::generate(self.data, ParameterMethod::EquallySpaced);
+        let knots = Knots::generate(self.degree, polygon_segments, &parameters, KnotMethod::Uniform)?;
 
         let points = match self.ends {
             Ends::Fixed => fixed::fit(&knots, self.data, &parameters, self.penalization)?,
@@ -125,7 +123,7 @@ pub(crate) fn compute_svd(
             return Err(Error::NegativeLambda { lambda });
         }
         if lambda > 0.0 {
-            if !is_uniform(knots)? {
+            if !knots.is_uniform() {
                 return Err(Error::NonUniformKnots);
             }
             let difference_matrix = calculate_finite_difference_matrix(penalization.kappa, knots);

@@ -47,16 +47,21 @@ pub enum KnotMethod {
     Averaging,
 }
 
-/// Generates a clamped knot vector with the given method from the parameters ū.
-pub fn generate(degree: usize, polygon_segments: usize, parameters: &Parameters, method: KnotMethod) -> Result<Knots> {
-    match method {
-        KnotMethod::Uniform => methods::uniform(degree, polygon_segments),
-        KnotMethod::DeBoor => methods::de_boor(degree, polygon_segments, parameters),
-        KnotMethod::Averaging => methods::averaging(degree, polygon_segments, parameters),
-    }
-}
-
 impl Knots {
+    /// Generates a clamped knot vector with the given method from the parameters ū.
+    pub fn generate(
+        degree: usize,
+        polygon_segments: usize,
+        parameters: &Parameters,
+        method: KnotMethod,
+    ) -> Result<Self> {
+        match method {
+            KnotMethod::Uniform => methods::uniform(degree, polygon_segments),
+            KnotMethod::DeBoor => methods::de_boor(degree, polygon_segments, parameters),
+            KnotMethod::Averaging => methods::averaging(degree, polygon_segments, parameters),
+        }
+    }
+
     /// Returns a clamped, uniform knot vector for a curve of the given degree
     /// with `n` polygon segments.
     pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Self> {
@@ -215,52 +220,49 @@ impl Knots {
 
         basis::basis(knots, index, basis_degree, derivative, polygon_segments, u)
     }
-}
 
-/// Returns whether the first and last knot value are each repeated p + 1 times,
-/// so a curve starts and ends at its end control points.
-pub fn is_clamped(knots: &Knots) -> bool {
-    let knot_values = knots.vector();
-    let clamp_size = knots.degree + 1;
+    /// Returns whether the first and last knot value are each repeated p + 1 times,
+    /// so a curve starts and ends at its end control points.
+    pub fn is_clamped(&self) -> bool {
+        let knot_values = self.vector();
+        let clamp_size = self.degree + 1;
 
-    let is_head_clamped = knot_values.iter().take(clamp_size).all(|&u| u == 0.0);
-    let is_tail_clamped = knot_values.iter().rev().take(clamp_size).all(|&u| u == 1.0);
+        let is_head_clamped = knot_values.iter().take(clamp_size).all(|&u| u == 0.0);
+        let is_tail_clamped = knot_values.iter().rev().take(clamp_size).all(|&u| u == 1.0);
 
-    is_head_clamped && is_tail_clamped
-}
-
-/// Returns whether the knot values span exactly the domain [0, 1].
-pub fn is_normalized(knots: &Knots) -> bool {
-    let knot_values = knots.vector();
-
-    let is_min_zero = knot_values.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
-    let is_max_unity = knot_values.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
-
-    is_min_zero && is_max_unity
-}
-
-/// Returns whether the knot values are in non-decreasing order.
-pub fn is_sorted(knots: &Knots) -> bool {
-    let mut values = knots.derivatives[0].iter();
-    match values.next() {
-        None => true,
-        Some(first) => values
-            .scan(first, |state, next| {
-                let cmp = *state <= next;
-                *state = next;
-                Some(cmp)
-            })
-            .all(|b| b),
+        is_head_clamped && is_tail_clamped
     }
-}
 
-/// Returns whether the knot values equal a clamped, uniform knot vector.
-pub fn is_uniform(knots: &Knots) -> Result<bool> {
-    let knot_values = knots.vector();
+    /// Returns whether the knot values span exactly the domain [0, 1].
+    pub fn is_normalized(&self) -> bool {
+        let knot_values = self.vector();
 
-    let expected = methods::uniform(knots.degree(), knots.polygon_segments())?;
+        let is_min_zero = knot_values.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
+        let is_max_unity = knot_values.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
 
-    Ok(knot_values.eq(expected.vector()))
+        is_min_zero && is_max_unity
+    }
+
+    /// Returns whether the knot values are in non-decreasing order.
+    pub fn is_sorted(&self) -> bool {
+        let mut values = self.derivatives[0].iter();
+        match values.next() {
+            None => true,
+            Some(first) => values
+                .scan(first, |state, next| {
+                    let cmp = *state <= next;
+                    *state = next;
+                    Some(cmp)
+                })
+                .all(|b| b),
+        }
+    }
+
+    /// Returns whether the knot values equal the clamped, uniform knot vector
+    /// of the same degree and number of polygon segments.
+    pub fn is_uniform(&self) -> bool {
+        methods::uniform(self.degree, self.polygon_segments()).is_ok_and(|uniform| uniform.vector() == self.vector())
+    }
 }
 
 pub(crate) fn reverse(knots: &mut VecD) {
@@ -282,17 +284,10 @@ pub(crate) fn reversed(knots: &VecD) -> VecD {
 }
 
 /// Normalizes the knot values to the domain [0, 1] in place.
-pub fn normalize(knots: &mut VecD) {
+pub(crate) fn normalize(knots: &mut VecD) {
     let old_lim = (knots.min(), knots.max());
 
     rescale(knots, old_lim, (0.0, 1.0))
-}
-
-/// Returns a copy of the knot values normalized to the domain [0, 1].
-pub fn normalized(knots: &mut VecD) -> VecD {
-    let mut copy = knots.clone();
-    normalize(&mut copy);
-    copy
 }
 
 fn rescale(knots: &mut VecD, old_lim: (f64, f64), new_lim: (f64, f64)) {
@@ -409,26 +404,26 @@ mod tests {
 
     #[test]
     fn is_sorted_test() {
-        assert!(is_sorted(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
-        assert!(!is_sorted(&Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0])));
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_sorted());
+        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).is_sorted());
     }
 
     #[test]
     fn is_clamped_test() {
-        assert!(is_clamped(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
-        assert!(!is_clamped(&Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0])));
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_clamped());
+        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).is_clamped());
     }
 
     #[test]
     fn is_normalized_test() {
-        assert!(is_normalized(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
-        assert!(!is_normalized(&Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0])));
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_normalized());
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0]).is_normalized());
     }
 
     #[test]
     fn is_uniform_test() {
-        assert!(is_uniform(&Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0])).unwrap());
-        assert!(!is_uniform(&Knots::new(1, dvector![0.0, 0.0, 0.25, 0.75, 1.0, 1.0])).unwrap());
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).is_uniform());
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 0.25, 0.75, 1.0, 1.0]).is_uniform());
     }
 
     #[rstest(u, expected, case(0.24, 1), case(0.25, 2), case(0.26, 2), case(0.74, 3), case(0.75, 4), case(0.76, 4))]

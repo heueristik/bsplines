@@ -24,7 +24,7 @@ use crate::{
     Curve,
     basis::basis,
     error::{Error, Result},
-    knots::{Knots, is_clamped, is_normalized, reversed},
+    knots::{Knots, reversed},
     points,
     points::{ControlPoints, Points},
     types::{MatD, VecD, VecHelpers},
@@ -62,11 +62,11 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
         return Err(Error::DimensionMismatch { left: left.dimension(), right: right.dimension() });
     }
 
-    if !is_clamped(&left.knots) || !is_clamped(&right.knots) {
+    if !left.knots.is_clamped() || !right.knots.is_clamped() {
         return Err(Error::UnclampedCurve);
     }
 
-    if !is_normalized(&left.knots) || !is_normalized(&right.knots) {
+    if !left.knots.is_normalized() || !right.knots.is_normalized() {
         return Err(Error::UnnormalizedCurve);
     }
 

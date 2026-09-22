@@ -68,9 +68,8 @@ mod tests {
     use nalgebra::{dmatrix, dvector};
 
     use crate::{
-        Curve, knots,
+        Curve,
         knots::KnotMethod::{Averaging, Uniform},
-        parameters,
         parameters::ParameterMethod::{ChordLength, EquallySpaced},
         points::ControlPoints,
     };
@@ -110,8 +109,8 @@ mod tests {
             1., 2., 3., 4., 5.;
         ]);
 
-        let parameters = parameters::generate(&points, EquallySpaced);
-        let knots = knots::generate(1, points.polyline_segments(), &parameters, Uniform).unwrap();
+        let parameters = Parameters::generate(&points, EquallySpaced);
+        let knots = Knots::generate(1, points.polyline_segments(), &parameters, Uniform).unwrap();
         assert_eq!(fit(&knots, &points, &parameters, None).unwrap(), *points.matrix());
     }
 
@@ -122,8 +121,8 @@ mod tests {
             1., 2., 3., 4., 5.;
         ]);
 
-        let parameters = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
+        let parameters = Parameters::generate(&points, ChordLength);
+        let knots = Knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
         assert_relative_eq!(
             fit(&knots, &points, &parameters, Some(Penalization { lambda: 0.5, kappa: 2 })).unwrap(),
             points.matrix(),
@@ -137,8 +136,8 @@ mod tests {
         let data_points = test_data_points(10);
 
         let polygon_segments = data_points.polyline_segments();
-        let parameters = parameters::generate(&data_points, EquallySpaced);
-        let knots = knots::generate(degree, polygon_segments, &parameters, Uniform).unwrap();
+        let parameters = Parameters::generate(&data_points, EquallySpaced);
+        let knots = Knots::generate(degree, polygon_segments, &parameters, Uniform).unwrap();
 
         assert_relative_eq!(
             fit(&knots, &data_points, &parameters, None).unwrap(),
@@ -152,8 +151,8 @@ mod tests {
         let degree = 2;
         let data_points = test_data_points(10);
 
-        let parameters = parameters::generate(&data_points, EquallySpaced);
-        let knots = knots::generate(degree, data_points.polyline_segments(), &parameters, Uniform).unwrap();
+        let parameters = Parameters::generate(&data_points, EquallySpaced);
+        let knots = Knots::generate(degree, data_points.polyline_segments(), &parameters, Uniform).unwrap();
         let points =
             crate::fit::fixed::fit(&knots, &data_points, &parameters, Some(Penalization { lambda: 1.0, kappa: 2 }))
                 .unwrap();

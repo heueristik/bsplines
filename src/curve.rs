@@ -23,13 +23,13 @@ use crate::{
     error::{Error, Result},
     fit::FitBuilder,
     interpolation,
-    knots::{self, KnotMethod, Knots},
+    knots::{KnotMethod, Knots},
     manipulation::{
         insert::insert,
         merge::{Constraints, merge},
         split::split,
     },
-    parameters::{self, ParameterMethod},
+    parameters::{ParameterMethod, Parameters},
     points::{ControlPoints, DataPoints, Points},
     types::VecD,
 };
@@ -115,8 +115,8 @@ impl Curve {
         parameter_method: ParameterMethod,
         knot_method: KnotMethod,
     ) -> Result<Self> {
-        let parameters = parameters::generate(data, parameter_method);
-        let knots = knots::generate(degree, data.polyline_segments(), &parameters, knot_method)?;
+        let parameters = Parameters::generate(data, parameter_method);
+        let knots = Knots::generate(degree, data.polyline_segments(), &parameters, knot_method)?;
         let points =
             ControlPoints::new_with_capacity(interpolation::interpolate(&knots, data, &parameters), degree + 1);
         Self::new(knots, points)

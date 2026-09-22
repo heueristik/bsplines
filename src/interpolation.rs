@@ -31,7 +31,7 @@ mod tests {
     use approx::assert_relative_eq;
     use nalgebra::dmatrix;
 
-    use crate::{knots, knots::KnotMethod::Averaging, parameters, parameters::ParameterMethod::ChordLength};
+    use crate::{knots::KnotMethod::Averaging, parameters::ParameterMethod::ChordLength};
 
     use super::*;
 
@@ -42,8 +42,8 @@ mod tests {
             1., 2., 3., 4.;
         ]);
 
-        let parameters = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
+        let parameters = Parameters::generate(&points, ChordLength);
+        let knots = Knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
 
         assert_eq!(interpolate(&knots, &points, &parameters), *points.matrix());
     }
@@ -54,8 +54,8 @@ mod tests {
             1., 2., 3., 4.;
             1., 2., 3., 4.;
         ]);
-        let parameters = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(2, points.polyline_segments(), &parameters, Averaging).unwrap();
+        let parameters = Parameters::generate(&points, ChordLength);
+        let knots = Knots::generate(2, points.polyline_segments(), &parameters, Averaging).unwrap();
 
         assert_relative_eq!(
             interpolate(&knots, &points, &parameters),
