@@ -34,14 +34,14 @@ pub trait Points {
     /// Returns the mutable coordinate matrix holding one point per column.
     fn matrix_mut(&mut self) -> &mut DMatrix<f64>;
 
-    /// Returns a view of the `i`-th point.
-    fn get(&self, index: usize) -> DVectorView<'_, f64> {
-        self.matrix().column(index)
+    /// Returns a view of the `i`-th point, or `None` if the index is out of range.
+    fn get(&self, index: usize) -> Option<DVectorView<'_, f64>> {
+        (index < self.count()).then(|| self.matrix().column(index))
     }
 
-    /// Returns a mutable view of the `i`-th point.
-    fn get_mut(&mut self, index: usize) -> DVectorViewMut<'_, f64> {
-        self.matrix_mut().column_mut(index)
+    /// Returns a mutable view of the `i`-th point, or `None` if the index is out of range.
+    fn get_mut(&mut self, index: usize) -> Option<DVectorViewMut<'_, f64>> {
+        (index < self.count()).then(|| self.matrix_mut().column_mut(index))
     }
 
     /// Returns the dimension N of the points.
@@ -197,6 +197,15 @@ mod tests {
     #[test]
     fn count() {
         assert_eq!(control_points_example().count(), 4);
+    }
+
+    #[test]
+    fn get_returns_none_beyond_the_last_point() {
+        let points = control_points_example();
+        let last = points.count() - 1;
+
+        assert_eq!(points.get(last), Some(points.matrix().column(last)));
+        assert_eq!(points.get(last + 1), None);
     }
 
     #[test]

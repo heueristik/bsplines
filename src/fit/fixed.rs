@@ -33,8 +33,8 @@ pub fn fit(
     let mut control_points = DMatrix::zeros(points.dimension(), polygon_segments + 1);
 
     // Fix the first and last control point to the end data points.
-    control_points.column_mut(0).copy_from(&points.get(0));
-    control_points.column_mut(polygon_segments).copy_from(&points.get(polyline_segments));
+    control_points.column_mut(0).copy_from(&points.matrix().column(0));
+    control_points.column_mut(polygon_segments).copy_from(&points.matrix().column(polyline_segments));
 
     for i in 1..=polygon_segments - 1 {
         control_points.column_mut(i).copy_from(&internal_control_points.column(i - 1));
@@ -55,11 +55,13 @@ fn calculate_residuals(knots: &Knots, points: &DataPoints, parameters: &Paramete
     let u_bar = parameters.vector();
 
     for g in 1..=polyline_segments - 1 {
-        residuals.column_mut(g).copy_from(&points.get(g));
+        residuals.column_mut(g).copy_from(&points.matrix().column(g));
         let u = u_bar[g];
 
-        residuals.column_mut(g).sub_assign(knots.basis(0, u) * points.get(0));
-        residuals.column_mut(g).sub_assign(knots.basis(polygon_segments, u) * points.get(polyline_segments));
+        residuals.column_mut(g).sub_assign(knots.basis(0, u) * points.matrix().column(0));
+        residuals
+            .column_mut(g)
+            .sub_assign(knots.basis(polygon_segments, u) * points.matrix().column(polyline_segments));
     }
 
     residuals

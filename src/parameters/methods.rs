@@ -36,7 +36,7 @@ pub fn centripetal(points: &DataPoints) -> Parameters {
     let mut sum = 0.0;
 
     for g in 1..=polyline_segments {
-        let chord = points.get(g) - points.get(g - 1);
+        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
         sum += chord.norm().sqrt()
     }
 
@@ -49,7 +49,7 @@ pub fn centripetal(points: &DataPoints) -> Parameters {
     let mut u_bar = DVector::zeros(polyline_segments + 1);
 
     for g in 1..polyline_segments {
-        let chord = points.get(g) - points.get(g - 1);
+        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
         u_bar[g] = u_bar[g - 1] + chord.norm().sqrt() / sum;
     }
 
@@ -69,13 +69,13 @@ pub fn chord_length(points: &DataPoints) -> Parameters {
     let mut sum = 0f64;
 
     for g in 1..=polyline_segments {
-        let chord = points.get(g) - points.get(g - 1);
+        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
         sum += chord.norm();
     }
 
     let mut u_bar = DVector::zeros(polyline_segments + 1);
     for g in 1..polyline_segments {
-        let chord = points.get(g) - points.get(g - 1);
+        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
         u_bar[g] = u_bar[g - 1] + chord.norm() / sum;
     }
 
