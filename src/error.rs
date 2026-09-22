@@ -170,6 +170,13 @@ pub enum Error {
     #[error("all data points lie at the same position, so their chord lengths give no parameters")]
     CoincidentDataPoints,
 
+    /// Parameters must be in non-decreasing order.
+    #[error("the parameter at index {index} is smaller than the parameter before it")]
+    DecreasingParameters {
+        /// The index of the smaller parameter.
+        index: usize,
+    },
+
     /// A calculation left the range of `f64` values, for example because the input magnitudes are too large.
     #[error("a calculation produced a value that is not finite; reduce the magnitude of the input")]
     NonFiniteValue,

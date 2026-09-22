@@ -39,9 +39,20 @@ impl Parameters {
         }
     }
 
-    /// Returns parameters from the given values, one per data point.
-    pub fn new(vector: DVector<f64>) -> Self {
-        Parameters { vector }
+    /// Returns parameters from the given values, one per data point. There must be at least two
+    /// values, each in [0, 1], in non-decreasing order.
+    pub fn new(vector: DVector<f64>) -> Result<Self> {
+        let count = vector.len();
+        if count < 2 {
+            return Err(Error::TooFewDataPoints { count });
+        }
+        if let Some(&u) = vector.iter().find(|u| !(0.0..=1.0).contains(*u)) {
+            return Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 });
+        }
+        if let Some(index) = (1..count).find(|&index| vector[index] < vector[index - 1]) {
+            return Err(Error::DecreasingParameters { index });
+        }
+        Ok(Parameters { vector })
     }
 
     /// Returns the parameter values ū.
@@ -120,6 +131,28 @@ mod tests {
             &dvector![0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0],
             epsilon = f64::EPSILON.sqrt()
         );
+    }
+
+    #[test]
+    fn new_errors_for_one_value() {
+        assert_eq!(Parameters::new(dvector![0.5]).err(), Some(Error::TooFewDataPoints { count: 1 }));
+    }
+
+    #[test]
+    fn new_errors_for_a_value_outside_the_domain() {
+        let u = 1.5;
+        assert_eq!(Parameters::new(dvector![0.0, u]).err(), Some(Error::OutsideDomain { u, min: 0.0, max: 1.0 }));
+        assert!(matches!(Parameters::new(dvector![0.0, f64::NAN]), Err(Error::OutsideDomain { .. })));
+    }
+
+    #[test]
+    fn new_errors_for_a_decreasing_value() {
+        assert_eq!(Parameters::new(dvector![0.0, 0.6, 0.4, 1.0]).err(), Some(Error::DecreasingParameters { index: 2 }));
+    }
+
+    #[test]
+    fn new_accepts_a_repeated_value() {
+        assert!(Parameters::new(dvector![0.0, 0.5, 0.5, 1.0]).is_ok());
     }
 
     #[test]

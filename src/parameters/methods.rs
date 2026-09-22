@@ -32,7 +32,7 @@ pub fn equally_spaced(polyline_segments: usize) -> Parameters {
     }
     u_bar[polyline_segments] = 1f64;
 
-    Parameters::new(u_bar)
+    Parameters { vector: u_bar }
 }
 
 /// Generates the parameters by the centripetal method — eq. (9.6) in `Piegl1997`:
@@ -62,7 +62,7 @@ pub fn centripetal(points: &DataPoints) -> Result<Parameters> {
 
     u_bar[polyline_segments] = 1.0;
 
-    Ok(Parameters::new(u_bar))
+    Ok(Parameters { vector: u_bar })
 }
 
 /// Generates the parameters by the chord-length method — eqs. (9.4) and (9.5) in `Piegl1997`:
@@ -89,7 +89,7 @@ pub fn chord_length(points: &DataPoints) -> Result<Parameters> {
 
     u_bar[polyline_segments] = 1f64;
 
-    Ok(Parameters::new(u_bar))
+    Ok(Parameters { vector: u_bar })
 }
 
 #[cfg(test)]
