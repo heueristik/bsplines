@@ -1,10 +1,11 @@
+use nalgebra::DMatrix;
+
 use crate::{
     error::Result,
     fit::{Penalization, compute_svd, difference_operator, input_checks},
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
-    types::MatD,
 };
 
 pub fn fit(
@@ -12,7 +13,7 @@ pub fn fit(
     points: &DataPoints,
     parameters: &Parameters,
     penalization: Option<Penalization>,
-) -> Result<MatD> {
+) -> Result<DMatrix<f64>> {
     input_checks(knots, points, parameters, &penalization)?;
 
     let basis_matrix = calculate_basis_matrix(knots, points, parameters);
@@ -25,13 +26,13 @@ pub fn fit(
     Ok(control_points)
 }
 
-fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
+fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
     let polygon_segments = knots.polygon_segments();
     let polyline_segments = points.polyline_segments();
 
     let u_bar = parameters.vector();
 
-    let mut basis_matrix = MatD::zeros(polyline_segments + 1, polygon_segments + 1);
+    let mut basis_matrix = DMatrix::zeros(polyline_segments + 1, polygon_segments + 1);
     for g in 0..=polyline_segments {
         let u = u_bar[g];
         for i in 0..=polygon_segments {
@@ -41,7 +42,7 @@ fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Param
     basis_matrix
 }
 
-fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> MatD {
+fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> DMatrix<f64> {
     let polygon_segments = knots.polygon_segments();
     assert!(
         kappa <= polygon_segments,
@@ -50,7 +51,7 @@ fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> MatD {
         polygon_segments
     );
 
-    let mut difference_matrix = MatD::zeros(polygon_segments + 1 - kappa, polygon_segments + 1);
+    let mut difference_matrix = DMatrix::zeros(polygon_segments + 1 - kappa, polygon_segments + 1);
 
     for i in 0..=polygon_segments - kappa {
         for j in 0..=polygon_segments {

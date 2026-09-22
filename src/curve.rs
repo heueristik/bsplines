@@ -19,6 +19,8 @@ doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.sv
 
 use embed_doc_image::embed_doc_image;
 
+use nalgebra::DVector;
+
 use crate::{
     error::{Error, Result},
     fit::FitBuilder,
@@ -31,7 +33,6 @@ use crate::{
     },
     parameters::{ParameterMethod, Parameters},
     points::{ControlPoints, DataPoints, Points},
-    types::VecD,
 };
 
 #[embed_doc_image("spline", "doc-images/plots/derivatives.svg")]
@@ -165,7 +166,7 @@ impl Curve {
     }
 
     /// Evaluates the curve at the parameter `u`.
-    pub fn evaluate(&self, u: f64) -> Result<VecD> {
+    pub fn evaluate(&self, u: f64) -> Result<DVector<f64>> {
         self.evaluate_derivative(u, 0)
     }
 
@@ -179,14 +180,14 @@ impl Curve {
     ///
     /// Derivative orders beyond the degree return the zero vector,
     /// since all higher derivatives of a polynomial of degree p vanish.
-    pub fn evaluate_derivative(&self, u: f64, derivative: usize) -> Result<VecD> {
+    pub fn evaluate_derivative(&self, u: f64, derivative: usize) -> Result<DVector<f64>> {
         if !(0.0..=1.0).contains(&u) {
             return Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 });
         }
 
         let degree = self.degree();
 
-        let mut value = VecD::zeros(self.points.dimension());
+        let mut value = DVector::zeros(self.points.dimension());
 
         if derivative <= degree {
             let polygon_segments = self.polygon_segments();

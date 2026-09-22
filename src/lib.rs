@@ -81,7 +81,7 @@ pub mod knots;
 pub mod manipulation;
 pub mod parameters;
 pub mod points;
-pub mod types;
+mod vector_views;
 
 pub use curve::Curve;
 pub use error::{Error, Result};

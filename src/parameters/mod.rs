@@ -4,7 +4,9 @@
 //! - Centripetal method
 //! - Chord-length method
 
-use crate::{points::DataPoints, types::VecD};
+use nalgebra::DVector;
+
+use crate::points::DataPoints;
 
 pub(crate) mod methods;
 
@@ -12,7 +14,7 @@ pub(crate) mod methods;
 /// one per data point.
 #[derive(Debug, Clone)]
 pub struct Parameters {
-    vector: VecD,
+    vector: DVector<f64>,
 }
 
 impl Parameters {
@@ -26,12 +28,12 @@ impl Parameters {
     }
 
     /// Returns parameters from the given values, one per data point.
-    pub fn new(vector: VecD) -> Self {
+    pub fn new(vector: DVector<f64>) -> Self {
         Parameters { vector }
     }
 
     /// Returns the parameter values ū.
-    pub fn vector(&self) -> &VecD {
+    pub fn vector(&self) -> &DVector<f64> {
         &self.vector
     }
 

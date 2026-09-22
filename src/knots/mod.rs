@@ -16,12 +16,9 @@ doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.sv
 
 use std::ops::MulAssign;
 
-use crate::{
-    basis,
-    error::Result,
-    parameters::Parameters,
-    types::{VecD, VecDView, VecHelpers},
-};
+use nalgebra::{DVector, DVectorView};
+
+use crate::{basis, error::Result, parameters::Parameters, vector_views::VectorViews};
 
 pub(crate) mod methods;
 
@@ -29,7 +26,7 @@ pub(crate) mod methods;
 #[derive(Debug, Clone)]
 pub struct Knots {
     /// The knot vectors of the curve and of its derivatives, indexed by derivative order.
-    pub(crate) derivatives: Vec<VecD>,
+    pub(crate) derivatives: Vec<DVector<f64>>,
     pub(crate) degree: usize,
 }
 
@@ -69,8 +66,8 @@ impl Knots {
 
     /// Returns knots for a curve of the given degree from the given knot values,
     /// deriving the knot vectors of all derivative orders.
-    pub fn new(degree: usize, knots: VecD) -> Self {
-        let mut derivatives: Vec<VecD> = Vec::with_capacity(degree + 1);
+    pub fn new(degree: usize, knots: DVector<f64>) -> Self {
+        let mut derivatives: Vec<DVector<f64>> = Vec::with_capacity(degree + 1);
         derivatives.push(knots);
 
         let mut knots = Knots { derivatives, degree };
@@ -79,12 +76,12 @@ impl Knots {
     }
 
     /// Returns the knot vector of the curve.
-    pub fn vector(&self) -> &VecD {
+    pub fn vector(&self) -> &DVector<f64> {
         &self.derivatives[0]
     }
 
     /// Returns the knot vector of the `k`-th derivative curve.
-    pub(crate) fn vector_derivative(&self, derivative: usize) -> &VecD {
+    pub(crate) fn vector_derivative(&self, derivative: usize) -> &DVector<f64> {
         &self.derivatives[derivative]
     }
 
@@ -103,7 +100,7 @@ impl Knots {
     }
 
     /// Returns a view of the internal knots.
-    pub fn internal(&self) -> VecDView<'_> {
+    pub fn internal(&self) -> DVectorView<'_, f64> {
         self.derivatives[0].segment(self.degree + 1, self.internal_count())
     }
 
@@ -112,11 +109,11 @@ impl Knots {
     }
 
     /// Returns a view of the domain knots, spanning from knot p to knot n + 1.
-    pub fn domain(&self) -> VecDView<'_> {
+    pub fn domain(&self) -> DVectorView<'_, f64> {
         self.domain_derivative(0)
     }
 
-    fn domain_derivative(&self, derivative: usize) -> VecDView<'_> {
+    fn domain_derivative(&self, derivative: usize) -> DVectorView<'_, f64> {
         self.derivatives[derivative].segment(self.degree - derivative, self.domain_count())
     }
 
@@ -245,7 +242,7 @@ impl Knots {
     }
 }
 
-pub(crate) fn reverse(knots: &mut VecD) {
+pub(crate) fn reverse(knots: &mut DVector<f64>) {
     let nrows = knots.nrows();
     let half_nrows = knots.len() / 2;
 
@@ -257,25 +254,25 @@ pub(crate) fn reverse(knots: &mut VecD) {
     knots.mul_assign(-1.0);
 }
 
-pub(crate) fn reversed(knots: &VecD) -> VecD {
+pub(crate) fn reversed(knots: &DVector<f64>) -> DVector<f64> {
     let mut copy = knots.clone();
     reverse(&mut copy);
     copy
 }
 
 /// Normalizes the knot values to the domain [0, 1] in place.
-pub(crate) fn normalize(knots: &mut VecD) {
+pub(crate) fn normalize(knots: &mut DVector<f64>) {
     let old_lim = (knots.min(), knots.max());
 
     rescale(knots, old_lim, (0.0, 1.0))
 }
 
-fn rescale(knots: &mut VecD, old_lim: (f64, f64), new_lim: (f64, f64)) {
+fn rescale(knots: &mut DVector<f64>, old_lim: (f64, f64), new_lim: (f64, f64)) {
     let len = knots.len();
-    *knots -= VecD::repeat(len, old_lim.0);
+    *knots -= DVector::repeat(len, old_lim.0);
     *knots /= old_lim.1 - old_lim.0;
     *knots *= new_lim.1 - new_lim.0;
-    *knots += VecD::repeat(len, new_lim.0);
+    *knots += DVector::repeat(len, new_lim.0);
 }
 
 #[cfg(test)]

@@ -1,19 +1,18 @@
-use nalgebra::SVD;
+use nalgebra::{DMatrix, SVD};
 
 use crate::{
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
-    types::MatD,
 };
 
-pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
+pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
     let polyline_segments = points.polyline_segments();
 
     let u_bar = parameters.vector();
 
     // Interpolation uses one control point per data point, so the system is square.
-    let mut basis_matrix = MatD::zeros(points.count(), points.count());
+    let mut basis_matrix = DMatrix::zeros(points.count(), points.count());
     for i in 0..=polyline_segments {
         for g in 0..=polyline_segments {
             basis_matrix[(g, i)] = knots.basis(i, u_bar[g]);

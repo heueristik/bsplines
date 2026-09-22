@@ -1,6 +1,6 @@
 //! Least-squares fitting of data points, with fixed or loose ends and optional penalization.
 
-use nalgebra::{Dyn, SVD};
+use nalgebra::{DMatrix, Dyn, SVD};
 
 use crate::{
     Curve,
@@ -8,7 +8,6 @@ use crate::{
     knots::{KnotMethod, Knots},
     parameters::{ParameterMethod, Parameters},
     points::{ControlPoints, DataPoints},
-    types::MatD,
 };
 
 pub(crate) mod fixed;
@@ -108,9 +107,9 @@ fn input_checks(
 
 pub(crate) fn compute_svd(
     knots: &Knots,
-    basis_matrix: &MatD,
+    basis_matrix: &DMatrix<f64>,
     penalization: &Option<Penalization>,
-    calculate_finite_difference_matrix: Box<dyn FnOnce(usize, &Knots) -> MatD>,
+    calculate_finite_difference_matrix: Box<dyn FnOnce(usize, &Knots) -> DMatrix<f64>>,
 ) -> Result<SVD<f64, Dyn, Dyn>> {
     let mut normal_matrix = basis_matrix.transpose() * basis_matrix;
 

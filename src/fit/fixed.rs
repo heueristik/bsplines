@@ -1,12 +1,13 @@
 use std::ops::SubAssign;
 
+use nalgebra::{DMatrix, DVector};
+
 use crate::{
     error::Result,
     fit::{Penalization, compute_svd, difference_operator, input_checks},
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
-    types::{MatD, VecD},
 };
 
 pub fn fit(
@@ -14,7 +15,7 @@ pub fn fit(
     points: &DataPoints,
     parameters: &Parameters,
     penalization: Option<Penalization>,
-) -> Result<MatD> {
+) -> Result<DMatrix<f64>> {
     input_checks(knots, points, parameters, &penalization)?;
 
     let residuals = calculate_residuals(knots, points, parameters);
@@ -29,7 +30,7 @@ pub fn fit(
 
     let polygon_segments = knots.polygon_segments();
     let polyline_segments = points.polyline_segments();
-    let mut control_points = MatD::zeros(points.dimension(), polygon_segments + 1);
+    let mut control_points = DMatrix::zeros(points.dimension(), polygon_segments + 1);
 
     // Fix the first and last control point to the end data points.
     control_points.column_mut(0).copy_from(&points.get(0));
@@ -44,12 +45,12 @@ pub fn fit(
 
 /// Returns the residual vectors R: the internal data points reduced by the contributions
 /// of the two fixed end control points.
-fn calculate_residuals(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
+fn calculate_residuals(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
     let polygon_segments = knots.polygon_segments();
     let polyline_segments = points.polyline_segments();
     let dimension = points.dimension();
 
-    let mut residuals = MatD::zeros(dimension, polyline_segments + 1);
+    let mut residuals = DMatrix::zeros(dimension, polyline_segments + 1);
 
     let u_bar = parameters.vector();
 
@@ -68,17 +69,17 @@ fn calculate_constant_terms_matrix(
     knots: &Knots,
     points: &DataPoints,
     parameters: &Parameters,
-    residuals: &MatD,
-) -> MatD {
+    residuals: &DMatrix<f64>,
+) -> DMatrix<f64> {
     let polygon_segments = knots.polygon_segments();
     let polyline_segments = points.polyline_segments();
     let dimension = points.dimension();
 
     let u_bar = parameters.vector();
 
-    let mut constant_terms = MatD::zeros(dimension, polygon_segments - 1);
+    let mut constant_terms = DMatrix::zeros(dimension, polygon_segments - 1);
 
-    let mut sum = VecD::zeros(dimension);
+    let mut sum = DVector::zeros(dimension);
     for i in 1..=polygon_segments - 1 {
         sum *= 0.0;
 
@@ -92,13 +93,13 @@ fn calculate_constant_terms_matrix(
     constant_terms
 }
 
-fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
+fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
     let polygon_segments = knots.polygon_segments();
     let polyline_segments = points.polyline_segments();
 
     let u_bar = parameters.vector();
 
-    let mut basis_matrix = MatD::zeros(polyline_segments - 1, polygon_segments - 1);
+    let mut basis_matrix = DMatrix::zeros(polyline_segments - 1, polygon_segments - 1);
     for g in 1..=polyline_segments - 1 {
         let u = u_bar[g];
         for i in 1..=polygon_segments - 1 {
@@ -108,7 +109,7 @@ fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Param
     basis_matrix
 }
 
-fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> MatD {
+fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> DMatrix<f64> {
     let polygon_segments = knots.polygon_segments();
     assert!(
         kappa <= polygon_segments - 2,
@@ -117,7 +118,7 @@ fn calculate_finite_difference_matrix(kappa: usize, knots: &Knots) -> MatD {
         polygon_segments - 2
     );
 
-    let mut difference_matrix = MatD::zeros(polygon_segments - 1 - kappa, polygon_segments - 1);
+    let mut difference_matrix = DMatrix::zeros(polygon_segments - 1 - kappa, polygon_segments - 1);
 
     for i in 0..=polygon_segments - kappa - 2 {
         for j in 0..=polygon_segments - 2 {

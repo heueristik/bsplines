@@ -1,6 +1,6 @@
 //! Implements the basis functions by the Cox-de Boor-Mansfield recurrence.
 
-use crate::types::VecD;
+use nalgebra::DVector;
 
 /// Evaluates the `i`-th basis function of degree `p` at the parameter `u`
 /// by the Cox-de Boor-Mansfield recurrence — see [`Knots::basis`](crate::knots::Knots::basis).
@@ -8,7 +8,7 @@ use crate::types::VecD;
 /// The derivative order `k` and the number of polygon segments `n` close the
 /// last interval, so the last basis function covers `u = 1`.
 pub(crate) fn basis(
-    knots: &VecD,
+    knots: &DVector<f64>,
     index: usize,
     degree: usize,
     derivative: usize,

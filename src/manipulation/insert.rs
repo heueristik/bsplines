@@ -2,11 +2,12 @@
 
 use std::ops::AddAssign;
 
+use nalgebra::DMatrix;
+
 use crate::{
     Curve,
     error::{Error, Result},
     points::Points,
-    types::MatD,
 };
 
 /// Inserts the knot `u` into the curve by Boehm's algorithm, keeping the curve shape unchanged.
@@ -36,7 +37,7 @@ pub(crate) fn insert(curve: &mut Curve, u: f64) -> Result<()> {
     // Only the control points from `span - degree + 1` to `span` change.
     let control_point_count = curve.points.count();
 
-    let mut new_points = MatD::zeros(dimension, control_point_count + 1);
+    let mut new_points = DMatrix::zeros(dimension, control_point_count + 1);
 
     let head_count = span - degree + 1;
     new_points.columns_mut(0, head_count).copy_from(&old_points.columns(0, head_count));

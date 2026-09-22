@@ -1,8 +1,9 @@
+use nalgebra::DVector;
+
 use crate::{
     error::{Error, Result},
     knots::Knots,
     parameters::Parameters,
-    types::VecD,
 };
 
 fn input_check(degree: usize, polygon_segments: usize) -> Result<()> {
@@ -26,7 +27,7 @@ pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
 
     let internal_knot_count = polygon_segments - degree;
 
-    let mut knots = VecD::zeros(degree + polygon_segments + 2);
+    let mut knots = DVector::zeros(degree + polygon_segments + 2);
 
     for i in 1..=internal_knot_count {
         knots[degree + i] = i as f64 / (internal_knot_count + 1) as f64
@@ -52,7 +53,7 @@ pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters
 
     let u_bar = parameters.vector();
 
-    let mut knots = VecD::zeros(degree + polygon_segments + 2);
+    let mut knots = DVector::zeros(degree + polygon_segments + 2);
 
     for j in 1..=internal_knot_count {
         let mut parameter_sum = 0.;
@@ -94,7 +95,7 @@ pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) 
 
     let span_width = (polygon_segments + 1) as f64 / internal_knot_spans as f64;
 
-    let mut knots = VecD::zeros(degree + polygon_segments + 2);
+    let mut knots = DVector::zeros(degree + polygon_segments + 2);
 
     for j in 1..=internal_knot_count {
         let position = j as f64 * span_width;
@@ -156,7 +157,7 @@ mod tests {
 
             assert_eq!(
                 uniform(degree, polygon_segments).unwrap().derivatives[0],
-                VecD::from_vec([head, tail].concat())
+                DVector::from_vec([head, tail].concat())
             );
         }
 
@@ -169,7 +170,7 @@ mod tests {
 
             assert_eq!(
                 uniform(degree, polygon_segments).unwrap().derivatives[0],
-                VecD::from_vec([head, internal, tail].concat())
+                DVector::from_vec([head, internal, tail].concat())
             );
         }
 
@@ -183,7 +184,7 @@ mod tests {
 
             assert_eq!(
                 uniform(degree, polygon_segments).unwrap().derivatives[0],
-                VecD::from_vec([head, internal, tail].concat())
+                DVector::from_vec([head, internal, tail].concat())
             );
         }
     }
@@ -243,7 +244,7 @@ mod tests {
             let tail = vec![1.0; degree + 1];
             assert_eq!(
                 averaging(degree, polygon_segments, &parameters).unwrap().derivatives[0],
-                VecD::from_vec([head, tail].concat())
+                DVector::from_vec([head, tail].concat())
             );
         }
 
@@ -258,7 +259,7 @@ mod tests {
 
             assert_eq!(
                 averaging(degree, polygon_segments, &parameters).unwrap().derivatives[0],
-                VecD::from_vec([head, internal, tail].concat())
+                DVector::from_vec([head, internal, tail].concat())
             );
         }
     }
@@ -319,7 +320,7 @@ mod tests {
             let tail = vec![1.0; degree + 1];
             assert_eq!(
                 de_boor(degree, polygon_segments, &parameters).unwrap().derivatives[0],
-                VecD::from_vec([head, tail].concat())
+                DVector::from_vec([head, tail].concat())
             );
         }
 
@@ -334,7 +335,7 @@ mod tests {
 
             assert_eq!(
                 de_boor(degree, polygon_segments, &parameters).unwrap().derivatives[0],
-                VecD::from_vec([head, internal, tail].concat())
+                DVector::from_vec([head, internal, tail].concat())
             );
         }
     }

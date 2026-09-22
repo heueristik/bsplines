@@ -1,12 +1,14 @@
 //! Splits a curve into two independent curves.
 
+use nalgebra::{DMatrix, DVector};
+
 use crate::{
     Curve,
     error::{Error, Result},
     knots::{Knots, normalize},
     manipulation::insert::insert,
     points::{ControlPoints, Points},
-    types::{MatD, VecD, VecHelpers},
+    vector_views::VectorViews,
 };
 
 /// Splits the curve into two independent curves at the parameter `u` and normalizes both knot vectors.
@@ -35,51 +37,51 @@ pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
 
     if multiplicity > 0 {
         let left = {
-            let mut left_knots = VecD::zeros(span + degree + 1);
+            let mut left_knots = DVector::zeros(span + degree + 1);
             left_knots.head_mut(span + degree).copy_from(&knots.head(span + degree));
             left_knots[span + degree] = u;
 
             normalize(&mut left_knots);
             let point_count = left_knots.len() - (degree + 2) + 1;
-            let left_points: MatD = points.columns(0, point_count).into();
+            let left_points: DMatrix<f64> = points.columns(0, point_count).into();
 
             Curve::new(Knots::new(degree, left_knots), ControlPoints::new(left_points))?
         };
 
         let right = {
-            let mut right_knots = VecD::zeros(knots.len() + 1 - span);
+            let mut right_knots = DVector::zeros(knots.len() + 1 - span);
             right_knots[0] = u;
             right_knots.tail_mut(knots.len() - span).copy_from(&knots.tail(knots.len() - span));
 
             normalize(&mut right_knots);
             let point_count = right_knots.len() - (degree + 2) + 1;
-            let right_points: MatD = points.columns(points.ncols() - point_count, point_count).into();
+            let right_points: DMatrix<f64> = points.columns(points.ncols() - point_count, point_count).into();
 
             Curve::new(Knots::new(degree, right_knots), ControlPoints::new(right_points))?
         };
         Ok((left, right))
     } else {
         let left = {
-            let mut left_knots = VecD::zeros(span + degree + 1 + 1);
+            let mut left_knots = DVector::zeros(span + degree + 1 + 1);
             left_knots.head_mut(span + degree + 1).copy_from(&knots.head(span + degree + 1));
             left_knots[span + degree + 1] = u;
 
             normalize(&mut left_knots);
 
             let point_count = left_knots.len() + 1 - (degree + 2);
-            let left_points: MatD = points.columns(0, point_count).into();
+            let left_points: DMatrix<f64> = points.columns(0, point_count).into();
 
             Curve::new(Knots::new(degree, left_knots), ControlPoints::new(left_points))?
         };
 
         let right = {
-            let mut right_knots = VecD::zeros(knots.len() + 1 - (span + 1));
+            let mut right_knots = DVector::zeros(knots.len() + 1 - (span + 1));
             right_knots[0] = u;
             right_knots.tail_mut(knots.len() - (span + 1)).copy_from(&knots.tail(knots.len() - (span + 1)));
 
             normalize(&mut right_knots);
             let point_count = right_knots.len() + 1 - (degree + 2);
-            let right_points: MatD = points.columns(points.ncols() - point_count, point_count).into();
+            let right_points: DMatrix<f64> = points.columns(points.ncols() - point_count, point_count).into();
 
             Curve::new(Knots::new(degree, right_knots), ControlPoints::new(right_points))?
         };
