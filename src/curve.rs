@@ -648,6 +648,22 @@ mod tests {
     }
 
     #[test]
+    fn interpolate_with_errors_when_a_basis_function_is_zero_at_its_parameter() {
+        let data = DataPoints::new(dmatrix![
+            0.0, 0.01, 0.02, 0.03, 0.04, 10.0;
+            0.0,  0.5, -0.5,  0.5, -0.5,  0.0;
+        ]);
+        let parameters = Parameters::generate(&data, ParameterMethod::ChordLength).unwrap();
+        assert!(parameters.vector()[3] < 0.25, "the basis function 3 of the uniform knots starts at 0.25");
+
+        let result = Curve::interpolate_with(&data, 2, ParameterMethod::ChordLength, KnotMethod::Uniform);
+        assert_eq!(result.err(), Some(Error::SingularInterpolation { index: 3 }));
+
+        let result = Curve::interpolate_with(&data, 2, ParameterMethod::ChordLength, KnotMethod::Averaging);
+        assert!(result.is_ok(), "averaged knots suit the chord-length parameters");
+    }
+
+    #[test]
     fn interpolate_errors_for_no_data_points() {
         assert!(Curve::interpolate(&DataPoints::new(DMatrix::zeros(2, 0)), 2).is_err());
     }

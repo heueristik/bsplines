@@ -212,6 +212,17 @@ pub enum Error {
         index: usize,
     },
 
+    /// A basis function is zero at its own parameter, so the interpolation system is singular and no curve passes
+    /// through all data points (the Schoenberg-Whitney condition). Uniform knots with uneven parameters cause this.
+    #[error(
+        "the basis function {index} is zero at its parameter, so no curve interpolates the data; \
+         choose other parameter or knot methods"
+    )]
+    SingularInterpolation {
+        /// The index of the basis function and of its parameter.
+        index: usize,
+    },
+
     /// A calculation left the range of `f64` values, for example because the input magnitudes are too large.
     #[error("a calculation produced a value that is not finite; reduce the magnitude of the input")]
     NonFiniteValue,

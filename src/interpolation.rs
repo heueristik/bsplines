@@ -1,7 +1,7 @@
 use nalgebra::DMatrix;
 
 use crate::{
-    error::Result,
+    error::{Error, Result},
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
@@ -19,6 +19,11 @@ pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) 
         for g in 0..=polyline_segments {
             basis_matrix[(g, i)] = knots.basis_of_derivative_curve(0, i, u_bar[g]);
         }
+    }
+
+    // A basis function that is zero at its own parameter makes the system singular (Schoenberg-Whitney).
+    if let Some(index) = (0..=polyline_segments).find(|&i| basis_matrix[(i, i)] == 0.0) {
+        return Err(Error::SingularInterpolation { index });
     }
 
     let svd = decompose(basis_matrix)?;
