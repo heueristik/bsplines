@@ -112,7 +112,7 @@ fn insert_plots() {
     let u = 0.8;
     visualization::generate_2d_plot("manipulation/insert-before.svg", vec![(&c, RED_100)], &lim, None);
 
-    c.insert_times(u, 1).unwrap();
+    c.insert_knot(u).unwrap();
 
     visualization::generate_2d_plot("manipulation/insert-after.svg", vec![(&c, BLUE_100)], &lim, None);
 }

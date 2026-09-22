@@ -314,24 +314,15 @@ impl Curve {
     }
 
     /// Inserts a knot at the parameter `u` without changing the curve shape.
-    /// The parameter must lie in the domain interior (0, 1).
+    /// The parameter must lie in the domain interior (0, 1). Call it again to raise the multiplicity of `u`.
     ///
     /// | The curve.         | The curve after the insertion at u = 4/5. |
     /// |:------------------:|:-----------------------------------------:|
     /// | ![][insert-before] | ![][insert-after]                         |
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("insert-before", "doc-images/plots/manipulation/insert-before.svg"))]
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("insert-after", "doc-images/plots/manipulation/insert-after.svg"))]
-    pub fn insert(&mut self, u: f64) -> Result<&mut Self> {
-        self.insert_times(u, 1)?;
-        Ok(self)
-    }
-
-    /// Inserts a knot at the parameter `u` the given number of times.
-    /// The parameter must lie in the domain interior (0, 1).
-    pub fn insert_times(&mut self, u: f64, times: usize) -> Result<&mut Self> {
-        for _ in 0..times {
-            insert(self, u)?;
-        }
+    pub fn insert_knot(&mut self, u: f64) -> Result<&mut Self> {
+        insert(self, u)?;
         Ok(self)
     }
 
@@ -402,7 +393,7 @@ mod tests {
             let points = dmatrix![1., 1., 1., 1.;];
             let mut curve = Curve::with_uniform_knots(degree, ControlPoints::new(points)).unwrap();
 
-            curve.insert(0.5).unwrap();
+            curve.insert_knot(0.5).unwrap();
 
             assert_eq!(curve.evaluate_derivative(0.9, 1).unwrap(), dvector![0.]);
         }

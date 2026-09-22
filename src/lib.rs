@@ -17,7 +17,7 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //!   - [curve parametrization][ParameterMethod]
 //!   - [knot generation][KnotMethod]
 //!   - curve manipulation
-//!     - [knot insertion][Curve::insert]
+//!     - [knot insertion][Curve::insert_knot]
 //!     - [reversing][Curve::reverse]
 //!     - [splitting][Curve::split]
 //!     - [merging][Curve::append]
