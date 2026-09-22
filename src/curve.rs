@@ -199,10 +199,16 @@ impl Curve {
         let mut value = DVector::zeros(self.control_points.dimension());
 
         if derivative <= degree {
-            let polygon_segments = self.polygon_segments();
-            let span = self.knots.find_span(u, derivative);
+            let basis_degree = degree - derivative;
+            let knots = self.knots.vector_derivative(derivative).as_slice();
+            // The basis functions that are not zero at u end at the last knot at or below u,
+            // limited to the n − k + 1 basis functions of the derivative curve.
+            let last = knots
+                .partition_point(|&knot| knot <= u)
+                .saturating_sub(1)
+                .clamp(basis_degree, self.polygon_segments() - derivative);
 
-            for i in span - (degree - derivative)..=polygon_segments - derivative {
+            for i in last - basis_degree..=last {
                 value += self.knots.basis_of_derivative_curve(derivative, i, u) *
                     self.control_points.matrix_derivative(derivative).column(i);
             }
@@ -417,6 +423,31 @@ mod tests {
         use rstest::rstest;
 
         use super::*;
+
+        #[test]
+        fn evaluate_derivative_equals_the_sum_over_all_basis_functions() {
+            let degree = 3;
+            let mut curve =
+                Curve::with_uniform_knots(ControlPoints::new(dmatrix![0., 1., 3., 2., 4., 5., 3., 6.;]), degree)
+                    .unwrap();
+            curve.insert_knot(0.4).unwrap();
+            curve.insert_knot(0.4).unwrap();
+            assert_eq!(curve.knots().multiplicity(0.4), degree, "the internal knot 0.4 repeats p times");
+
+            for derivative in 0..=degree {
+                let derivative_curve = curve.derivative_curve(derivative).unwrap();
+                let knots = derivative_curve.knots();
+                let points = derivative_curve.control_points().matrix();
+                let parameters = knots.vector().iter().copied().chain((0..=20).map(|step| f64::from(step) / 20.0));
+
+                for u in parameters {
+                    let sum = (0..points.ncols())
+                        .map(|i| knots.basis(i, u).unwrap() * points.column(i))
+                        .fold(DVector::zeros(points.nrows()), |sum, term| sum + term);
+                    assert_relative_eq!(curve.evaluate_derivative(u, derivative).unwrap(), sum, epsilon = 1e-9);
+                }
+            }
+        }
 
         #[rstest]
         fn evaluate_derivative_returns_zero_above_the_degree(curve: Curve) {
