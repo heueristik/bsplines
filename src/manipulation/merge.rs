@@ -47,6 +47,9 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
     if left_degree != right_degree {
         return Err(Error::DegreeMismatch { left: left_degree, right: right_degree });
     }
+    if left_degree == 0 {
+        return Err(Error::DegreeTooLow { degree: left_degree });
+    }
 
     if left.dimension() != right.dimension() {
         return Err(Error::DimensionMismatch { left: left.dimension(), right: right.dimension() });
@@ -612,6 +615,13 @@ mod tests {
 
     fn test_curve(degree: usize, points: DMatrix<f64>) -> Curve {
         Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap()
+    }
+
+    #[test]
+    fn merge_errors_for_degree_0() {
+        let curve = test_curve(1, dmatrix![0., 1.;]).derivative_curve(1).unwrap();
+        assert_eq!(curve.degree(), 0, "the first derivative of a line has degree 0");
+        assert_eq!(merge(&curve, &curve, &Constraints::default()).err(), Some(Error::DegreeTooLow { degree: 0 }));
     }
 
     #[test]
