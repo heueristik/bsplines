@@ -27,6 +27,7 @@ pub struct Knots {
 }
 
 /// The method generating a clamped knot vector for a curve of degree p with n polygon segments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KnotMethod {
     /// Spaces the internal knots equally — eq. (9.7) in `Piegl1997`.
     /// Use only with evenly distributed control points.

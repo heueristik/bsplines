@@ -45,6 +45,7 @@ impl Parameters {
 }
 
 /// The method assigning a parameter value ū to every data point.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ParameterMethod {
     /// Distributes the parameters equally — eq. (9.3) in `Piegl1997`.
     /// Simple, but risks erratic shapes when the data is unevenly spaced.
