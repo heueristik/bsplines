@@ -26,7 +26,7 @@ use crate::{
     knots::{self, KnotMethod, Knots},
     manipulation::{
         insert::insert,
-        merge::{ConstrainedCurve, Constraints, merge, merge_with_constraints},
+        merge::{Constraints, merge, merge_with_constraints},
         split::split,
     },
     parameters::{self, ParameterMethod},
@@ -249,17 +249,10 @@ impl Curve {
         Ok(self)
     }
 
-    /// Prepends another curve with maximally `p-1` constraints.
-    pub fn prepend_constrained(
-        &mut self,
-        constraints_self: Constraints,
-        other: &Self,
-        constraints_other: Constraints,
-    ) -> Result<&mut Self> {
-        let merged = merge_with_constraints(
-            &ConstrainedCurve { curve: other, constraints: constraints_other },
-            &ConstrainedCurve { curve: self, constraints: constraints_self },
-        )?;
+    /// Prepends another curve like [`Curve::prepend`], but keeps the points at the constrained
+    /// parameters fixed. The other curve is the left one, this curve is the right one.
+    pub fn prepend_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
+        let merged = merge_with_constraints(other, self, &constraints)?;
         self.knots = merged.knots;
         self.points = merged.points;
         Ok(self)
@@ -292,17 +285,27 @@ impl Curve {
         Ok(self)
     }
 
-    /// Appends another curve with maximally `p-1` constraints.
-    pub fn append_constrained(
-        &mut self,
-        constraints_self: Constraints,
-        other: &Self,
-        constraints_other: Constraints,
-    ) -> Result<&mut Self> {
-        let merged = merge_with_constraints(
-            &ConstrainedCurve { curve: self, constraints: constraints_self },
-            &ConstrainedCurve { curve: other, constraints: constraints_other },
-        )?;
+    /// Appends another curve like [`Curve::append`], but keeps the points at the constrained
+    /// parameters fixed. This curve is the left one, the other curve is the right one.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use approx::assert_relative_eq;
+    /// use bsplines::{Curve, manipulation::merge::Constraints, points::ControlPoints};
+    /// use nalgebra::dmatrix;
+    ///
+    /// let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2.0,-1.0,-0.5;])).unwrap();
+    /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 0.5, 1.0, 2.0;])).unwrap();
+    /// let end = curve.evaluate(1.0).unwrap();
+    ///
+    /// // Keep the end of this curve fixed, so the joint at u = 0.5 stays at its old end point.
+    /// curve.append_constrained(&other, Constraints { left: vec![1.0], right: vec![] }).unwrap();
+    ///
+    /// assert_relative_eq!(curve.evaluate(0.5).unwrap(), end, epsilon = f64::EPSILON.sqrt());
+    /// ```
+    pub fn append_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
+        let merged = merge_with_constraints(self, other, &constraints)?;
         self.knots = merged.knots;
         self.points = merged.points;
         Ok(self)
@@ -502,9 +505,7 @@ mod tests {
         );
         assert_ne!(unconstrained.evaluate(joint).unwrap(), start, "the unconstrained merge moves the joint");
 
-        curve
-            .prepend_constrained(Constraints { parameters: vec![0.0] }, &left, Constraints { parameters: vec![] })
-            .unwrap();
+        curve.prepend_constrained(&left, Constraints { left: vec![], right: vec![0.0] }).unwrap();
 
         assert_relative_eq!(curve.evaluate(joint).unwrap(), start, epsilon = f64::EPSILON.sqrt());
     }
@@ -524,9 +525,7 @@ mod tests {
         );
         assert_ne!(unconstrained.evaluate(joint).unwrap(), end, "the unconstrained merge moves the joint");
 
-        curve
-            .append_constrained(Constraints { parameters: vec![1.0] }, &right, Constraints { parameters: vec![] })
-            .unwrap();
+        curve.append_constrained(&right, Constraints { left: vec![1.0], right: vec![] }).unwrap();
 
         assert_relative_eq!(curve.evaluate(joint).unwrap(), end, epsilon = f64::EPSILON.sqrt());
     }

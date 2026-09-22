@@ -30,88 +30,73 @@ use crate::{
     types::{MatD, VecD, VecHelpers},
 };
 
-/// The parameters at which points on a curve stay fixed during a merge.
+/// The parameters at which the points of two merged curves stay fixed.
+///
+/// The fields name the side of the joint, for [`Curve::append_constrained`] and
+/// [`Curve::prepend_constrained`] alike. Both curves together take fewer than p constraints.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Constraints {
-    /// The constrained parameter values.
-    pub parameters: Vec<f64>,
+    /// The parameters of the left curve whose points stay fixed.
+    pub left: Vec<f64>,
+    /// The parameters of the right curve whose points stay fixed.
+    pub right: Vec<f64>,
 }
 
 impl Constraints {
-    /// Returns the number of constrained points.
-    pub fn count(&self) -> usize {
-        self.parameters.len()
-    }
-
-    /// Returns the number of segments between the constrained points — one less than their count.
-    pub fn polyline_segments(&self) -> usize {
-        self.count() - 1
+    fn count(&self) -> usize {
+        self.left.len() + self.right.len()
     }
 }
 
-/// A curve paired with the constraints that hold during a merge.
-pub struct ConstrainedCurve<'a> {
-    pub(crate) curve: &'a Curve,
-    pub(crate) constraints: Constraints,
-}
-
-/// Merges two curves, keeping the start of the left curve fixed.
+/// Merges two curves, keeping the end of the left curve fixed.
 pub fn merge_from(left: &Curve, right: &Curve) -> Result<Curve> {
-    merge_with_constraints(
-        &ConstrainedCurve { curve: left, constraints: Constraints { parameters: vec![1.] } },
-        &ConstrainedCurve { curve: right, constraints: Constraints { parameters: vec![] } },
-    )
+    merge_with_constraints(left, right, &Constraints { left: vec![1.], right: vec![] })
 }
 
-/// Merges two curves, keeping the end of the right curve fixed.
+/// Merges two curves, keeping the start of the right curve fixed.
 pub fn merge_to(left: &Curve, right: &Curve) -> Result<Curve> {
-    merge_with_constraints(
-        &ConstrainedCurve { curve: left, constraints: Constraints { parameters: vec![] } },
-        &ConstrainedCurve { curve: right, constraints: Constraints { parameters: vec![0.] } },
-    )
+    merge_with_constraints(left, right, &Constraints { left: vec![], right: vec![0.] })
 }
 
 /// Merges two curves into one, attaching the end of the left curve to the start
 /// of the right one while maintaining continuity of all derivatives — see `Tai2003`.
 pub fn merge(left: &Curve, right: &Curve) -> Result<Curve> {
-    merge_with_constraints(
-        &ConstrainedCurve { curve: left, constraints: Constraints { parameters: vec![] } },
-        &ConstrainedCurve { curve: right, constraints: Constraints { parameters: vec![] } },
-    )
+    merge_with_constraints(left, right, &Constraints::default())
 }
 
-pub(crate) fn merge_with_constraints(left: &ConstrainedCurve, right: &ConstrainedCurve) -> Result<Curve> {
-    let left_degree = left.curve.degree();
-    let right_degree = right.curve.degree();
+pub(crate) fn merge_with_constraints(left: &Curve, right: &Curve, constraints: &Constraints) -> Result<Curve> {
+    let left_degree = left.degree();
+    let right_degree = right.degree();
 
     if left_degree != right_degree {
         return Err(Error::DegreeMismatch { left: left_degree, right: right_degree });
     }
 
-    if left.curve.dimension() != right.curve.dimension() {
-        return Err(Error::DimensionMismatch { left: left.curve.dimension(), right: right.curve.dimension() });
+    if left.dimension() != right.dimension() {
+        return Err(Error::DimensionMismatch { left: left.dimension(), right: right.dimension() });
     }
 
-    if !is_clamped(&left.curve.knots) || !is_clamped(&right.curve.knots) {
+    if !is_clamped(&left.knots) || !is_clamped(&right.knots) {
         return Err(Error::UnclampedCurve);
     }
 
-    if !is_normalized(&left.curve.knots) || !is_normalized(&right.curve.knots) {
+    if !is_normalized(&left.knots) || !is_normalized(&right.knots) {
         return Err(Error::UnnormalizedCurve);
     }
 
-    let total_constraints = left.constraints.count() + right.constraints.count();
+    let total_constraints = constraints.count();
     if total_constraints >= left_degree {
         return Err(Error::TooManyConstraints { total: total_constraints, degree: left_degree });
     }
 
-    let shifts = solve_linear_equation_system(left, right);
-    let (left_shifted, right_shifted) = shift_boundary_control_points(left.curve, right.curve, &shifts);
+    let shifts = solve_linear_equation_system(left, right, constraints);
+    let (left_shifted, right_shifted) = shift_boundary_control_points(left, right, &shifts);
 
-    let (left_adjusted, right_reversed, right_adjusted) = adjust_knot_vectors(left.curve, right.curve);
-    let merged_knots = merge_knot_vectors(left.curve, right.curve, &left_adjusted, &right_adjusted);
+    let (left_adjusted, right_reversed, right_adjusted) = adjust_knot_vectors(left, right);
+    let merged_knots = merge_knot_vectors(left, right, &left_adjusted, &right_adjusted);
 
     let (left_points, right_points) = adjust_control_points_of_both_curves(
-        left.curve,
+        left,
         &left_shifted,
         &right_shifted,
         &left_adjusted,
@@ -119,40 +104,44 @@ pub(crate) fn merge_with_constraints(left: &ConstrainedCurve, right: &Constraine
         &right_adjusted,
     );
 
-    let merged_points = merge_control_points(left.curve, right.curve, &left_points, &right_points);
+    let merged_points = merge_control_points(left, right, &left_points, &right_points);
 
     Curve::new(Knots::new(left_degree, merged_knots), ControlPoints::new(merged_points))
 }
 
 // The names of the block matrices (kv, kw, iv, jw, gv, hw, ipv, jppw, kconst) follow the notation in `Tai2003`.
-fn construct_system_matrix(left: &ConstrainedCurve, right: &ConstrainedCurve) -> MatD {
-    let degree = left.curve.degree();
+fn construct_system_matrix(left: &Curve, right: &Curve, constraints: &Constraints) -> MatD {
+    let degree = left.degree();
 
-    let left_constraints = left.constraints.count();
-    let right_constraints = right.constraints.count();
+    let left_constraints = constraints.left.len();
+    let right_constraints = constraints.right.len();
 
     let dimension = 3 * degree + left_constraints + right_constraints;
     let mut system_matrix = MatD::zeros(dimension, dimension);
 
     system_matrix.view_mut((0, 0), (2 * degree, 2 * degree)).copy_from(&MatD::identity(2 * degree, 2 * degree));
 
-    system_matrix.view_mut((2 * degree, 0), (degree, degree)).copy_from(&calculate_kv(left.curve));
-    system_matrix.view_mut((2 * degree, degree), (degree, degree)).copy_from(&calculate_kw(right.curve));
+    system_matrix.view_mut((2 * degree, 0), (degree, degree)).copy_from(&calculate_kv(left));
+    system_matrix.view_mut((2 * degree, degree), (degree, degree)).copy_from(&calculate_kw(right));
 
-    system_matrix.view_mut((0, 2 * degree), (degree, degree)).copy_from(&calculate_iv(left.curve));
-    system_matrix.view_mut((degree, 2 * degree), (degree, degree)).copy_from(&calculate_jw(right.curve));
+    system_matrix.view_mut((0, 2 * degree), (degree, degree)).copy_from(&calculate_iv(left));
+    system_matrix.view_mut((degree, 2 * degree), (degree, degree)).copy_from(&calculate_jw(right));
 
     if left_constraints > 0 {
-        system_matrix.view_mut((3 * degree, 0), (left_constraints, degree)).copy_from(&calculate_gv(left));
-        system_matrix.view_mut((0, 3 * degree), (degree, left_constraints)).copy_from(&calculate_ipv(left));
+        system_matrix
+            .view_mut((3 * degree, 0), (left_constraints, degree))
+            .copy_from(&calculate_gv(left, &constraints.left));
+        system_matrix
+            .view_mut((0, 3 * degree), (degree, left_constraints))
+            .copy_from(&calculate_ipv(left, &constraints.left));
     }
     if right_constraints > 0 {
         system_matrix
             .view_mut((3 * degree + left_constraints, degree), (right_constraints, degree))
-            .copy_from(&calculate_hw(right));
+            .copy_from(&calculate_hw(right, &constraints.right));
         system_matrix
             .view_mut((degree, 3 * degree + left_constraints), (degree, right_constraints))
-            .copy_from(&calculate_jppw(right));
+            .copy_from(&calculate_jppw(right, &constraints.right));
     }
 
     system_matrix
@@ -281,72 +270,63 @@ fn calculate_jw(curve: &Curve) -> MatD {
     jw
 }
 
-fn calculate_gv(constrained: &ConstrainedCurve) -> MatD {
-    let degree = constrained.curve.degree();
-    let polygon_segments = constrained.curve.polygon_segments();
-    let knot_values = constrained.curve.knots.vector();
+fn calculate_gv(curve: &Curve, parameters: &[f64]) -> MatD {
+    let degree = curve.degree();
+    let polygon_segments = curve.polygon_segments();
+    let knot_values = curve.knots.vector();
 
-    let constraint_segments = constrained.constraints.polyline_segments();
+    let mut gv = MatD::zeros(parameters.len(), degree);
 
-    let mut gv = MatD::zeros(constraint_segments + 1, degree);
-
-    for g in 0..=constraint_segments {
+    for (g, &u) in parameters.iter().enumerate() {
         for i in polygon_segments - degree + 1..=polygon_segments {
-            gv[(g, i - (polygon_segments - degree + 1))] =
-                basis(knot_values, i, degree, 0, polygon_segments, constrained.constraints.parameters[g]);
+            gv[(g, i - (polygon_segments - degree + 1))] = basis(knot_values, i, degree, 0, polygon_segments, u);
         }
     }
     gv
 }
 
-fn calculate_hw(constrained: &ConstrainedCurve) -> MatD {
-    let degree = constrained.curve.degree();
-    let polygon_segments = constrained.curve.polygon_segments();
-    let knot_values = constrained.curve.knots.vector();
+fn calculate_hw(curve: &Curve, parameters: &[f64]) -> MatD {
+    let degree = curve.degree();
+    let polygon_segments = curve.polygon_segments();
+    let knot_values = curve.knots.vector();
 
-    let constraint_segments = constrained.constraints.polyline_segments();
-    let mut hw = MatD::zeros(constraint_segments + 1, degree);
+    let mut hw = MatD::zeros(parameters.len(), degree);
 
-    for h in 0..=constraint_segments {
+    for (h, &u) in parameters.iter().enumerate() {
         for i in 0..=degree - 1 {
-            hw[(h, i)] = basis(knot_values, i, degree, 0, polygon_segments, constrained.constraints.parameters[h]);
+            hw[(h, i)] = basis(knot_values, i, degree, 0, polygon_segments, u);
         }
     }
 
     hw
 }
 
-fn calculate_ipv(constrained: &ConstrainedCurve) -> MatD {
-    let degree = constrained.curve.degree();
-    let polygon_segments = constrained.curve.polygon_segments();
-    let knot_values = constrained.curve.knots.vector();
+fn calculate_ipv(curve: &Curve, parameters: &[f64]) -> MatD {
+    let degree = curve.degree();
+    let polygon_segments = curve.polygon_segments();
+    let knot_values = curve.knots.vector();
 
-    let constraint_segments = constrained.constraints.polyline_segments();
-
-    let mut ipv = MatD::zeros(degree, constraint_segments + 1);
+    let mut ipv = MatD::zeros(degree, parameters.len());
 
     for i in polygon_segments - degree + 1..=polygon_segments {
-        for g in 0..=constraint_segments {
-            ipv[(i - (polygon_segments + 1 - degree), g)] =
-                basis(knot_values, i, degree, 0, polygon_segments, constrained.constraints.parameters[g]);
+        for (g, &u) in parameters.iter().enumerate() {
+            ipv[(i - (polygon_segments + 1 - degree), g)] = basis(knot_values, i, degree, 0, polygon_segments, u);
         }
     }
     ipv *= -0.5;
     ipv
 }
 
-fn calculate_jppw(constrained: &ConstrainedCurve) -> MatD {
-    let degree = constrained.curve.degree();
-    let polygon_segments = constrained.curve.polygon_segments();
-    let knot_values = constrained.curve.knots.vector();
+fn calculate_jppw(curve: &Curve, parameters: &[f64]) -> MatD {
+    let degree = curve.degree();
+    let polygon_segments = curve.polygon_segments();
+    let knot_values = curve.knots.vector();
 
-    let constraint_segments = constrained.constraints.polyline_segments();
-
-    let mut jppw = MatD::zeros(degree, constraint_segments + 1);
+    let mut jppw = MatD::zeros(degree, parameters.len());
 
     for j in 0..=degree - 1 {
-        for h in 0..=constraint_segments {
-            jppw[(j, h)] = basis(knot_values, j, degree, 0, polygon_segments, constrained.constraints.parameters[h]);
+        for (h, &u) in parameters.iter().enumerate() {
+            jppw[(j, h)] = basis(knot_values, j, degree, 0, polygon_segments, u);
         }
     }
     jppw *= -0.5;
@@ -418,11 +398,9 @@ fn construct_constant_terms(left: &Curve, right: &Curve, total_constraints: usiz
     constant_terms
 }
 
-fn solve_linear_equation_system(left: &ConstrainedCurve, right: &ConstrainedCurve) -> MatD {
-    let total_constraints = left.constraints.count() + right.constraints.count();
-
-    let system_matrix = construct_system_matrix(left, right);
-    let constant_terms = construct_constant_terms(left.curve, right.curve, total_constraints);
+fn solve_linear_equation_system(left: &Curve, right: &Curve, constraints: &Constraints) -> MatD {
+    let system_matrix = construct_system_matrix(left, right, constraints);
+    let constant_terms = construct_constant_terms(left, right, constraints.count());
 
     SVD::new(system_matrix, true, true)
         .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
