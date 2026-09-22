@@ -10,8 +10,8 @@ keywords = ["b-spline", "spline", "curve", "derivatives", "nalgebra"]
 categories = ["mathematics", "algorithms", "graphics"]
 
 readme = "README.md"
-homepage = "https://github.com/michael-a-heuer/bsplines"
-repository = "https://github.com/michael-a-heuer/bsplines"
+homepage = "https://github.com/heueristik/bsplines"
+repository = "https://github.com/heueristik/bsplines"
 documentation = "https://docs.rs/bsplines"
 
 [package.metadata.docs.rs]
@@ -45,4 +45,3 @@ rstest = "0.26.1"
 approx = "0.5.1"
 plotters = "0.3.7"
 plotters-arrows = "0.1.0"
-num-traits = "0.2.19"
