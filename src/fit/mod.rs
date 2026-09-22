@@ -8,6 +8,7 @@ use crate::{
     knots::{KnotMethod, Knots},
     parameters::{ParameterMethod, Parameters},
     points::{ControlPoints, DataPoints},
+    svd::decompose,
 };
 
 pub(crate) mod fixed;
@@ -130,7 +131,7 @@ pub(crate) fn decompose_normal_matrix(
         }
     }
 
-    Ok(SVD::new(normal_matrix, true, true))
+    decompose(normal_matrix)
 }
 
 /// Returns one entry of the finite-difference operator matrix of the order κ — see `Eilers1996`:
@@ -173,6 +174,13 @@ mod tests {
             let result = Curve::fit(&data, 2).polygon_segments(4).penalized(strength, 2).build();
             assert!(matches!(result, Err(Error::InvalidPenalizationStrength { .. })), "the strength {strength}");
         }
+    }
+
+    #[test]
+    fn build_errors_when_the_penalty_overflows() {
+        let data = test_data_points(8);
+        let result = Curve::fit(&data, 2).polygon_segments(4).penalized(f64::MAX, 2).build();
+        assert_eq!(result.err(), Some(Error::NonFiniteValue));
     }
 
     #[test]

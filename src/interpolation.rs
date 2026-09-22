@@ -1,12 +1,14 @@
-use nalgebra::{DMatrix, SVD};
+use nalgebra::DMatrix;
 
 use crate::{
+    error::Result,
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
+    svd::decompose,
 };
 
-pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
+pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> Result<DMatrix<f64>> {
     let polyline_segments = points.polyline_segments();
 
     let u_bar = parameters.vector();
@@ -19,9 +21,9 @@ pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) 
         }
     }
 
-    let svd = SVD::new(basis_matrix, true, true);
+    let svd = decompose(basis_matrix)?;
     let transposed_data = points.matrix().transpose();
-    svd.solve(&transposed_data, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T").transpose()
+    Ok(svd.solve(&transposed_data, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T").transpose())
 }
 
 #[cfg(test)]
@@ -43,7 +45,7 @@ mod tests {
         let parameters = Parameters::generate(&points, ChordLength).unwrap();
         let knots = Knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
 
-        assert_eq!(interpolate(&knots, &points, &parameters), *points.matrix());
+        assert_eq!(interpolate(&knots, &points, &parameters).unwrap(), *points.matrix());
     }
 
     #[test]
@@ -56,7 +58,7 @@ mod tests {
         let knots = Knots::generate(2, points.polyline_segments(), &parameters, Averaging).unwrap();
 
         assert_relative_eq!(
-            interpolate(&knots, &points, &parameters),
+            interpolate(&knots, &points, &parameters).unwrap(),
             dmatrix![
                 1., 1.75, 3.25, 4.;
                 1., 1.75, 3.25, 4.;

@@ -2,7 +2,7 @@
 
 use std::ops::{AddAssign, DivAssign, SubAssign};
 
-use nalgebra::{DMatrix, DVector, SVD};
+use nalgebra::{DMatrix, DVector};
 
 use crate::{
     Curve,
@@ -11,6 +11,7 @@ use crate::{
     knots::{Knots, reversed},
     points,
     points::{ControlPoints, Points},
+    svd::decompose,
     vector_views::VectorViews,
 };
 
@@ -63,7 +64,7 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
         return Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 });
     }
 
-    let shifts = solve_linear_equation_system(left, right, constraints);
+    let shifts = solve_linear_equation_system(left, right, constraints)?;
     let (left_shifted, right_shifted) = shift_boundary_control_points(left, right, &shifts);
 
     let (left_adjusted, right_reversed, right_adjusted) = adjust_knot_vectors(left, right);
@@ -372,14 +373,14 @@ fn calculate_constant_terms(left: &Curve, right: &Curve, total_constraints: usiz
     constant_terms
 }
 
-fn solve_linear_equation_system(left: &Curve, right: &Curve, constraints: &Constraints) -> DMatrix<f64> {
+fn solve_linear_equation_system(left: &Curve, right: &Curve, constraints: &Constraints) -> Result<DMatrix<f64>> {
     let system_matrix = calculate_system_matrix(left, right, constraints);
     let constant_terms = calculate_constant_terms(left, right, constraints.count());
 
-    SVD::new(system_matrix, true, true)
+    Ok(decompose(system_matrix)?
         .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
         .expect("the SVD was computed with both U and V^T")
-        .transpose()
+        .transpose())
 }
 
 fn shift_boundary_control_points(left: &Curve, right: &Curve, shifts: &DMatrix<f64>) -> (DMatrix<f64>, DMatrix<f64>) {

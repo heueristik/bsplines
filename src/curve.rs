@@ -127,7 +127,7 @@ impl Curve {
     ) -> Result<Self> {
         let parameters = Parameters::generate(data, parameter_method)?;
         let knots = Knots::generate(degree, data.polyline_segments(), &parameters, knot_method)?;
-        let control_points = ControlPoints::new(interpolation::interpolate(&knots, data, &parameters));
+        let control_points = ControlPoints::new(interpolation::interpolate(&knots, data, &parameters)?);
         Self::new(knots, control_points)
     }
 
