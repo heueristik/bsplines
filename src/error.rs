@@ -131,8 +131,8 @@ pub enum Error {
         index: usize,
     },
 
-    /// The knot vector must be clamped.
-    #[error("the knot vector must be clamped")]
+    /// The knot vector must be clamped: exactly its first p + 1 knots are equal, and exactly its last p + 1 knots.
+    #[error("the knot vector must be clamped: exactly its first p + 1 and its last p + 1 knots are equal")]
     UnclampedKnots,
 
     /// The knot vector must be normalized to the domain [0, 1].

@@ -256,12 +256,15 @@ impl Knots {
         basis::basis(knots, index, basis_degree, derivative, self.polygon_segments(), u)
     }
 
-    /// Returns whether the first p + 1 knots are equal and the last p + 1 knots are equal,
+    /// Returns whether exactly the first p + 1 knots are equal and exactly the last p + 1 knots are equal,
     /// so a curve starts and ends at its end control points.
     pub fn is_clamped(&self) -> bool {
         let knot_values = self.vector();
-        let last = knot_values.len() - 1;
-        knot_values[0] == knot_values[self.degree] && knot_values[last - self.degree] == knot_values[last]
+        let (degree, last) = (self.degree, knot_values.len() - 1);
+        let is_head_clamped = knot_values[0] == knot_values[degree] && knot_values[degree] < knot_values[degree + 1];
+        let is_tail_clamped = knot_values[last - degree] == knot_values[last] &&
+            knot_values[last - degree - 1] < knot_values[last - degree];
+        is_head_clamped && is_tail_clamped
     }
 
     /// Returns whether the knot values span exactly the domain [0, 1].
@@ -506,6 +509,11 @@ mod tests {
         assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_clamped());
         assert!(Knots::new(1, dvector![2.0, 2.0, 2.5, 3.0, 3.0]).unwrap().is_clamped());
         assert!(!Knots::new(1, dvector![0.0, 0.25, 0.5, 1.0, 1.0]).unwrap().is_clamped());
+        assert!(
+            !Knots::new(1, dvector![0.0, 0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_clamped(),
+            "p + 2 equal first knots"
+        );
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0, 1.0]).unwrap().is_clamped(), "p + 2 equal last knots");
     }
 
     #[test]

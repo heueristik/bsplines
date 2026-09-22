@@ -413,6 +413,13 @@ mod tests {
     }
 
     #[test]
+    fn new_errors_for_more_than_p_plus_1_equal_end_knots() {
+        let knots = Knots::new(2, dvector![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]).unwrap();
+        let points = DMatrix::zeros(1, knots.polygon_segments() + 1);
+        assert_eq!(Curve::new(knots, ControlPoints::new(points)).err(), Some(Error::UnclampedKnots));
+    }
+
+    #[test]
     fn new_errors_for_unnormalized_knots() {
         let knots = Knots::new(1, dvector![0.0, 0.0, 1.0, 2.0, 2.0]).unwrap();
         let points = DMatrix::zeros(1, knots.polygon_segments() + 1);
