@@ -10,8 +10,8 @@ keywords = ["b-spline", "spline", "curve", "derivatives", "nalgebra"]
 categories = ["mathematics", "algorithms", "graphics"]
 
 readme = "README.md"
-homepage = "https://github.com/michael-a-heuer/bsplines"
-repository = "https://github.com/michael-a-heuer/bsplines"
+homepage = "https://github.com/heueristik/bsplines"
+repository = "https://github.com/heueristik/bsplines"
 documentation = "https://docs.rs/bsplines"
 
 [package.metadata.docs.rs]
