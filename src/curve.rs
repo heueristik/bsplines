@@ -137,12 +137,12 @@ impl Curve {
         FitBuilder::new(data, degree)
     }
 
-    /// Returns the knot vector and its derivatives.
+    /// Returns the knot vector.
     pub fn knots(&self) -> &Knots {
         &self.knots
     }
 
-    /// Returns the control points and their derivatives.
+    /// Returns the control points.
     pub fn control_points(&self) -> &ControlPoints {
         &self.control_points
     }
