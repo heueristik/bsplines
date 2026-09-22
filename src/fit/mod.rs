@@ -99,6 +99,9 @@ fn check_input(
         (polygon_segments, _, degree, _) if polygon_segments < degree => {
             Err(Error::TooFewPolygonSegments { degree, polygon_segments })
         }
+        (_, _, _, Some(penalization)) if !(0.0..f64::INFINITY).contains(&penalization.strength) => {
+            Err(Error::InvalidPenalizationStrength { strength: penalization.strength })
+        }
         (polygon_segments, _, _, Some(penalization)) if polygon_segments - 1 < penalization.difference_order => {
             Err(Error::DifferenceOrderTooLarge { difference_order: penalization.difference_order, polygon_segments })
         }
@@ -116,9 +119,6 @@ pub(crate) fn decompose_normal_matrix(
 
     if let Some(penalization) = penalization {
         let strength = penalization.strength;
-        if strength < 0.0 {
-            return Err(Error::NegativePenalizationStrength { strength });
-        }
         if strength > 0.0 {
             if !knots.is_uniform() {
                 return Err(Error::NonUniformKnots);
@@ -163,4 +163,18 @@ pub(crate) fn test_data_points(count: usize) -> DataPoints {
             if column % 2 == 0 { 0.5 } else { -0.5 }
         }
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_errors_for_a_penalization_strength_that_is_negative_or_not_finite() {
+        let data = test_data_points(8);
+        for strength in [-1.0, f64::INFINITY, f64::NAN] {
+            let result = Curve::fit(&data, 2).polygon_segments(4).penalized(strength, 2).build();
+            assert!(matches!(result, Err(Error::InvalidPenalizationStrength { .. })), "the strength {strength}");
+        }
+    }
 }

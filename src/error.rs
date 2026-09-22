@@ -151,9 +151,9 @@ pub enum Error {
         degree: usize,
     },
 
-    /// The penalization strength must not be negative.
-    #[error("the penalization strength {strength} must not be negative")]
-    NegativePenalizationStrength {
+    /// The penalization strength must be finite and not negative.
+    #[error("the penalization strength {strength} must be finite and not negative")]
+    InvalidPenalizationStrength {
         /// The offending penalization strength.
         strength: f64,
     },
