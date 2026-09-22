@@ -37,7 +37,7 @@ fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Param
     for g in 0..=polyline_segments {
         let u = u_bar[g];
         for i in 0..=polygon_segments {
-            basis_matrix[(g, i)] = knots.basis(i, u);
+            basis_matrix[(g, i)] = knots.basis_of_derivative_curve(0, i, u);
         }
     }
     basis_matrix

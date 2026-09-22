@@ -54,60 +54,61 @@ mod tests {
     fn basis_functions_degree_3() {
         let degree = 3;
         let knots = Knots::new(degree, dvector![0., 0., 0., 0., 1. / 3., 2. / 3., 1., 1., 1., 1.]);
+        let basis = |index, u| knots.basis(index, u).unwrap();
 
         let mut i = 0;
-        assert_eq!(knots.basis(i, 0.0), 1.0);
-        assert_eq!(knots.basis(i, 1. / 6.), 1. / 8.);
-        assert_eq!(knots.basis(i, 1. / 3.), 0.0);
-        assert_eq!(knots.basis(i, 1. / 2.), 0.0);
-        assert_eq!(knots.basis(i, 2. / 3.), 0.0);
-        assert_eq!(knots.basis(i, 5. / 6.), 0.0);
-        assert_eq!(knots.basis(i, 1.), 0.0);
+        assert_eq!(basis(i, 0.0), 1.0);
+        assert_eq!(basis(i, 1. / 6.), 1. / 8.);
+        assert_eq!(basis(i, 1. / 3.), 0.0);
+        assert_eq!(basis(i, 1. / 2.), 0.0);
+        assert_eq!(basis(i, 2. / 3.), 0.0);
+        assert_eq!(basis(i, 5. / 6.), 0.0);
+        assert_eq!(basis(i, 1.), 0.0);
 
         i = 1;
-        assert_eq!(knots.basis(i, 0.), 0.0);
-        assert_eq!(knots.basis(i, 1. / 6.), 19. / 32.);
-        assert_eq!(knots.basis(i, 1. / 3.), 1. / 4.);
-        assert_relative_eq!(knots.basis(i, 1. / 2.), 1. / 32., epsilon = f64::EPSILON.sqrt());
-        assert_eq!(knots.basis(i, 2. / 3.), 0.0);
-        assert_eq!(knots.basis(i, 5. / 6.), 0.0);
-        assert_eq!(knots.basis(i, 1.), 0.0);
+        assert_eq!(basis(i, 0.), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 19. / 32.);
+        assert_eq!(basis(i, 1. / 3.), 1. / 4.);
+        assert_relative_eq!(basis(i, 1. / 2.), 1. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 2. / 3.), 0.0);
+        assert_eq!(basis(i, 5. / 6.), 0.0);
+        assert_eq!(basis(i, 1.), 0.0);
 
         i = 2;
-        assert_eq!(knots.basis(i, 0.), 0.0);
-        assert_eq!(knots.basis(i, 1. / 6.), 25. / 96.);
-        assert_eq!(knots.basis(i, 1. / 3.), 7. / 12.);
-        assert_relative_eq!(knots.basis(i, 1. / 2.), 15. / 32., epsilon = f64::EPSILON.sqrt());
-        assert_relative_eq!(knots.basis(i, 2. / 3.), 1. / 6., epsilon = f64::EPSILON.sqrt());
-        assert_relative_eq!(knots.basis(i, 5. / 6.), 1. / 48., epsilon = f64::EPSILON.sqrt());
-        assert_eq!(knots.basis(i, 1.0), 0.0);
+        assert_eq!(basis(i, 0.), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 25. / 96.);
+        assert_eq!(basis(i, 1. / 3.), 7. / 12.);
+        assert_relative_eq!(basis(i, 1. / 2.), 15. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 2. / 3.), 1. / 6., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 5. / 6.), 1. / 48., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 1.0), 0.0);
 
         i = 3;
-        assert_eq!(knots.basis(i, 0.), 0.0);
-        assert_eq!(knots.basis(i, 1. / 6.), 1. / 48.);
-        assert_eq!(knots.basis(i, 1. / 3.), 1. / 6.);
-        assert_relative_eq!(knots.basis(i, 1. / 2.), 15. / 32., epsilon = f64::EPSILON.sqrt());
-        assert_relative_eq!(knots.basis(i, 2. / 3.), 7. / 12., epsilon = f64::EPSILON.sqrt());
-        assert_relative_eq!(knots.basis(i, 5. / 6.), 25. / 96., epsilon = f64::EPSILON.sqrt());
-        assert_eq!(knots.basis(i, 1.0), 0.0);
+        assert_eq!(basis(i, 0.), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 1. / 48.);
+        assert_eq!(basis(i, 1. / 3.), 1. / 6.);
+        assert_relative_eq!(basis(i, 1. / 2.), 15. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 2. / 3.), 7. / 12., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 5. / 6.), 25. / 96., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 1.0), 0.0);
 
         i = 4;
-        assert_eq!(knots.basis(i, 0.), 0.0);
-        assert_eq!(knots.basis(i, 1. / 6.), 0.0);
-        assert_eq!(knots.basis(i, 1. / 3.), 0.0);
-        assert_relative_eq!(knots.basis(i, 1. / 2.), 1. / 32., epsilon = f64::EPSILON.sqrt());
-        assert_relative_eq!(knots.basis(i, 2. / 3.), 1. / 4., epsilon = f64::EPSILON.sqrt());
-        assert_relative_eq!(knots.basis(i, 5. / 6.), 19. / 32., epsilon = f64::EPSILON.sqrt());
-        assert_eq!(knots.basis(i, 1.0), 0.0);
+        assert_eq!(basis(i, 0.), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 0.0);
+        assert_eq!(basis(i, 1. / 3.), 0.0);
+        assert_relative_eq!(basis(i, 1. / 2.), 1. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 2. / 3.), 1. / 4., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 5. / 6.), 19. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 1.0), 0.0);
 
         i = 5;
-        assert_eq!(knots.basis(i, 0.0), 0.0);
-        assert_eq!(knots.basis(i, 1. / 6.), 0.);
-        assert_eq!(knots.basis(i, 1. / 3.), 0.0);
-        assert_eq!(knots.basis(i, 1. / 2.), 0.0);
-        assert_eq!(knots.basis(i, 2. / 3.), 0.0);
-        assert_relative_eq!(knots.basis(i, 5. / 6.), 1. / 8., epsilon = f64::EPSILON.sqrt());
-        assert_eq!(knots.basis(i, 1.), 1.0);
+        assert_eq!(basis(i, 0.0), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 0.);
+        assert_eq!(basis(i, 1. / 3.), 0.0);
+        assert_eq!(basis(i, 1. / 2.), 0.0);
+        assert_eq!(basis(i, 2. / 3.), 0.0);
+        assert_relative_eq!(basis(i, 5. / 6.), 1. / 8., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 1.), 1.0);
     }
 
     #[test]

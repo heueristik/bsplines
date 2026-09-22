@@ -185,12 +185,13 @@ impl Knots {
     /// which is 0 for the curve itself. The condition ⋁ (i = n − k ⋀ u = Uₙ₊₁₋ₖ) closes the last
     /// interval, so the last basis function covers u = 1.
     ///
-    /// Call it on [`Knots::derivative_knots`] to evaluate the basis functions of a derivative curve.
+    /// Returns `None` for an index above n. Call it on [`Knots::derivative_knots`] to evaluate
+    /// the basis functions of a derivative curve.
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-function", "doc-images/equations/basis-function.svg"))]
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-function-zero", "doc-images/equations/basis-function-zero.svg"))]
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-prefactor", "doc-images/equations/basis-prefactor.svg"))]
-    pub fn basis(&self, index: usize, u: f64) -> f64 {
-        self.basis_of_derivative_curve(0, index, u)
+    pub fn basis(&self, index: usize, u: f64) -> Option<f64> {
+        (index <= self.polygon_segments()).then(|| self.basis_of_derivative_curve(0, index, u))
     }
 
     /// Returns the knot vector of the `k`-th derivative curve: this knot vector without its first
@@ -211,7 +212,7 @@ impl Knots {
     ///
     /// // The basis functions sum to one at every parameter of the domain.
     /// let sum: f64 = (0..=first_derivative.polygon_segments())
-    ///     .map(|index| first_derivative.basis(index, 0.25))
+    ///     .map(|index| first_derivative.basis(index, 0.25).unwrap())
     ///     .sum();
     /// assert_eq!(sum, 1.0);
     /// ```
@@ -227,6 +228,7 @@ impl Knots {
     /// Evaluates the `i`-th basis function of the `k`-th derivative curve at the parameter `u`:
     /// the basis function of degree p − k on the knot vector of that derivative.
     pub(crate) fn basis_of_derivative_curve(&self, derivative: usize, index: usize, u: f64) -> f64 {
+        debug_assert!(index <= self.polygon_segments() - derivative, "the basis index must not exceed n − k");
         let knots = &self.derivatives[derivative];
         let basis_degree = self.degree - derivative;
 
@@ -410,7 +412,10 @@ mod tests {
 
             for index in 0..=derivative_knots.polygon_segments() {
                 for u in (0..=8).map(|eighth| f64::from(eighth) / 8.0) {
-                    assert_eq!(derivative_knots.basis(index, u), knots.basis_of_derivative_curve(derivative, index, u));
+                    assert_eq!(
+                        derivative_knots.basis(index, u),
+                        Some(knots.basis_of_derivative_curve(derivative, index, u))
+                    );
                 }
             }
         }
@@ -425,6 +430,15 @@ mod tests {
             knots.derivative_knots(derivative).err(),
             Some(Error::DerivativeExceedsDegree { derivative, degree })
         );
+    }
+
+    #[test]
+    fn basis_returns_none_beyond_the_last_index() {
+        let knots = knots_example(2);
+        let last = knots.polygon_segments();
+
+        assert_eq!(knots.basis(last, 1.0), Some(1.0), "the last basis function is 1 at the end of clamped knots");
+        assert_eq!(knots.basis(last + 1, 1.0), None);
     }
 
     #[test]
