@@ -40,7 +40,7 @@ mod tests {
             1., 2., 3., 4.;
         ]);
 
-        let parameters = Parameters::generate(&points, ChordLength);
+        let parameters = Parameters::generate(&points, ChordLength).unwrap();
         let knots = Knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
 
         assert_eq!(interpolate(&knots, &points, &parameters), *points.matrix());
@@ -52,7 +52,7 @@ mod tests {
             1., 2., 3., 4.;
             1., 2., 3., 4.;
         ]);
-        let parameters = Parameters::generate(&points, ChordLength);
+        let parameters = Parameters::generate(&points, ChordLength).unwrap();
         let knots = Knots::generate(2, points.polyline_segments(), &parameters, Averaging).unwrap();
 
         assert_relative_eq!(

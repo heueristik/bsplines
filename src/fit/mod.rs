@@ -69,7 +69,7 @@ impl<'a> FitBuilder<'a> {
     /// Performs the fit.
     pub fn build(self) -> Result<Curve> {
         let polygon_segments = self.polygon_segments.unwrap_or_else(|| self.data.polyline_segments());
-        let parameters = Parameters::generate(self.data, ParameterMethod::EquallySpaced);
+        let parameters = Parameters::generate(self.data, ParameterMethod::EquallySpaced)?;
         let knots = Knots::generate(self.degree, polygon_segments, &parameters, KnotMethod::Uniform)?;
 
         let points = match self.ends {

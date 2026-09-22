@@ -151,4 +151,26 @@ pub enum Error {
     /// Penalized fitting requires a uniform knot vector (see `Eilers1996`).
     #[error("penalized fitting requires a uniform knot vector")]
     NonUniformKnots,
+
+    /// Parameters need at least two data points: the first gets the parameter 0, the last gets 1.
+    #[error("the data holds {count} points, but at least 2 are needed")]
+    TooFewDataPoints {
+        /// The number of data points.
+        count: usize,
+    },
+
+    /// A data point has a coordinate that is NaN or infinite.
+    #[error("the data point at index {index} has a coordinate that is not finite")]
+    NonFiniteDataPoint {
+        /// The index of the data point.
+        index: usize,
+    },
+
+    /// The chord-length and centripetal methods need data points at two or more positions.
+    #[error("all data points lie at the same position, so their chord lengths give no parameters")]
+    CoincidentDataPoints,
+
+    /// A calculation left the range of `f64` values, for example because the input magnitudes are too large.
+    #[error("a calculation produced a value that is not finite; reduce the magnitude of the input")]
+    NonFiniteValue,
 }

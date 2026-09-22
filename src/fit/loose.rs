@@ -110,7 +110,7 @@ mod tests {
             1., 2., 3., 4., 5.;
         ]);
 
-        let parameters = Parameters::generate(&points, EquallySpaced);
+        let parameters = Parameters::generate(&points, EquallySpaced).unwrap();
         let knots = Knots::generate(1, points.polyline_segments(), &parameters, Uniform).unwrap();
         assert_eq!(fit(&knots, &points, &parameters, None).unwrap(), *points.matrix());
     }
@@ -122,7 +122,7 @@ mod tests {
             1., 2., 3., 4., 5.;
         ]);
 
-        let parameters = Parameters::generate(&points, ChordLength);
+        let parameters = Parameters::generate(&points, ChordLength).unwrap();
         let knots = Knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
         assert_relative_eq!(
             fit(&knots, &points, &parameters, Some(Penalization { strength: 0.5, difference_order: 2 })).unwrap(),
@@ -137,7 +137,7 @@ mod tests {
         let data_points = test_data_points(10);
 
         let polygon_segments = data_points.polyline_segments();
-        let parameters = Parameters::generate(&data_points, EquallySpaced);
+        let parameters = Parameters::generate(&data_points, EquallySpaced).unwrap();
         let knots = Knots::generate(degree, polygon_segments, &parameters, Uniform).unwrap();
 
         assert_relative_eq!(
@@ -152,7 +152,7 @@ mod tests {
         let degree = 2;
         let data_points = test_data_points(10);
 
-        let parameters = Parameters::generate(&data_points, EquallySpaced);
+        let parameters = Parameters::generate(&data_points, EquallySpaced).unwrap();
         let knots = Knots::generate(degree, data_points.polyline_segments(), &parameters, Uniform).unwrap();
         let points = crate::fit::fixed::fit(
             &knots,
