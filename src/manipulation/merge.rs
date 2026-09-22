@@ -17,7 +17,7 @@ use crate::{
 /// The parameters at which the points of two merged curves stay fixed.
 ///
 /// The fields name the side of the joint, for [`Curve::append_constrained`] and
-/// [`Curve::prepend_constrained`] alike. Both curves together take fewer than p constraints.
+/// [`Curve::prepend_constrained`] alike. Both curves together take fewer than p constraints, each in [0, 1].
 ///
 /// | The end of the left curve fixed.      | The start of the right curve fixed.      |
 /// |:-------------------------------------:|:----------------------------------------:|
@@ -55,6 +55,9 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
     let total_constraints = constraints.count();
     if total_constraints >= left_degree {
         return Err(Error::TooManyConstraints { total: total_constraints, degree: left_degree });
+    }
+    if let Some(&u) = constraints.left.iter().chain(&constraints.right).find(|u| !(0.0..=1.0).contains(*u)) {
+        return Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 });
     }
 
     let shifts = solve_linear_equation_system(left, right, constraints);
@@ -609,6 +612,19 @@ mod tests {
 
     fn test_curve(degree: usize, points: DMatrix<f64>) -> Curve {
         Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap()
+    }
+
+    #[test]
+    fn merge_errors_for_a_constraint_outside_the_domain() {
+        let left = test_curve(3, dmatrix![-4., -3., -2., -1.;]);
+        let right = test_curve(3, dmatrix![1., 2., 3., 4.;]);
+
+        let u = 1.5;
+        let constraints = Constraints { left: vec![u], right: vec![] };
+        assert_eq!(merge(&left, &right, &constraints).err(), Some(Error::OutsideDomain { u, min: 0.0, max: 1.0 }));
+
+        let constraints = Constraints { left: vec![], right: vec![f64::NAN] };
+        assert!(matches!(merge(&left, &right, &constraints), Err(Error::OutsideDomain { .. })));
     }
 
     mod knots {
