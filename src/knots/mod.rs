@@ -4,6 +4,7 @@ use nalgebra::{DMatrix, DVector, DVectorView};
 
 use crate::{
     basis,
+    buffer::with_buffer,
     error::{Error, Result},
     parameters::Parameters,
     vector_views::VectorViews,
@@ -199,7 +200,7 @@ impl Knots {
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-function-zero", "doc-images/equations/basis-function-zero.svg"))]
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-prefactor", "doc-images/equations/basis-prefactor.svg"))]
     pub fn basis(&self, index: usize, u: f64) -> Option<f64> {
-        (index <= self.polygon_segments()).then(|| self.basis_of_derivative_curve(0, index, u))
+        (index <= self.polygon_segments()).then(|| basis::basis(self.vector(), index, self.degree, u))
     }
 
     /// Returns the knot vector of the `k`-th derivative curve: this knot vector without its first
@@ -238,23 +239,23 @@ impl Knots {
     /// gets only these.
     pub(crate) fn calculate_basis_matrix(&self, parameters: &DVector<f64>) -> DMatrix<f64> {
         let mut basis_matrix = DMatrix::zeros(parameters.len(), self.polygon_segments() + 1);
-        for (g, &u) in parameters.iter().enumerate() {
-            let span = self.find_span(u, 0);
-            for i in span - self.degree..=span {
-                basis_matrix[(g, i)] = self.basis_of_derivative_curve(0, i, u);
+        with_buffer(self.degree + 1, |basis_values| {
+            for (g, &u) in parameters.iter().enumerate() {
+                let first = self.calculate_nonzero_basis(0, u, basis_values);
+                basis_matrix.view_mut((g, first), (1, basis_values.len())).copy_from_slice(basis_values);
             }
-        }
+        });
         basis_matrix
     }
 
-    /// Evaluates the `i`-th basis function of the `k`-th derivative curve at the parameter `u`:
-    /// the basis function of degree p − k on the knot vector of that derivative.
-    pub(crate) fn basis_of_derivative_curve(&self, derivative: usize, index: usize, u: f64) -> f64 {
-        debug_assert!(index <= self.polygon_segments() - derivative, "the basis index must not exceed n − k");
-        let knots = &self.derivatives[derivative];
+    /// Evaluates the p − k + 1 basis functions of the `k`-th derivative curve that are not zero at the parameter `u`
+    /// into `values`, and returns the index of the first of them.
+    pub(crate) fn calculate_nonzero_basis(&self, derivative: usize, u: f64, values: &mut [f64]) -> usize {
+        let span = self.find_span(u, derivative);
         let basis_degree = self.degree - derivative;
 
-        basis::basis(knots, index, basis_degree, u)
+        basis::calculate_basis_values(&self.derivatives[derivative], span, basis_degree, u, values);
+        span - basis_degree
     }
 
     /// Returns whether exactly the first p + 1 knots are equal and exactly the last p + 1 knots are equal,
@@ -404,12 +405,13 @@ mod tests {
             let derivative_knots = knots.derivative_knots(derivative).unwrap();
             assert_eq!(derivative_knots.vector(), &knots.derivatives[derivative]);
 
-            for index in 0..=derivative_knots.polygon_segments() {
-                for u in (0..=8).map(|eighth| f64::from(eighth) / 8.0) {
-                    assert_eq!(
-                        derivative_knots.basis(index, u),
-                        Some(knots.basis_of_derivative_curve(derivative, index, u))
-                    );
+            let mut basis_values = vec![0.0; knots.degree() - derivative + 1];
+            for u in (0..=8).map(|eighth| f64::from(eighth) / 8.0) {
+                let first = knots.calculate_nonzero_basis(derivative, u, &mut basis_values);
+                for index in 0..=derivative_knots.polygon_segments() {
+                    let offset = index.checked_sub(first);
+                    let expected = offset.and_then(|offset| basis_values.get(offset)).copied().unwrap_or(0.0);
+                    assert_eq!(derivative_knots.basis(index, u), Some(expected));
                 }
             }
         }
