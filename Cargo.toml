@@ -38,10 +38,10 @@ type_complexity = "allow"
 [dependencies]
 embed-doc-image = "0.1.4"
 nalgebra = "0.35.0"
-thiserror = "2.0.19"
+thiserror = "2.0.20"
 
 [dev-dependencies]
-rstest = "0.26.1"
+rstest = "0.27.0"
 approx = "0.5.1"
 plotters = "0.3.7"
 plotters-arrows = "0.1.0"
