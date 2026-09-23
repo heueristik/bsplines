@@ -1,40 +1,38 @@
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.svg")))]
-//! Implements the knot vector defining the [spline basis functions][basis].
-//!
-//! The knot vector parametrizing the `k`-th degree curve is composed of `n+p+2 - 2k` scalar values
-//! in ascending order, called 'knots'.
-//!
-//! ![The knot vector][eq-knots]
-//!
-//! The head and tail contains of `p-k+1` knots of value `0` and `1`, respectively.
-//! This leaves `n-p` internal knots in the center.
-//! The interval from index `i = p-k,..., n+1-k` is called 'domain'.
-//!
-//! Different knot vector generation methods are available via [KnotMethod].
+//! Implements the knot vector.
 
 use std::ops::MulAssign;
 
+use nalgebra::{DVector, DVectorView};
+
 use crate::{
     basis,
-    error::Result,
+    error::{Error, Result},
     parameters::Parameters,
-    types::{VecD, VecDView, VecHelpers},
+    vector_views::VectorViews,
 };
 
 pub(crate) mod methods;
 
 /// The knot vector U of a curve and the knot vectors of its derivatives.
+///
+/// The knot vector of the k-th derivative curve holds n + p + 2 − 2k knots in non-decreasing order:
+///
+/// ![The knot vector][eq-knots]
+///
+/// with the number of polygon segments n, the degree p, and the derivative order k. The first
+/// p − k + 1 knots are 0 and the last p − k + 1 knots are 1, which leaves the n − p internal knots
+/// between them. The knots from index p − k to n + 1 − k span the domain. [`KnotMethod`] lists
+/// the methods that generate a knot vector.
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.svg"))]
 #[derive(Debug, Clone)]
 pub struct Knots {
     /// The knot vectors of the curve and of its derivatives, indexed by derivative order.
-    pub(crate) derivatives: Vec<VecD>,
+    pub(crate) derivatives: Vec<DVector<f64>>,
     pub(crate) degree: usize,
-    pub(crate) max_derivative: usize,
 }
 
 /// The method generating a clamped knot vector for a curve of degree p with n polygon segments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KnotMethod {
     /// Spaces the internal knots equally — eq. (9.7) in `Piegl1997`.
     /// Use only with evenly distributed control points.
@@ -47,16 +45,21 @@ pub enum KnotMethod {
     Averaging,
 }
 
-/// Generates a clamped knot vector with the given method from the parameters ū.
-pub fn generate(degree: usize, polygon_segments: usize, parameters: &Parameters, method: KnotMethod) -> Result<Knots> {
-    match method {
-        KnotMethod::Uniform => methods::uniform(degree, polygon_segments),
-        KnotMethod::DeBoor => methods::de_boor(degree, polygon_segments, parameters),
-        KnotMethod::Averaging => methods::averaging(degree, polygon_segments, parameters),
-    }
-}
-
 impl Knots {
+    /// Generates a clamped knot vector with the given method from the parameters ū.
+    pub fn generate(
+        degree: usize,
+        polygon_segments: usize,
+        parameters: &Parameters,
+        method: KnotMethod,
+    ) -> Result<Self> {
+        match method {
+            KnotMethod::Uniform => methods::uniform(degree, polygon_segments),
+            KnotMethod::DeBoor => methods::de_boor(degree, polygon_segments, parameters),
+            KnotMethod::Averaging => methods::averaging(degree, polygon_segments, parameters),
+        }
+    }
+
     /// Returns a clamped, uniform knot vector for a curve of the given degree
     /// with `n` polygon segments.
     pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Self> {
@@ -65,34 +68,23 @@ impl Knots {
 
     /// Returns knots for a curve of the given degree from the given knot values,
     /// deriving the knot vectors of all derivative orders.
-    pub fn new(degree: usize, knots: VecD) -> Self {
-        let mut derivatives: Vec<VecD> = Vec::with_capacity(degree + 1);
+    pub fn new(degree: usize, knots: DVector<f64>) -> Self {
+        let mut derivatives: Vec<DVector<f64>> = Vec::with_capacity(degree + 1);
         derivatives.push(knots);
 
-        let mut knots = Knots { derivatives, degree, max_derivative: 0 };
+        let mut knots = Knots { derivatives, degree };
         knots.derive();
         knots
     }
 
     /// Returns the knot vector of the curve.
-    pub fn vector(&self) -> &VecD {
+    pub fn vector(&self) -> &DVector<f64> {
         &self.derivatives[0]
     }
 
-    /// Returns the mutable knot vector of the curve.
-    /// Call [`Knots::derive`] afterwards to refresh the derivative knot vectors.
-    pub fn vector_mut(&mut self) -> &mut VecD {
-        &mut self.derivatives[0]
-    }
-
     /// Returns the knot vector of the `k`-th derivative curve.
-    pub fn vector_derivative(&self, derivative: usize) -> &VecD {
+    pub(crate) fn vector_derivative(&self, derivative: usize) -> &DVector<f64> {
         &self.derivatives[derivative]
-    }
-
-    /// Returns the mutable knot vector of the `k`-th derivative curve.
-    pub fn vector_derivative_mut(&mut self, derivative: usize) -> &mut VecD {
-        &mut self.derivatives[derivative]
     }
 
     /// Returns the degree p of the curve the knots parametrize.
@@ -105,44 +97,26 @@ impl Knots {
         self.derivatives[0].len() - (self.degree + 2)
     }
 
-    /// Returns the number of knots of the `k`-th derivative knot vector.
-    pub fn len(&self, derivative: usize) -> usize {
-        self.derivatives[derivative].len()
-    }
-
-    /// Returns the number of internal knots, i.e. those between the clamps.
-    pub fn internal_count(&self) -> usize {
+    fn internal_count(&self) -> usize {
         self.polygon_segments() - self.degree
     }
 
     /// Returns a view of the internal knots.
-    pub fn internal(&self) -> VecDView<'_> {
+    pub fn internal(&self) -> DVectorView<'_, f64> {
         self.derivatives[0].segment(self.degree + 1, self.internal_count())
     }
 
-    /// Returns the `i`-th internal knot.
-    pub fn internal_knot(&self, index: usize) -> f64 {
-        self.internal()[index]
-    }
-
-    /// Returns the number of knots in the domain.
-    pub fn domain_count(&self) -> usize {
+    fn domain_count(&self) -> usize {
         self.polygon_segments() - self.degree + 2
     }
 
     /// Returns a view of the domain knots, spanning from knot p to knot n + 1.
-    pub fn domain(&self) -> VecDView<'_> {
+    pub fn domain(&self) -> DVectorView<'_, f64> {
         self.domain_derivative(0)
     }
 
-    /// Returns a view of the domain knots of the `k`-th derivative knot vector.
-    pub fn domain_derivative(&self, derivative: usize) -> VecDView<'_> {
+    fn domain_derivative(&self, derivative: usize) -> DVectorView<'_, f64> {
         self.derivatives[derivative].segment(self.degree - derivative, self.domain_count())
-    }
-
-    /// Returns the `i`-th domain knot.
-    pub fn domain_knot(&self, index: usize) -> f64 {
-        self.domain()[index]
     }
 
     /// Returns how often the knot value `u` occurs in the domain.
@@ -165,28 +139,16 @@ impl Knots {
         self
     }
 
-    /// Rescales all knot vectors from the limits `old_lim` to `new_lim`.
-    pub fn rescale(&mut self, old_lim: (f64, f64), new_lim: (f64, f64)) {
-        for knots in self.derivatives.iter_mut() {
-            rescale(knots, old_lim, new_lim);
-        }
-    }
-
-    /// Returns the highest derivative order for which a knot vector is available.
-    pub fn max_derivative(&self) -> usize {
-        self.max_derivative
-    }
-
     /// Derives the knot vectors of all derivative orders from the curve's knot vector.
     /// The `k`-th derivative knot vector drops the first and last knot of the previous order.
-    pub fn derive(&mut self) {
+    pub(crate) fn derive(&mut self) {
         self.derivatives.truncate(1);
         for derivative in 1..=self.degree {
-            let trimmed = self.derivatives[derivative - 1].segment(1, self.len(derivative - 1) - 2).clone_owned();
+            let previous = &self.derivatives[derivative - 1];
+            let trimmed = previous.segment(1, previous.len() - 2).clone_owned();
 
             self.derivatives.push(trimmed);
         }
-        self.max_derivative = self.degree;
     }
 
     /// Returns the index `i` of the last domain knot on the interval
@@ -206,64 +168,118 @@ impl Knots {
         span
     }
 
-    /// Evaluates the `i`-th basis function of the `k`-th derivative knot vector at the parameter `u`,
-    /// where `p` is the degree of the curve itself, so the basis degree is p − k.
-    pub fn evaluate(&self, derivative: usize, index: usize, degree: usize, u: f64) -> f64 {
+    /// Evaluates the `i`-th basis function of degree p at the parameter `u`
+    /// by the Cox-de Boor-Mansfield recurrence:
+    ///
+    /// ![The Cox-de Boor-Mansfield recurrence relation][eq-basis-function]
+    ///
+    /// with the basis functions of degree 0
+    ///
+    /// ![Basis function of degree zero][eq-basis-function-zero]
+    ///
+    /// and the prefactors
+    ///
+    /// ![Prefactors][eq-basis-prefactor]
+    ///
+    /// with the knots U, the degree p, the number of polygon segments n, and the derivative order k,
+    /// which is 0 for the curve itself. The condition ⋁ (i = n − k ⋀ u = Uₙ₊₁₋ₖ) closes the last
+    /// interval, so the last basis function covers u = 1.
+    ///
+    /// Returns `None` for an index above n. Call it on [`Knots::derivative_knots`] to evaluate
+    /// the basis functions of a derivative curve.
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-function", "doc-images/equations/basis-function.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-function-zero", "doc-images/equations/basis-function-zero.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-basis-prefactor", "doc-images/equations/basis-prefactor.svg"))]
+    pub fn basis(&self, index: usize, u: f64) -> Option<f64> {
+        (index <= self.polygon_segments()).then(|| self.basis_of_derivative_curve(0, index, u))
+    }
+
+    /// Returns the knot vector of the `k`-th derivative curve: this knot vector without its first
+    /// and last k knots, with the degree p − k. Its [basis functions][Knots::basis] are the basis
+    /// functions of the derivative curve. The derivative order must not exceed the degree p.
+    ///
+    /// # Examples
+    /// ```
+    /// use bsplines::Knots;
+    ///
+    /// let degree = 3;
+    /// let polygon_segments = 4;
+    /// let knots = Knots::uniform(degree, polygon_segments).unwrap();
+    ///
+    /// let first_derivative = knots.derivative_knots(1).unwrap();
+    /// assert_eq!(first_derivative.degree(), degree - 1);
+    /// assert_eq!(first_derivative.polygon_segments(), polygon_segments - 1);
+    ///
+    /// // The basis functions sum to one at every parameter of the domain.
+    /// let sum: f64 = (0..=first_derivative.polygon_segments())
+    ///     .map(|index| first_derivative.basis(index, 0.25).unwrap())
+    ///     .sum();
+    /// assert_eq!(sum, 1.0);
+    /// ```
+    pub fn derivative_knots(&self, derivative: usize) -> Result<Self> {
+        let degree = self.degree;
+        if derivative > degree {
+            return Err(Error::DerivativeExceedsDegree { derivative, degree });
+        }
+
+        Ok(Knots::new(degree - derivative, self.derivatives[derivative].clone()))
+    }
+
+    /// Evaluates the `i`-th basis function of the `k`-th derivative curve at the parameter `u`:
+    /// the basis function of degree p − k on the knot vector of that derivative.
+    pub(crate) fn basis_of_derivative_curve(&self, derivative: usize, index: usize, u: f64) -> f64 {
+        debug_assert!(index <= self.polygon_segments() - derivative, "the basis index must not exceed n − k");
         let knots = &self.derivatives[derivative];
-        let polygon_segments = self.polygon_segments();
-        let basis_degree = degree - derivative;
+        let basis_degree = self.degree - derivative;
 
-        basis::basis(knots, index, basis_degree, derivative, polygon_segments, u)
+        basis::basis(knots, index, basis_degree, derivative, self.polygon_segments(), u)
+    }
+
+    /// Returns whether the first and last knot value are each repeated p + 1 times,
+    /// so a curve starts and ends at its end control points.
+    pub fn is_clamped(&self) -> bool {
+        let knot_values = self.vector();
+        let clamp_size = self.degree + 1;
+
+        let is_head_clamped = knot_values.iter().take(clamp_size).all(|&u| u == 0.0);
+        let is_tail_clamped = knot_values.iter().rev().take(clamp_size).all(|&u| u == 1.0);
+
+        is_head_clamped && is_tail_clamped
+    }
+
+    /// Returns whether the knot values span exactly the domain [0, 1].
+    pub fn is_normalized(&self) -> bool {
+        let knot_values = self.vector();
+
+        let is_min_zero = knot_values.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
+        let is_max_unity = knot_values.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
+
+        is_min_zero && is_max_unity
+    }
+
+    /// Returns whether the knot values are in non-decreasing order.
+    pub fn is_sorted(&self) -> bool {
+        let mut values = self.derivatives[0].iter();
+        match values.next() {
+            None => true,
+            Some(first) => values
+                .scan(first, |state, next| {
+                    let cmp = *state <= next;
+                    *state = next;
+                    Some(cmp)
+                })
+                .all(|b| b),
+        }
+    }
+
+    /// Returns whether the knot values equal the clamped, uniform knot vector
+    /// of the same degree and number of polygon segments.
+    pub fn is_uniform(&self) -> bool {
+        methods::uniform(self.degree, self.polygon_segments()).is_ok_and(|uniform| uniform.vector() == self.vector())
     }
 }
 
-/// Returns whether the first and last knot value are each repeated p + 1 times,
-/// so a curve starts and ends at its end control points.
-pub fn is_clamped(knots: &Knots) -> bool {
-    let knot_values = knots.vector();
-    let clamp_size = knots.degree + 1;
-
-    let is_head_clamped = knot_values.iter().take(clamp_size).all(|&u| u == 0.0);
-    let is_tail_clamped = knot_values.iter().rev().take(clamp_size).all(|&u| u == 1.0);
-
-    is_head_clamped && is_tail_clamped
-}
-
-/// Returns whether the knot values span exactly the domain [0, 1].
-pub fn is_normalized(knots: &Knots) -> bool {
-    let knot_values = knots.vector();
-
-    let is_min_zero = knot_values.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
-    let is_max_unity = knot_values.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
-
-    is_min_zero && is_max_unity
-}
-
-/// Returns whether the knot values are in non-decreasing order.
-pub fn is_sorted(knots: &Knots) -> bool {
-    let mut values = knots.derivatives[0].iter();
-    match values.next() {
-        None => true,
-        Some(first) => values
-            .scan(first, |state, next| {
-                let cmp = *state <= next;
-                *state = next;
-                Some(cmp)
-            })
-            .all(|b| b),
-    }
-}
-
-/// Returns whether the knot values equal a clamped, uniform knot vector.
-pub fn is_uniform(knots: &Knots) -> Result<bool> {
-    let knot_values = knots.vector();
-
-    let expected = methods::uniform(knots.degree(), knots.polygon_segments())?;
-
-    Ok(knot_values.eq(expected.vector()))
-}
-
-pub(crate) fn reverse(knots: &mut VecD) {
+pub(crate) fn reverse(knots: &mut DVector<f64>) {
     let nrows = knots.nrows();
     let half_nrows = knots.len() / 2;
 
@@ -275,32 +291,25 @@ pub(crate) fn reverse(knots: &mut VecD) {
     knots.mul_assign(-1.0);
 }
 
-pub(crate) fn reversed(knots: &VecD) -> VecD {
+pub(crate) fn reversed(knots: &DVector<f64>) -> DVector<f64> {
     let mut copy = knots.clone();
     reverse(&mut copy);
     copy
 }
 
 /// Normalizes the knot values to the domain [0, 1] in place.
-pub fn normalize(knots: &mut VecD) {
+pub(crate) fn normalize(knots: &mut DVector<f64>) {
     let old_lim = (knots.min(), knots.max());
 
     rescale(knots, old_lim, (0.0, 1.0))
 }
 
-/// Returns a copy of the knot values normalized to the domain [0, 1].
-pub fn normalized(knots: &mut VecD) -> VecD {
-    let mut copy = knots.clone();
-    normalize(&mut copy);
-    copy
-}
-
-fn rescale(knots: &mut VecD, old_lim: (f64, f64), new_lim: (f64, f64)) {
+fn rescale(knots: &mut DVector<f64>, old_lim: (f64, f64), new_lim: (f64, f64)) {
     let len = knots.len();
-    *knots -= VecD::repeat(len, old_lim.0);
+    *knots -= DVector::repeat(len, old_lim.0);
     *knots /= old_lim.1 - old_lim.0;
     *knots *= new_lim.1 - new_lim.0;
-    *knots += VecD::repeat(len, new_lim.0);
+    *knots += DVector::repeat(len, new_lim.0);
 }
 
 #[cfg(test)]
@@ -394,6 +403,45 @@ mod tests {
     }
 
     #[test]
+    fn derivative_knots_carry_the_basis_functions_of_the_derivative_curve() {
+        let knots = Knots::new(3, dvector![0., 0., 0., 0., 0.25, 0.5, 0.5, 1., 1., 1., 1.]);
+
+        for derivative in 0..=knots.degree() {
+            let derivative_knots = knots.derivative_knots(derivative).unwrap();
+            assert_eq!(derivative_knots.vector(), knots.vector_derivative(derivative));
+
+            for index in 0..=derivative_knots.polygon_segments() {
+                for u in (0..=8).map(|eighth| f64::from(eighth) / 8.0) {
+                    assert_eq!(
+                        derivative_knots.basis(index, u),
+                        Some(knots.basis_of_derivative_curve(derivative, index, u))
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn derivative_knots_errors_above_the_degree() {
+        let knots = knots_example(2);
+        let degree = knots.degree();
+        let derivative = degree + 1;
+        assert_eq!(
+            knots.derivative_knots(derivative).err(),
+            Some(Error::DerivativeExceedsDegree { derivative, degree })
+        );
+    }
+
+    #[test]
+    fn basis_returns_none_beyond_the_last_index() {
+        let knots = knots_example(2);
+        let last = knots.polygon_segments();
+
+        assert_eq!(knots.basis(last, 1.0), Some(1.0), "the last basis function is 1 at the end of clamped knots");
+        assert_eq!(knots.basis(last + 1, 1.0), None);
+    }
+
+    #[test]
     fn normalize() {
         let mut knots = Knots::new(1, dvector![1.0, 1.0, 1.5, 2.0, 2.0]);
         knots.normalize();
@@ -409,26 +457,26 @@ mod tests {
 
     #[test]
     fn is_sorted_test() {
-        assert!(is_sorted(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
-        assert!(!is_sorted(&Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0])));
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_sorted());
+        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).is_sorted());
     }
 
     #[test]
     fn is_clamped_test() {
-        assert!(is_clamped(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
-        assert!(!is_clamped(&Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0])));
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_clamped());
+        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).is_clamped());
     }
 
     #[test]
     fn is_normalized_test() {
-        assert!(is_normalized(&Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0])));
-        assert!(!is_normalized(&Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0])));
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_normalized());
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0]).is_normalized());
     }
 
     #[test]
     fn is_uniform_test() {
-        assert!(is_uniform(&Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0])).unwrap());
-        assert!(!is_uniform(&Knots::new(1, dvector![0.0, 0.0, 0.25, 0.75, 1.0, 1.0])).unwrap());
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).is_uniform());
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 0.25, 0.75, 1.0, 1.0]).is_uniform());
     }
 
     #[rstest(u, expected, case(0.24, 1), case(0.25, 2), case(0.26, 2), case(0.74, 3), case(0.75, 4), case(0.76, 4))]

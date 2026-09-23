@@ -1,7 +1,8 @@
+use nalgebra::DVector;
+
 use crate::{
     parameters::Parameters,
     points::{DataPoints, Points},
-    types::VecD,
 };
 
 /// Generates one parameter per data point, equally spaced on [0, 1] — eq. (9.3) in `Piegl1997`:
@@ -12,14 +13,14 @@ use crate::{
 ///
 /// Not recommended for unevenly spaced data, as it can produce erratic shapes such as loops.
 pub fn equally_spaced(polyline_segments: usize) -> Parameters {
-    let mut u_bar = VecD::zeros(polyline_segments + 1);
+    let mut u_bar = DVector::zeros(polyline_segments + 1);
 
     for g in 1..polyline_segments {
         u_bar[g] = g as f64 / polyline_segments as f64;
     }
     u_bar[polyline_segments] = 1f64;
 
-    Parameters { vector: u_bar, polyline_segments }
+    Parameters::new(u_bar)
 }
 
 /// Generates the parameters by the centripetal method — eq. (9.6) in `Piegl1997`:
@@ -35,7 +36,7 @@ pub fn centripetal(points: &DataPoints) -> Parameters {
     let mut sum = 0.0;
 
     for g in 1..=polyline_segments {
-        let chord = points.get(g) - points.get(g - 1);
+        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
         sum += chord.norm().sqrt()
     }
 
@@ -45,16 +46,16 @@ pub fn centripetal(points: &DataPoints) -> Parameters {
         sum
     );
 
-    let mut u_bar = VecD::zeros(polyline_segments + 1);
+    let mut u_bar = DVector::zeros(polyline_segments + 1);
 
     for g in 1..polyline_segments {
-        let chord = points.get(g) - points.get(g - 1);
+        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
         u_bar[g] = u_bar[g - 1] + chord.norm().sqrt() / sum;
     }
 
     u_bar[polyline_segments] = 1.0;
 
-    Parameters { vector: u_bar, polyline_segments }
+    Parameters::new(u_bar)
 }
 
 /// Generates the parameters by the chord-length method — eqs. (9.4) and (9.5) in `Piegl1997`:
@@ -68,19 +69,19 @@ pub fn chord_length(points: &DataPoints) -> Parameters {
     let mut sum = 0f64;
 
     for g in 1..=polyline_segments {
-        let chord = points.get(g) - points.get(g - 1);
+        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
         sum += chord.norm();
     }
 
-    let mut u_bar = VecD::zeros(polyline_segments + 1);
+    let mut u_bar = DVector::zeros(polyline_segments + 1);
     for g in 1..polyline_segments {
-        let chord = points.get(g) - points.get(g - 1);
+        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
         u_bar[g] = u_bar[g - 1] + chord.norm() / sum;
     }
 
     u_bar[polyline_segments] = 1f64;
 
-    Parameters { vector: u_bar, polyline_segments }
+    Parameters::new(u_bar)
 }
 
 #[cfg(test)]

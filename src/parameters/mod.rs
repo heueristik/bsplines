@@ -4,7 +4,9 @@
 //! - Centripetal method
 //! - Chord-length method
 
-use crate::{points::DataPoints, types::VecD};
+use nalgebra::DVector;
+
+use crate::points::DataPoints;
 
 pub(crate) mod methods;
 
@@ -12,28 +14,38 @@ pub(crate) mod methods;
 /// one per data point.
 #[derive(Debug, Clone)]
 pub struct Parameters {
-    vector: VecD,
-    polyline_segments: usize,
+    vector: DVector<f64>,
 }
 
 impl Parameters {
-    /// Returns parameters from the given values, associated with a data polyline of `m` segments.
-    pub fn new(vector: VecD, polyline_segments: usize) -> Self {
-        Parameters { vector, polyline_segments }
+    /// Generates the parameters ū for the data points with the given method.
+    pub fn generate(data: &DataPoints, method: ParameterMethod) -> Self {
+        match method {
+            ParameterMethod::EquallySpaced => methods::equally_spaced(data.polyline_segments()),
+            ParameterMethod::ChordLength => methods::chord_length(data),
+            ParameterMethod::Centripetal => methods::centripetal(data),
+        }
+    }
+
+    /// Returns parameters from the given values, one per data point.
+    pub fn new(vector: DVector<f64>) -> Self {
+        Parameters { vector }
     }
 
     /// Returns the parameter values ū.
-    pub fn vector(&self) -> &VecD {
+    pub fn vector(&self) -> &DVector<f64> {
         &self.vector
     }
 
-    /// Returns the number of polyline segments `m` of the data the parameters belong to.
+    /// Returns the number of polyline segments m of the data the parameters belong to —
+    /// one less than the number of parameters.
     pub fn polyline_segments(&self) -> usize {
-        self.polyline_segments
+        self.vector.len() - 1
     }
 }
 
 /// The method assigning a parameter value ū to every data point.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ParameterMethod {
     /// Distributes the parameters equally — eq. (9.3) in `Piegl1997`.
     /// Simple, but risks erratic shapes when the data is unevenly spaced.
@@ -44,13 +56,4 @@ pub enum ParameterMethod {
     /// Distributes the parameters proportionally to the chord lengths — eq. (9.5) in `Piegl1997`.
     /// The most common choice, approximating a uniform parametrization with respect to arc length.
     ChordLength,
-}
-
-/// Generates the parameters ū for the data points with the given method.
-pub fn generate(points: &DataPoints, method: ParameterMethod) -> Parameters {
-    match method {
-        ParameterMethod::EquallySpaced => methods::equally_spaced(points.polyline_segments()),
-        ParameterMethod::ChordLength => methods::chord_length(points),
-        ParameterMethod::Centripetal => methods::centripetal(points),
-    }
 }

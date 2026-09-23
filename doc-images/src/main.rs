@@ -3,14 +3,7 @@ use std::ops::AddAssign;
 use nalgebra::{dmatrix, dvector};
 use plotters::{prelude::*, style::full_palette::TEAL};
 
-use bsplines::{
-    Curve,
-    manipulation::{
-        merge::{merge, merge_from, merge_to},
-        split::split_and_normalize,
-    },
-    points::{ControlPoints, DataPoints, Points},
-};
+use bsplines::{Constraints, ControlPoints, Curve, DataPoints, Points};
 
 use crate::visualization::Limits;
 
@@ -36,11 +29,11 @@ fn scattered_data_points() -> DataPoints {
 
 fn example_spline(p: usize) -> Curve {
     Curve::with_uniform_knots(
-        p,
         ControlPoints::new(dmatrix![
             -2.5,-1.5,-0.5, 1.0, 2.0, 0.0;
             -2.5, 1.0,-1.5,-2.0, 1.0, 2.0;
         ]),
+        p,
     )
     .unwrap()
 }
@@ -75,24 +68,24 @@ fn interpolation_plot() {
 
 fn manual_plot() {
     let dp = scattered_data_points();
-    let c = Curve::with_uniform_knots(2, ControlPoints::new(dp.matrix().clone())).unwrap();
+    let c = Curve::with_uniform_knots(ControlPoints::new(dp.matrix().clone()), 2).unwrap();
     visualization::generate_2d_plot("generation/manual.svg", vec![(&c, RED_100)], &limits(), Some(&dp));
 }
 
 fn derivatives_plot() {
     let mut bs_k0 = Curve::with_uniform_knots(
-        3,
         ControlPoints::new(dmatrix![
             -0.25, -0.05, 0.0, 0.05, 0.25;
         ]),
+        3,
     )
     .unwrap();
 
     let lim = Limits { min: vec![-4.4], max: vec![9.0] };
 
-    let bs_k1 = bs_k0.derivative_curve(1);
-    let bs_k2 = bs_k0.derivative_curve(2);
-    let bs_k3 = bs_k0.derivative_curve(3);
+    let bs_k1 = bs_k0.derivative_curve(1).unwrap();
+    let bs_k2 = bs_k0.derivative_curve(2).unwrap();
+    let bs_k3 = bs_k0.derivative_curve(3).unwrap();
 
     visualization::generate_1d_plot(
         "derivatives.svg",
@@ -101,9 +94,9 @@ fn derivatives_plot() {
     );
 
     bs_k0.reverse(); // p = 3 CORRECT
-    let bs_k1_rev = bs_k0.derivative_curve(1); // p = 2 WRONG
-    let bs_k2_rev = bs_k0.derivative_curve(2); // p = 1 CORRECT
-    let bs_k3_rev = bs_k0.derivative_curve(3); // p = 0 WRONG
+    let bs_k1_rev = bs_k0.derivative_curve(1).unwrap(); // p = 2 WRONG
+    let bs_k2_rev = bs_k0.derivative_curve(2).unwrap(); // p = 1 CORRECT
+    let bs_k3_rev = bs_k0.derivative_curve(3).unwrap(); // p = 0 WRONG
 
     visualization::generate_1d_plot(
         "derivatives-reversed.svg",
@@ -119,7 +112,7 @@ fn insert_plots() {
     let u = 0.8;
     visualization::generate_2d_plot("manipulation/insert-before.svg", vec![(&c, RED_100)], &lim, None);
 
-    c.insert_times(u, 1).unwrap();
+    c.insert_knot(u).unwrap();
 
     visualization::generate_2d_plot("manipulation/insert-after.svg", vec![(&c, BLUE_100)], &lim, None);
 }
@@ -128,7 +121,7 @@ fn split_plots() {
     let c = example_spline(2);
     let lim = Limits { min: vec![-3., -3.], max: vec![3., 3.] };
     visualization::generate_2d_plot("manipulation/split-before.svg", vec![(&c, PURPLE_100)], &lim, None);
-    let (a, b) = split_and_normalize(&c, 0.5, (true, true)).unwrap();
+    let (a, b) = c.split(0.5).unwrap();
     visualization::generate_2d_plot("manipulation/split-after.svg", vec![(&a, RED_100), (&b, BLUE_100)], &lim, None);
 }
 
@@ -142,10 +135,10 @@ fn reverse_plots() {
 
 fn merge_plots() {
     let c = example_spline(2);
-    let (l_unshifted, r_unshifted) = split_and_normalize(&c, 0.5, (true, true)).unwrap();
+    let (l_unshifted, r_unshifted) = c.split(0.5).unwrap();
 
-    let mut points_a = l_unshifted.points().matrix().clone();
-    let mut points_b = r_unshifted.points().matrix().clone();
+    let mut points_a = l_unshifted.control_points().matrix().clone();
+    let mut points_b = r_unshifted.control_points().matrix().clone();
 
     // Shift points
     points_a.column_mut(points_a.ncols() - 1).add_assign(dvector![0.25, -0.25]);
@@ -154,24 +147,28 @@ fn merge_plots() {
     let a = Curve::new(l_unshifted.knots().clone(), ControlPoints::new(points_a)).unwrap();
     let b = Curve::new(r_unshifted.knots().clone(), ControlPoints::new(points_b)).unwrap();
 
+    let mut merged = a.clone();
+    merged.append(&b).unwrap();
+
+    let mut left_end_constrained = a.clone();
+    left_end_constrained.append_constrained(&b, Constraints { left: vec![1.0], right: vec![] }).unwrap();
+
+    let mut right_start_constrained = a.clone();
+    right_start_constrained.append_constrained(&b, Constraints { left: vec![], right: vec![0.0] }).unwrap();
+
     let lim = limits();
 
     visualization::generate_2d_plot("manipulation/merge-before.svg", vec![(&a, RED_100), (&b, BLUE_100)], &lim, None);
-    visualization::generate_2d_plot(
-        "manipulation/merge-after.svg",
-        vec![(&merge(&a, &b).unwrap(), PURPLE_100)],
-        &lim,
-        None,
-    );
+    visualization::generate_2d_plot("manipulation/merge-after.svg", vec![(&merged, PURPLE_100)], &lim, None);
     visualization::generate_2d_plot(
         "manipulation/merge-after-left-end-constrained.svg",
-        vec![(&merge_from(&a, &b).unwrap(), PURPLE_100)],
+        vec![(&left_end_constrained, PURPLE_100)],
         &lim,
         None,
     );
     visualization::generate_2d_plot(
         "manipulation/merge-after-right-start-constrained.svg",
-        vec![(&merge_to(&a, &b).unwrap(), PURPLE_100)],
+        vec![(&right_start_constrained, PURPLE_100)],
         &lim,
         None,
     );

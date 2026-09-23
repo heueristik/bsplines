@@ -44,6 +44,14 @@ _Avoid_: order (in parts of the literature, order means degree + 1)
 Selects which derivative of the curve is meant; the zeroth derivative (k = 0) is the curve itself.
 _Avoid_: degree (reserved for the polynomial degree)
 
+**Penalization strength (λ)**:
+The weight of the penalty term in a penalized least-squares fit; zero turns the penalty off.
+_Avoid_: lambda, smoothing parameter (parameter means u or ū here)
+
+**Difference order (κ)**:
+The order of the finite differences between neighboring control points that the penalty term sums, see Eilers1996.
+_Avoid_: kappa
+
 **Domain**:
 The knot interval on which the curve is defined, spanning from knot p to knot n + 1.
 

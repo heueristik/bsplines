@@ -1,10 +1,7 @@
 use plotters::{backend::SVGBackend, chart::ChartContext, coord::types::RangedCoordf64, prelude::*};
 use plotters_arrows::TriangleArrow;
 
-use bsplines::{
-    Curve,
-    points::{ControlPoints, DataPoints, Points},
-};
+use bsplines::{ControlPoints, Curve, DataPoints, Points};
 
 use crate::PLOTS_DIR;
 
@@ -151,7 +148,7 @@ pub fn generate_2d_plot(filename: &str, splines: Vec<(&Curve, RGBAColor)>, limit
     }
 
     for (c, color) in splines {
-        draw_control_polygon_2d(&mut chart_context, c.points(), color);
+        draw_control_polygon_2d(&mut chart_context, c.control_points(), color);
         draw_parametrized_spline_2d(&mut chart_context, c, 0, color);
     }
 

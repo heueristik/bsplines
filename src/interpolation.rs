@@ -1,23 +1,21 @@
-use nalgebra::SVD;
+use nalgebra::{DMatrix, SVD};
 
 use crate::{
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
-    types::MatD,
 };
 
-pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> MatD {
-    let degree = knots.degree();
+pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
     let polyline_segments = points.polyline_segments();
 
     let u_bar = parameters.vector();
 
     // Interpolation uses one control point per data point, so the system is square.
-    let mut basis_matrix = MatD::zeros(points.count(), points.count());
+    let mut basis_matrix = DMatrix::zeros(points.count(), points.count());
     for i in 0..=polyline_segments {
         for g in 0..=polyline_segments {
-            basis_matrix[(g, i)] = knots.evaluate(0, i, degree, u_bar[g]);
+            basis_matrix[(g, i)] = knots.basis_of_derivative_curve(0, i, u_bar[g]);
         }
     }
 
@@ -31,7 +29,7 @@ mod tests {
     use approx::assert_relative_eq;
     use nalgebra::dmatrix;
 
-    use crate::{knots, knots::KnotMethod::Averaging, parameters, parameters::ParameterMethod::ChordLength};
+    use crate::{knots::KnotMethod::Averaging, parameters::ParameterMethod::ChordLength};
 
     use super::*;
 
@@ -42,8 +40,8 @@ mod tests {
             1., 2., 3., 4.;
         ]);
 
-        let parameters = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
+        let parameters = Parameters::generate(&points, ChordLength);
+        let knots = Knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
 
         assert_eq!(interpolate(&knots, &points, &parameters), *points.matrix());
     }
@@ -54,8 +52,8 @@ mod tests {
             1., 2., 3., 4.;
             1., 2., 3., 4.;
         ]);
-        let parameters = parameters::generate(&points, ChordLength);
-        let knots = knots::generate(2, points.polyline_segments(), &parameters, Averaging).unwrap();
+        let parameters = Parameters::generate(&points, ChordLength);
+        let knots = Knots::generate(2, points.polyline_segments(), &parameters, Averaging).unwrap();
 
         assert_relative_eq!(
             interpolate(&knots, &points, &parameters),

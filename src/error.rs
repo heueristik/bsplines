@@ -61,6 +61,15 @@ pub enum Error {
         degree: usize,
     },
 
+    /// The derivative order exceeds the degree: the k-th derivative curve would have the negative degree p − k.
+    #[error("the derivative order k = {derivative} exceeds the degree p = {degree}")]
+    DerivativeExceedsDegree {
+        /// The requested derivative order.
+        derivative: usize,
+        /// The degree of the curve.
+        degree: usize,
+    },
+
     /// Two curves to be merged have different degrees.
     #[error("the degrees of the two curves differ: p = {left} vs. p = {right}")]
     DegreeMismatch {
@@ -81,11 +90,11 @@ pub enum Error {
 
     /// The knot vector must be clamped.
     #[error("the knot vector must be clamped")]
-    UnclampedCurve,
+    UnclampedKnots,
 
     /// The knot vector must be normalized to the domain [0, 1].
     #[error("the knot vector must be normalized to the domain [0, 1]")]
-    UnnormalizedCurve,
+    UnnormalizedKnots,
 
     /// Merging supports at most p - 1 constrained points in total.
     #[error(
@@ -100,10 +109,10 @@ pub enum Error {
     },
 
     /// The penalization strength must not be negative.
-    #[error("the penalization parameter lambda = {lambda} must not be negative")]
-    NegativeLambda {
+    #[error("the penalization strength {strength} must not be negative")]
+    NegativePenalizationStrength {
         /// The offending penalization strength.
-        lambda: f64,
+        strength: f64,
     },
 
     /// A fit cannot request more polygon segments than the data provides polyline segments.
@@ -118,25 +127,14 @@ pub enum Error {
         polyline_segments: usize,
     },
 
-    /// The number of parameters must match the number of data points.
-    #[error(
-        "the m = {polyline_segments} polyline segments of the data must equal \
-         the {parameter_segments} segments of the parameters"
-    )]
-    ParameterSegmentsMismatch {
-        /// The polyline segments of the data.
-        polyline_segments: usize,
-        /// The segments of the parameter vector.
-        parameter_segments: usize,
-    },
-
     /// The penalization difference order must stay below the polygon segments.
     #[error(
-        "the penalization difference order kappa = {kappa} must be smaller than the n = {polygon_segments} polygon segments"
+        "the difference order {difference_order} of the penalization must be smaller than \
+         the n = {polygon_segments} polygon segments"
     )]
-    KappaTooLarge {
+    DifferenceOrderTooLarge {
         /// The offending difference order.
-        kappa: usize,
+        difference_order: usize,
         /// The requested polygon segments of the fitted curve.
         polygon_segments: usize,
     },

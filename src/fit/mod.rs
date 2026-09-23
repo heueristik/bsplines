@@ -1,30 +1,28 @@
 //! Least-squares fitting of data points, with fixed or loose ends and optional penalization.
 
-use nalgebra::{Dyn, SVD};
+use nalgebra::{DMatrix, Dyn, SVD};
 
 use crate::{
     Curve,
     error::{Error, Result},
-    knots,
-    knots::{KnotMethod, Knots, is_uniform},
-    parameters,
+    knots::{KnotMethod, Knots},
     parameters::{ParameterMethod, Parameters},
     points::{ControlPoints, DataPoints},
-    types::MatD,
 };
 
 pub(crate) mod fixed;
 pub(crate) mod loose;
 
 /// The penalization of a least-squares fit, see `Eilers1996`.
-pub struct Penalization {
+pub(crate) struct Penalization {
     /// The penalization strength λ ≥ 0.
-    pub lambda: f64,
+    pub strength: f64,
     /// The finite-difference order κ of the penalty term.
-    pub kappa: usize,
+    pub difference_order: usize,
 }
 
-/// Builds a least-squares fit of data points; created by [`Curve::fit`].
+/// Builds a least-squares fit of data points, with fixed or loose ends and an optional penalization;
+/// created by [`Curve::fit`].
 pub struct FitBuilder<'a> {
     data: &'a DataPoints,
     degree: usize,
@@ -62,83 +60,80 @@ impl<'a> FitBuilder<'a> {
         self
     }
 
-    /// Penalizes the fit with the strength `lambda` and the difference order `kappa`, see `Eilers1996`.
-    pub fn penalized(mut self, lambda: f64, kappa: usize) -> Self {
-        self.penalization = Some(Penalization { lambda, kappa });
+    /// Penalizes the fit with the strength λ and the difference order κ of the penalty term — see `Eilers1996`.
+    pub fn penalized(mut self, strength: f64, difference_order: usize) -> Self {
+        self.penalization = Some(Penalization { strength, difference_order });
         self
     }
 
     /// Performs the fit.
     pub fn build(self) -> Result<Curve> {
         let polygon_segments = self.polygon_segments.unwrap_or_else(|| self.data.polyline_segments());
-        let parameters = parameters::generate(self.data, ParameterMethod::EquallySpaced);
-        let knots = knots::generate(self.degree, polygon_segments, &parameters, KnotMethod::Uniform)?;
+        let parameters = Parameters::generate(self.data, ParameterMethod::EquallySpaced);
+        let knots = Knots::generate(self.degree, polygon_segments, &parameters, KnotMethod::Uniform)?;
 
         let points = match self.ends {
             Ends::Fixed => fixed::fit(&knots, self.data, &parameters, self.penalization)?,
             Ends::Loose => loose::fit(&knots, self.data, &parameters, self.penalization)?,
         };
-        Curve::new(knots, ControlPoints::new_with_capacity(points, self.degree + 1))
+        Curve::new(knots, ControlPoints::new(points))
     }
 }
 
-fn input_checks(
+fn check_input(
     knots: &Knots,
     points: &DataPoints,
     parameters: &Parameters,
     penalization: &Option<Penalization>,
 ) -> Result<()> {
-    match (
-        knots.polygon_segments(),
-        points.polyline_segments(),
+    debug_assert_eq!(
         parameters.polyline_segments(),
-        knots.degree(),
-        penalization,
-    ) {
-        (polygon_segments, polyline_segments, _, _, _) if polygon_segments > polyline_segments => {
+        points.polyline_segments(),
+        "each data point must have one parameter"
+    );
+
+    match (knots.polygon_segments(), points.polyline_segments(), knots.degree(), penalization) {
+        (polygon_segments, polyline_segments, _, _) if polygon_segments > polyline_segments => {
             Err(Error::TooFewPolylineSegments { polygon_segments, polyline_segments })
         }
-        (_, polyline_segments, parameter_segments, _, _) if polyline_segments != parameter_segments => {
-            Err(Error::ParameterSegmentsMismatch { polyline_segments, parameter_segments })
-        }
-        (polygon_segments, _, _, degree, _) if polygon_segments < degree => {
+        (polygon_segments, _, degree, _) if polygon_segments < degree => {
             Err(Error::TooFewPolygonSegments { degree, polygon_segments })
         }
-        (polygon_segments, _, _, _, Some(penalization)) if polygon_segments - 1 < penalization.kappa => {
-            Err(Error::KappaTooLarge { kappa: penalization.kappa, polygon_segments })
+        (polygon_segments, _, _, Some(penalization)) if polygon_segments - 1 < penalization.difference_order => {
+            Err(Error::DifferenceOrderTooLarge { difference_order: penalization.difference_order, polygon_segments })
         }
         _ => Ok(()),
     }
 }
 
-pub(crate) fn compute_svd(
+pub(crate) fn decompose_normal_matrix(
     knots: &Knots,
-    basis_matrix: &MatD,
+    basis_matrix: &DMatrix<f64>,
     penalization: &Option<Penalization>,
-    calculate_finite_difference_matrix: Box<dyn FnOnce(usize, &Knots) -> MatD>,
+    calculate_finite_difference_matrix: Box<dyn FnOnce(usize, &Knots) -> DMatrix<f64>>,
 ) -> Result<SVD<f64, Dyn, Dyn>> {
     let mut normal_matrix = basis_matrix.transpose() * basis_matrix;
 
     if let Some(penalization) = penalization {
-        let lambda = penalization.lambda;
-        if lambda < 0.0 {
-            return Err(Error::NegativeLambda { lambda });
+        let strength = penalization.strength;
+        if strength < 0.0 {
+            return Err(Error::NegativePenalizationStrength { strength });
         }
-        if lambda > 0.0 {
-            if !is_uniform(knots)? {
+        if strength > 0.0 {
+            if !knots.is_uniform() {
                 return Err(Error::NonUniformKnots);
             }
-            let difference_matrix = calculate_finite_difference_matrix(penalization.kappa, knots);
-            normal_matrix += lambda * (difference_matrix.transpose() * difference_matrix);
+            let difference_matrix = calculate_finite_difference_matrix(penalization.difference_order, knots);
+            normal_matrix += strength * (difference_matrix.transpose() * difference_matrix);
         }
     }
 
     Ok(SVD::new(normal_matrix, true, true))
 }
 
-/// Returns one entry of the finite-difference operator matrix of order `kappa` — see `Eilers1996`.
-fn difference_operator(i: usize, j: usize, kappa: usize) -> isize {
-    match kappa {
+/// Returns one entry of the finite-difference operator matrix of the given order — see `Eilers1996`.
+fn difference_operator(i: usize, j: usize, difference_order: usize) -> isize {
+    match difference_order {
         1 => {
             if i == j {
                 return -1;
@@ -148,7 +143,9 @@ fn difference_operator(i: usize, j: usize, kappa: usize) -> isize {
             }
             0
         }
-        kappa if kappa > 1 => difference_operator(i + 1, j, kappa - 1) - difference_operator(i, j, kappa - 1),
+        difference_order if difference_order > 1 => {
+            difference_operator(i + 1, j, difference_order - 1) - difference_operator(i, j, difference_order - 1)
+        }
         _ => 0,
     }
 }

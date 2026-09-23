@@ -1,44 +1,42 @@
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg")))]
 //! Implements the B-spline curve.
-//!
-//! A B-spline curve can be defined by
-//!
-//! ![B-spline curve][eq-curve]
-//!
-//! with the
-//! - parameter `u ∈ [0,1]` defining a point on the curve,
-//! - derivative order `k`,
-//! - number of control polygon segments `n`,
-//! - spline degree `p`,
-//! - `k`-th derivative [knot vector][crate::knots] `U`,
-//! - `n+1-k` [spline basis function][crate::basis] `N` of degree `p-k` defined by the [knot vector][crate::knots] `U`,
-//!   and
-//! - `n+1-k`, `N`-dimensional [control points][crate::points] `P`.
 
-use embed_doc_image::embed_doc_image;
+use nalgebra::DVector;
 
 use crate::{
     error::{Error, Result},
     fit::FitBuilder,
     interpolation,
-    knots::{self, KnotMethod, Knots},
+    knots::{KnotMethod, Knots},
     manipulation::{
         insert::insert,
-        merge::{ConstrainedCurve, Constraints, merge, merge_with_constraints},
+        merge::{Constraints, merge},
         split::split,
     },
-    parameters::{self, ParameterMethod},
+    parameters::{ParameterMethod, Parameters},
     points::{ControlPoints, DataPoints, Points},
-    types::VecD,
 };
 
-#[embed_doc_image("spline", "doc-images/plots/derivatives.svg")]
+/// A B-spline curve: a parametric function that maps the domain [0, 1] into N-dimensional space.
+///
+/// The curve and its derivatives follow from
+///
+/// ![B-spline curve][eq-curve]
+///
+/// with the parameter u ∈ [0, 1], the derivative order k, the number of polygon segments n,
+/// the degree p, the knot vector U of the k-th derivative (see [`Knots`]), the n + 1 − k
+/// [basis functions][Knots::basis] N of degree p − k, and the n + 1 − k control points P
+/// of the k-th derivative (see [`ControlPoints`]).
+///
+/// The plot shows a cubic curve in red and its first, second, and third derivative
+/// in purple, blue, and teal.
+///
+/// ![A cubic curve and its derivatives][curve-derivatives]
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg"))]
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("curve-derivatives", "doc-images/plots/derivatives.svg"))]
 #[derive(Debug, Clone)]
 pub struct Curve {
     pub(crate) knots: Knots,
-    pub(crate) points: ControlPoints,
+    pub(crate) control_points: ControlPoints,
 }
 
 impl Curve {
@@ -46,47 +44,47 @@ impl Curve {
     ///
     /// # Examples
     /// ```
-    /// use bsplines::{Curve, Knots, points::ControlPoints};
+    /// use bsplines::{ControlPoints, Curve, Knots};
     /// use nalgebra::dmatrix;
     ///
     /// // Create a coordinate matrix containing five 3D points.
-    /// let points = ControlPoints::new(dmatrix![
+    /// let control_points = ControlPoints::new(dmatrix![
     /// // 1    2    3    4    5
     ///  -2.0,-2.0,-1.0, 0.5, 1.5; // x
     ///  -1.0, 0.0, 1.0, 1.0, 2.0; // y
     ///   0.0, 0.5, 1.5,-0.5,-1.0; // z
     /// ]);
     /// let degree = 2;
-    /// let knots = Knots::uniform(degree, points.polygon_segments()).unwrap();
-    /// let curve = Curve::new(knots, points).unwrap();
+    /// let knots = Knots::uniform(degree, control_points.polygon_segments()).unwrap();
+    /// let curve = Curve::new(knots, control_points).unwrap();
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
-    pub fn new(knots: Knots, points: ControlPoints) -> Result<Self> {
-        match (knots.degree(), points.polygon_segments()) {
+    pub fn new(knots: Knots, control_points: ControlPoints) -> Result<Self> {
+        match (knots.degree(), control_points.polygon_segments()) {
             (degree, polygon_segments) if polygon_segments < degree => {
                 Err(Error::TooFewPolygonSegments { degree, polygon_segments })
             }
             _ => {
-                let mut curve = Self { knots, points };
-                curve.calculate_derivatives();
+                let mut curve = Self { knots, control_points };
+                curve.derive();
                 Ok(curve)
             }
         }
     }
 
-    /// Returns a curve of the given degree using the points as control points,
+    /// Returns a curve of the given degree with the given control points
     /// on a clamped, uniform knot vector.
     ///
     /// # Examples
     /// ```
-    /// use bsplines::{Curve, points::ControlPoints};
+    /// use bsplines::{ControlPoints, Curve};
     /// use nalgebra::dmatrix;
     ///
-    /// let curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-2.0,-1.0, 0.5, 1.5;])).unwrap();
+    /// let curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-2.0,-1.0, 0.5, 1.5;]), 2).unwrap();
     /// ```
-    pub fn with_uniform_knots(degree: usize, points: ControlPoints) -> Result<Self> {
-        let knots = Knots::uniform(degree, points.polygon_segments())?;
-        Self::new(knots, points)
+    pub fn with_uniform_knots(control_points: ControlPoints, degree: usize) -> Result<Self> {
+        let knots = Knots::uniform(degree, control_points.polygon_segments())?;
+        Self::new(knots, control_points)
     }
 
     /// Returns a curve of the given degree interpolating the data points,
@@ -94,7 +92,7 @@ impl Curve {
     ///
     /// # Examples
     /// ```
-    /// use bsplines::{Curve, points::DataPoints};
+    /// use bsplines::{Curve, DataPoints};
     /// use nalgebra::dmatrix;
     ///
     /// let data = DataPoints::new(dmatrix![
@@ -115,11 +113,10 @@ impl Curve {
         parameter_method: ParameterMethod,
         knot_method: KnotMethod,
     ) -> Result<Self> {
-        let parameters = parameters::generate(data, parameter_method);
-        let knots = knots::generate(degree, data.polyline_segments(), &parameters, knot_method)?;
-        let points =
-            ControlPoints::new_with_capacity(interpolation::interpolate(&knots, data, &parameters), degree + 1);
-        Self::new(knots, points)
+        let parameters = Parameters::generate(data, parameter_method);
+        let knots = Knots::generate(degree, data.polyline_segments(), &parameters, knot_method)?;
+        let control_points = ControlPoints::new(interpolation::interpolate(&knots, data, &parameters));
+        Self::new(knots, control_points)
     }
 
     /// Returns a builder for a least-squares fit of the data points
@@ -127,7 +124,7 @@ impl Curve {
     ///
     /// # Examples
     /// ```
-    /// use bsplines::{Curve, fit::Penalization, points::DataPoints};
+    /// use bsplines::{Curve, DataPoints};
     /// use nalgebra::dmatrix;
     ///
     /// let data = DataPoints::new(dmatrix![
@@ -140,14 +137,14 @@ impl Curve {
         FitBuilder::new(data, degree)
     }
 
-    /// Returns the knot vector and its derivatives.
+    /// Returns the knot vector.
     pub fn knots(&self) -> &Knots {
         &self.knots
     }
 
-    /// Returns the control points and their derivatives.
-    pub fn points(&self) -> &ControlPoints {
-        &self.points
+    /// Returns the control points.
+    pub fn control_points(&self) -> &ControlPoints {
+        &self.control_points
     }
 
     /// Returns the degree p of the curve.
@@ -157,16 +154,16 @@ impl Curve {
 
     /// Returns the number of segments n of the control polygon.
     pub fn polygon_segments(&self) -> usize {
-        self.points.polygon_segments()
+        self.control_points.polygon_segments()
     }
 
     /// Returns the dimension of the curve.
     pub fn dimension(&self) -> usize {
-        self.points.dimension()
+        self.control_points.dimension()
     }
 
     /// Evaluates the curve at the parameter `u`.
-    pub fn evaluate(&self, u: f64) -> Result<VecD> {
+    pub fn evaluate(&self, u: f64) -> Result<DVector<f64>> {
         self.evaluate_derivative(u, 0)
     }
 
@@ -180,167 +177,166 @@ impl Curve {
     ///
     /// Derivative orders beyond the degree return the zero vector,
     /// since all higher derivatives of a polynomial of degree p vanish.
-    pub fn evaluate_derivative(&self, u: f64, derivative: usize) -> Result<VecD> {
+    pub fn evaluate_derivative(&self, u: f64, derivative: usize) -> Result<DVector<f64>> {
         if !(0.0..=1.0).contains(&u) {
             return Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 });
         }
 
         let degree = self.degree();
 
-        let mut value = VecD::zeros(self.points.dimension());
+        let mut value = DVector::zeros(self.control_points.dimension());
 
         if derivative <= degree {
             let polygon_segments = self.polygon_segments();
             let span = self.knots.find_span(u, derivative);
 
             for i in span - (degree - derivative)..=polygon_segments - derivative {
-                value +=
-                    self.knots.evaluate(derivative, i, degree, u) * self.points.matrix_derivative(derivative).column(i);
+                value += self.knots.basis_of_derivative_curve(derivative, i, u) *
+                    self.control_points.matrix_derivative(derivative).column(i);
             }
         }
         Ok(value)
     }
 
-    /// Returns the highest derivative order for which knots and control points are available.
-    pub fn max_derivative(&self) -> usize {
-        let knots_max = self.knots.max_derivative();
-        let points_max = self.points.max_derivative();
-
-        assert_eq!(
-            knots_max, points_max,
-            "the available derivatives of the knots and control points differ: {} != {}",
-            knots_max, points_max
-        );
-
-        knots_max
-    }
-
-    /// Reverses the curve.
+    /// Reverses the direction of the curve: the point at the parameter u moves to 1 − u.
+    ///
+    /// | The curve.          | The reversed curve. |
+    /// |:-------------------:|:-------------------:|
+    /// | ![][reverse-before] | ![][reverse-after]  |
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("reverse-before", "doc-images/plots/manipulation/reverse-before.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("reverse-after", "doc-images/plots/manipulation/reverse-after.svg"))]
     pub fn reverse(&mut self) -> &mut Self {
         self.knots.reverse();
-        self.points.reverse();
+        self.control_points.reverse();
         self
     }
 
-    /// Prepends another curve.
-    ///
-    /// The end of the other curve is attached to the beginning of this curve,
-    /// while maintaining continuity of all derivatives.
-    /// This affects the first and last `p` control points of the two curves, respectively,
-    /// and removes `p` control points in total.
+    /// Prepends another curve: attaches the end of the other curve to the start of this curve
+    /// and keeps all derivatives continuous at the joint — see [`Curve::append`].
     ///
     /// # Examples
     ///
     /// ```
-    /// use approx::relative_eq;
-    /// use bsplines::{Curve, points::{ControlPoints, Points}};
+    /// use approx::assert_relative_eq;
+    /// use bsplines::{ControlPoints, Curve, Points};
     /// use nalgebra::dmatrix;
     ///
-    /// let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;])).unwrap();
-    /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;])).unwrap();
+    /// let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;]), 2).unwrap();
+    /// let other = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;]), 2).unwrap();
     /// let merged = curve.prepend(&other).unwrap();
     ///
-    /// relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
+    /// assert_relative_eq!(merged.control_points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn prepend(&mut self, other: &Self) -> Result<&mut Self> {
-        let merged = merge(other, self)?;
+        let merged = merge(other, self, &Constraints::default())?;
         self.knots = merged.knots;
-        self.points = merged.points;
+        self.control_points = merged.control_points;
         Ok(self)
     }
 
-    /// Prepends another curve with maximally `p-1` constraints.
-    pub fn prepend_constrained(
-        &mut self,
-        constraints_self: Constraints,
-        other: &Self,
-        constraints_other: Constraints,
-    ) -> Result<&mut Self> {
-        let merged = merge_with_constraints(
-            &ConstrainedCurve { curve: other, constraints: constraints_self },
-            &ConstrainedCurve { curve: self, constraints: constraints_other },
-        )?;
+    /// Prepends another curve like [`Curve::prepend`], but keeps the points at the constrained
+    /// parameters fixed. The other curve is the left one, this curve is the right one.
+    pub fn prepend_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
+        let merged = merge(other, self, &constraints)?;
         self.knots = merged.knots;
-        self.points = merged.points;
+        self.control_points = merged.control_points;
         Ok(self)
     }
 
-    /// Appends another curve.
+    /// Appends another curve: attaches the end of this curve to the start of the other curve
+    /// and keeps all derivatives continuous at the joint — see `Tai2003`. The merge moves the last
+    /// p control points of this curve and the first p control points of the other curve, and it
+    /// removes p control points in total.
     ///
-    /// The end of this curve is attached to the beginning of the other curve,
-    /// while maintaining continuity of all derivatives.
-    /// This affects the first and last `p` control points of the two curves, respectively,
-    /// and removes `p` control points in total.
+    /// | Two curves.       | The merged curve. |
+    /// |:-----------------:|:-----------------:|
+    /// | ![][merge-before] | ![][merge-after]  |
     ///
     /// # Examples
     ///
     /// ```
-    /// use approx::relative_eq;
-    /// use bsplines::{Curve, points::{ControlPoints, Points}};
+    /// use approx::assert_relative_eq;
+    /// use bsplines::{ControlPoints, Curve, Points};
     /// use nalgebra::dmatrix;
     ///
-    /// let mut curve = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;])).unwrap();
-    /// let other = Curve::with_uniform_knots(2, ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;])).unwrap();
+    /// let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-3.0,-2.0,-1.0;]), 2).unwrap();
+    /// let other = Curve::with_uniform_knots(ControlPoints::new(dmatrix![ 1.0, 2.0, 3.0;]), 2).unwrap();
     /// let merged = curve.append(&other).unwrap();
     ///
-    /// relative_eq!(merged.points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON);
+    /// assert_relative_eq!(merged.control_points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-before", "doc-images/plots/manipulation/merge-before.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-after", "doc-images/plots/manipulation/merge-after.svg"))]
     pub fn append(&mut self, other: &Self) -> Result<&mut Self> {
-        let merged = merge(self, other)?;
+        let merged = merge(self, other, &Constraints::default())?;
         self.knots = merged.knots;
-        self.points = merged.points;
+        self.control_points = merged.control_points;
         Ok(self)
     }
 
-    /// Appends another curve with maximally `p-1` constraints.
-    pub fn append_constrained(
-        &mut self,
-        constraints_self: Constraints,
-        other: &Self,
-        constraints_other: Constraints,
-    ) -> Result<&mut Self> {
-        let merged = merge_with_constraints(
-            &ConstrainedCurve { curve: self, constraints: constraints_self },
-            &ConstrainedCurve { curve: other, constraints: constraints_other },
-        )?;
+    /// Appends another curve like [`Curve::append`], but keeps the points at the constrained
+    /// parameters fixed. This curve is the left one, the other curve is the right one.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use approx::assert_relative_eq;
+    /// use bsplines::{Constraints, ControlPoints, Curve};
+    /// use nalgebra::dmatrix;
+    ///
+    /// let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-2.0,-1.0,-0.5;]), 2).unwrap();
+    /// let other = Curve::with_uniform_knots(ControlPoints::new(dmatrix![ 0.5, 1.0, 2.0;]), 2).unwrap();
+    /// let end = curve.evaluate(1.0).unwrap();
+    ///
+    /// // Keep the end of this curve fixed, so the joint at u = 0.5 stays at its old end point.
+    /// curve.append_constrained(&other, Constraints { left: vec![1.0], right: vec![] }).unwrap();
+    ///
+    /// assert_relative_eq!(curve.evaluate(0.5).unwrap(), end, epsilon = f64::EPSILON.sqrt());
+    /// ```
+    pub fn append_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
+        let merged = merge(self, other, &constraints)?;
         self.knots = merged.knots;
-        self.points = merged.points;
+        self.control_points = merged.control_points;
         Ok(self)
     }
 
     /// Splits the curve into two independent curves at the parameter `u`,
     /// normalizing both knot vectors to the domain [0, 1].
     /// The parameter must lie in the domain interior (0, 1).
+    ///
+    /// | The curve.        | The two curves after the split at u = 1/2. |
+    /// |:-----------------:|:------------------------------------------:|
+    /// | ![][split-before] | ![][split-after]                           |
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("split-before", "doc-images/plots/manipulation/split-before.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("split-after", "doc-images/plots/manipulation/split-after.svg"))]
     pub fn split(&self, u: f64) -> Result<(Self, Self)> {
         split(self, u)
     }
 
     /// Inserts a knot at the parameter `u` without changing the curve shape.
-    /// The parameter must lie in the domain interior (0, 1).
-    pub fn insert(&mut self, u: f64) -> Result<&mut Self> {
-        self.insert_times(u, 1)?;
+    /// The parameter must lie in the domain interior (0, 1). Call it again to raise the multiplicity of `u`.
+    ///
+    /// | The curve.         | The curve after the insertion at u = 4/5. |
+    /// |:------------------:|:-----------------------------------------:|
+    /// | ![][insert-before] | ![][insert-after]                         |
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("insert-before", "doc-images/plots/manipulation/insert-before.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("insert-after", "doc-images/plots/manipulation/insert-after.svg"))]
+    pub fn insert_knot(&mut self, u: f64) -> Result<&mut Self> {
+        insert(self, u)?;
         Ok(self)
     }
 
-    /// Inserts a knot at the parameter `u` the given number of times.
-    /// The parameter must lie in the domain interior (0, 1).
-    pub fn insert_times(&mut self, u: f64, times: usize) -> Result<&mut Self> {
-        for _ in 0..times {
-            insert(self, u)?;
-        }
-        Ok(self)
-    }
-
-    pub(crate) fn calculate_derivatives(&mut self) {
+    pub(crate) fn derive(&mut self) {
         self.knots.derive();
-        self.points.derive(&self.knots);
+        self.control_points.derive(&self.knots);
     }
 
     /// Returns the curve describing the `k`-th derivative of this curve.
-    pub fn derivative_curve(&self, derivative: usize) -> Self {
-        let knots = Knots::new(self.degree() - derivative, self.knots.vector_derivative(derivative).clone());
-        let points = ControlPoints::new(self.points.matrix_derivative(derivative).clone());
-        Curve { knots, points }
+    /// The derivative order must not exceed the degree p.
+    pub fn derivative_curve(&self, derivative: usize) -> Result<Self> {
+        let knots = self.knots.derivative_knots(derivative)?;
+        let control_points = ControlPoints::new(self.control_points.matrix_derivative(derivative).clone());
+        Curve::new(knots, control_points)
     }
 }
 
@@ -358,11 +354,11 @@ mod tests {
     /// A two-dimensional, linear test curve with default degree two.
     fn curve(#[default(2)] degree: usize) -> Curve {
         let curve = Curve::with_uniform_knots(
-            degree,
             ControlPoints::new(dmatrix![
                 1., 3., 5.;
                 2., 4., 6.;
             ]),
+            degree,
         )
         .unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 1., 1., 1.]);
@@ -396,9 +392,9 @@ mod tests {
         fn evaluate_derivative_succeeds_near_the_end_after_insertion() {
             let degree = 2;
             let points = dmatrix![1., 1., 1., 1.;];
-            let mut curve = Curve::with_uniform_knots(degree, ControlPoints::new(points)).unwrap();
+            let mut curve = Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap();
 
-            curve.insert(0.5).unwrap();
+            curve.insert_knot(0.5).unwrap();
 
             assert_eq!(curve.evaluate_derivative(0.9, 1).unwrap(), dvector![0.]);
         }
@@ -407,7 +403,7 @@ mod tests {
         fn evaluate_is_unchanged_by_repeated_insertion() {
             let degree = 3;
             let points = dmatrix![-1., -0.5, 0.5, 1.;];
-            let mut curve = Curve::with_uniform_knots(degree, ControlPoints::new(points)).unwrap();
+            let mut curve = Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap();
             let u = 0.5;
             let expected_point = dvector![0.0];
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0., 1., 1., 1., 1.]);
@@ -416,21 +412,21 @@ mod tests {
 
             insert(&mut curve, u).unwrap();
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0., u, 1., 1., 1., 1.]);
-            assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.75, 0.0, 0.75, 1.;]);
+            assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.75, 0.0, 0.75, 1.;]);
             assert_eq!(curve.evaluate(u).unwrap(), expected_point);
             assert_eq!(curve.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(curve.evaluate(1.0).unwrap(), dvector![1.]);
 
             insert(&mut curve, u).unwrap();
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0., u, u, 1., 1., 1., 1.]);
-            assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.375, 0.75, 1.;]);
+            assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.375, 0.75, 1.;]);
             assert_eq!(curve.evaluate(u).unwrap(), expected_point);
             assert_eq!(curve.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(curve.evaluate(1.0).unwrap(), dvector![1.]);
 
             insert(&mut curve, u).unwrap();
             assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0., u, u, u, 1., 1., 1., 1.]);
-            assert_eq!(curve.points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.0, 0.375, 0.75, 1.;]);
+            assert_eq!(curve.control_points.matrix(), &dmatrix![-1., -0.75, -0.375, 0.0, 0.375, 0.75, 1.;]);
             assert_eq!(curve.evaluate(u).unwrap(), expected_point);
             assert_eq!(curve.evaluate(0.0).unwrap(), dvector![-1.]);
             assert_eq!(curve.evaluate(1.0).unwrap(), dvector![1.]);
@@ -452,19 +448,46 @@ mod tests {
         }
     }
 
+    mod derivative_curve {
+        use rstest::rstest;
+
+        use super::*;
+
+        #[rstest]
+        fn derivative_curve_errors_above_the_degree(curve: Curve) {
+            let degree = curve.degree();
+            let derivative = degree + 1;
+            assert_eq!(
+                curve.derivative_curve(derivative).err(),
+                Some(Error::DerivativeExceedsDegree { derivative, degree })
+            );
+        }
+
+        #[test]
+        fn derivative_curve_carries_the_higher_derivatives_of_the_curve() {
+            let curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-1., -0.5, 0.5, 2., 1.;]), 3).unwrap();
+            let u = 0.25;
+            assert_ne!(curve.evaluate_derivative(u, 2).unwrap(), dvector![0.], "the second derivative is not zero");
+
+            let first_derivative = curve.derivative_curve(1).unwrap();
+
+            assert_eq!(first_derivative.evaluate_derivative(u, 1), curve.evaluate_derivative(u, 2));
+        }
+    }
+
     #[test]
     fn reverse() {
         let mut curve = Curve::with_uniform_knots(
-            2,
             ControlPoints::new(dmatrix![
                 1., 3., 5.;
                 2., 4., 6.;
             ]),
+            2,
         )
         .unwrap();
 
         let knots_before = curve.knots.vector().clone();
-        let points_before = curve.points.matrix().clone();
+        let points_before = curve.control_points.matrix().clone();
         curve.reverse();
 
         let points_after = dmatrix![
@@ -472,12 +495,59 @@ mod tests {
                  6., 4., 2.;
         ];
         assert_eq!(curve.knots.vector(), &knots_before);
-        assert_eq!(curve.points.matrix(), &points_after);
+        assert_eq!(curve.control_points.matrix(), &points_after);
 
         curve.reverse();
 
         assert_eq!(curve.knots.vector(), &knots_before);
-        assert_eq!(curve.points.matrix(), &points_before);
+        assert_eq!(curve.control_points.matrix(), &points_before);
+    }
+
+    /// Two quadratic curves with a gap: the left curve ends at −0.5, the right curve starts at 0.5.
+    fn curves_with_a_gap() -> (Curve, Curve) {
+        let left = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-2., -1., -0.5;]), 2).unwrap();
+        let right = Curve::with_uniform_knots(ControlPoints::new(dmatrix![0.5, 1., 2.;]), 2).unwrap();
+        (left, right)
+    }
+
+    #[test]
+    fn prepend_constrained_keeps_the_constrained_start_of_self_fixed() {
+        let (left, mut curve) = curves_with_a_gap();
+        let start = curve.evaluate(0.0).unwrap();
+        let joint = 0.5;
+
+        let mut unconstrained = curve.clone();
+        unconstrained.prepend(&left).unwrap();
+        assert_eq!(
+            unconstrained.knots.vector(),
+            &dvector![0., 0., 0., joint, 1., 1., 1.],
+            "the joint is the internal knot"
+        );
+        assert_ne!(unconstrained.evaluate(joint).unwrap(), start, "the unconstrained merge moves the joint");
+
+        curve.prepend_constrained(&left, Constraints { left: vec![], right: vec![0.0] }).unwrap();
+
+        assert_relative_eq!(curve.evaluate(joint).unwrap(), start, epsilon = f64::EPSILON.sqrt());
+    }
+
+    #[test]
+    fn append_constrained_keeps_the_constrained_end_of_self_fixed() {
+        let (mut curve, right) = curves_with_a_gap();
+        let end = curve.evaluate(1.0).unwrap();
+        let joint = 0.5;
+
+        let mut unconstrained = curve.clone();
+        unconstrained.append(&right).unwrap();
+        assert_eq!(
+            unconstrained.knots.vector(),
+            &dvector![0., 0., 0., joint, 1., 1., 1.],
+            "the joint is the internal knot"
+        );
+        assert_ne!(unconstrained.evaluate(joint).unwrap(), end, "the unconstrained merge moves the joint");
+
+        curve.append_constrained(&right, Constraints { left: vec![1.0], right: vec![] }).unwrap();
+
+        assert_relative_eq!(curve.evaluate(joint).unwrap(), end, epsilon = f64::EPSILON.sqrt());
     }
 
     #[test]
