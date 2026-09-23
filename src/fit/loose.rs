@@ -16,7 +16,7 @@ pub fn fit(
 ) -> Result<DMatrix<f64>> {
     check_input(knots, points, parameters, &penalization, knots.polygon_segments() + 1)?;
 
-    let basis_matrix = calculate_basis_matrix(knots, points, parameters);
+    let basis_matrix = knots.calculate_basis_matrix(parameters.vector());
 
     let svd =
         decompose_normal_matrix(knots, &basis_matrix, &penalization, Box::new(calculate_finite_difference_matrix))?;
@@ -25,22 +25,6 @@ pub fn fit(
         svd.solve(&constant_terms, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T").transpose();
 
     Ok(control_points)
-}
-
-fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
-    let polygon_segments = knots.polygon_segments();
-    let polyline_segments = points.polyline_segments();
-
-    let u_bar = parameters.vector();
-
-    let mut basis_matrix = DMatrix::zeros(polyline_segments + 1, polygon_segments + 1);
-    for g in 0..=polyline_segments {
-        let u = u_bar[g];
-        for i in 0..=polygon_segments {
-            basis_matrix[(g, i)] = knots.basis_of_derivative_curve(0, i, u);
-        }
-    }
-    basis_matrix
 }
 
 fn calculate_finite_difference_matrix(difference_order: usize, knots: &Knots) -> DMatrix<f64> {
