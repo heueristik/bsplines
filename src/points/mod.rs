@@ -164,6 +164,7 @@ pub(crate) fn reverse(points: &mut DMatrix<f64>) {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn reversed(points: &DMatrix<f64>) -> DMatrix<f64> {
     let mut copy = points.clone();
     reverse(&mut copy);

@@ -9,8 +9,7 @@ use crate::{
     basis::basis,
     buffer::with_buffer,
     error::{Error, Result},
-    knots::{Knots, reversed},
-    points,
+    knots::Knots,
     points::{ControlPoints, Points},
     svd::decompose,
     vector_views::VectorViews,
@@ -69,20 +68,18 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
     let shifts = solve_linear_equation_system(left, right, constraints)?;
     let (left_shifted, right_shifted) = shift_boundary_control_points(left, right, &shifts);
 
-    let (left_adjusted, right_reversed, right_adjusted) = adjust_knot_vectors(left, right);
-    let merged_knots = merge_knot_vectors(left, right, &left_adjusted, &right_adjusted);
-
-    let (left_points, right_points) = adjust_control_points_of_both_curves(
-        left,
-        right,
+    let left_adjusted = adjust_knots(left, right);
+    let left_points = adjust_shifted_control_points(
         &left_shifted,
-        &right_shifted,
+        left.knots.vector(),
         &left_adjusted,
-        &right_reversed,
-        &right_adjusted,
+        left_degree,
+        left.polygon_segments(),
+        left.dimension(),
     );
 
-    let merged_points = merge_control_points(left, right, &left_points, &right_points);
+    let merged_knots = merge_knot_vectors(left, right);
+    let merged_points = merge_control_points(left, right, &left_points, &right_shifted);
 
     let merged = Curve::new(Knots::new(left_degree, merged_knots)?, ControlPoints::new(merged_points))?;
     check_constraints(left, right, constraints, &merged)?;
@@ -417,53 +414,28 @@ fn shift_boundary_control_points(left: &Curve, right: &Curve, shifts: &DMatrix<f
     (left_shifted, right_shifted)
 }
 
-fn adjust_knot_vectors(left: &Curve, right: &Curve) -> (DVector<f64>, DVector<f64>, DVector<f64>) {
+/// Returns the knot vector of the left curve with its last p knots replaced by the first p internal knots
+/// of the right curve, moved behind the joint at 1.
+fn adjust_knots(left: &Curve, right: &Curve) -> DVector<f64> {
     let degree = left.degree();
+    let polygon_segments = left.polygon_segments();
 
-    let left_polygon_segments = left.polygon_segments();
-    let right_polygon_segments = right.polygon_segments();
-
-    let left_knots = left.knots.vector();
-    let right_knots = right.knots.vector();
-
-    let left_adjusted = adjust_knots(degree, left_knots, left_polygon_segments, right_knots);
-
-    let left_reversed = reversed(left_knots);
-    let right_reversed = reversed(right_knots);
-    let right_adjusted_reversed = adjust_knots(degree, &right_reversed, right_polygon_segments, &left_reversed);
-    let right_adjusted = reversed(&right_adjusted_reversed).add_scalar(1.);
-
-    (left_adjusted, right_reversed, right_adjusted)
-}
-
-fn adjust_knots(
-    degree: usize,
-    knots: &DVector<f64>,
-    polygon_segments: usize,
-    next_knots: &DVector<f64>,
-) -> DVector<f64> {
     let mut adjusted = DVector::zeros(polygon_segments + degree + 2);
-
-    adjusted.head_mut(polygon_segments + 2).copy_from(&knots.head(polygon_segments + 2));
-
-    adjusted.tail_mut(degree).copy_from(&next_knots.segment(degree + 1, degree).add_scalar(1.));
-
+    adjusted.head_mut(polygon_segments + 2).copy_from(&left.knots.vector().head(polygon_segments + 2));
+    adjusted.tail_mut(degree).copy_from(&right.knots.vector().segment(degree + 1, degree).add_scalar(1.));
     adjusted
 }
 
-fn merge_knot_vectors(
-    left: &Curve,
-    right: &Curve,
-    left_adjusted: &DVector<f64>,
-    right_adjusted: &DVector<f64>,
-) -> DVector<f64> {
+fn merge_knot_vectors(left: &Curve, right: &Curve) -> DVector<f64> {
     let left_polygon_segments = left.polygon_segments();
     let right_polygon_segments = right.polygon_segments();
 
     let mut merged_knots = DVector::zeros(left_polygon_segments + 2 + right_polygon_segments + 1);
 
-    merged_knots.head_mut(left_polygon_segments + 2).copy_from(&left_adjusted.head(left_polygon_segments + 2));
-    merged_knots.tail_mut(right_polygon_segments + 1).copy_from(&right_adjusted.tail(right_polygon_segments + 1));
+    merged_knots.head_mut(left_polygon_segments + 2).copy_from(&left.knots.vector().head(left_polygon_segments + 2));
+    merged_knots
+        .tail_mut(right_polygon_segments + 1)
+        .copy_from(&right.knots.vector().tail(right_polygon_segments + 1).add_scalar(1.));
 
     // The concatenated knot vector spans [0, 2]. Normalize it to [0, 1].
     merged_knots.div_assign(merged_knots[left_polygon_segments + right_polygon_segments + 2]);
@@ -542,42 +514,8 @@ fn adjust_shifted_control_points(
     adjusted
 }
 
-fn adjust_control_points_of_both_curves(
-    left: &Curve,
-    right: &Curve,
-    left_shifted: &DMatrix<f64>,
-    right_shifted: &DMatrix<f64>,
-    left_adjusted: &DVector<f64>,
-    right_reversed: &DVector<f64>,
-    right_adjusted: &DVector<f64>,
-) -> (DMatrix<f64>, DMatrix<f64>) {
-    let degree = left.degree();
-    let dimension = left.dimension();
-
-    let left_points = adjust_shifted_control_points(
-        left_shifted,
-        left.knots.vector(),
-        left_adjusted,
-        degree,
-        left.polygon_segments(),
-        dimension,
-    );
-
-    // The right curve is adjusted in its reversed orientation and then reversed back.
-    let right_shifted_reversed = points::reversed(right_shifted);
-    let right_points_reversed = adjust_shifted_control_points(
-        &right_shifted_reversed,
-        right_reversed,
-        right_adjusted,
-        degree,
-        right.polygon_segments(),
-        dimension,
-    );
-    let right_points = points::reversed(&right_points_reversed);
-
-    (left_points, right_points)
-}
-
+/// Returns the control points of the merged curve: the adjusted left points without the last one, followed by the
+/// shifted right points from the index p − 1 on. The merged curve has p control points fewer than both curves.
 fn merge_control_points(
     left: &Curve,
     right: &Curve,
