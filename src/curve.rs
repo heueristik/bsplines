@@ -222,9 +222,9 @@ impl Curve {
         if derivative <= degree {
             let span = self.knots.find_span(u, derivative);
 
+            let points = self.control_points.matrix_derivative(derivative);
             for i in span - (degree - derivative)..=span {
-                value += self.knots.basis_of_derivative_curve(derivative, i, u) *
-                    self.control_points.matrix_derivative(derivative).column(i);
+                value.axpy(self.knots.basis_of_derivative_curve(derivative, i, u), &points.column(i), 1.0);
             }
         }
 
