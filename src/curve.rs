@@ -61,7 +61,7 @@ impl Curve {
     /// let curve = Curve::new(knots, control_points).unwrap();
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
-    pub fn new(knots: Knots, control_points: ControlPoints) -> Result<Self> {
+    pub fn new(knots: Knots, mut control_points: ControlPoints) -> Result<Self> {
         if !knots.is_clamped() {
             return Err(Error::UnclampedKnots);
         }
@@ -79,9 +79,9 @@ impl Curve {
             return Err(Error::NonFiniteControlPoint { index });
         }
 
-        let mut curve = Self { knots, control_points };
-        curve.derive();
-        Ok(curve)
+        // Every knot vector arrives with the knot vectors of its derivatives.
+        control_points.derive(&knots);
+        Ok(Self { knots, control_points })
     }
 
     /// Returns a curve of the given degree with the given control points
