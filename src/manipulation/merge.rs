@@ -1,6 +1,6 @@
 //! Merges two curves into one — see `Tai2003`.
 
-use std::ops::{AddAssign, SubAssign};
+use std::ops::AddAssign;
 
 use nalgebra::{DMatrix, DVector};
 
@@ -194,33 +194,12 @@ fn calculate_hw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
 }
 
 fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
-    let degree = left.degree();
-    let dimension = left.dimension();
-    let left_polygon_segments = left.polygon_segments();
-
-    let left_points = left.control_points.matrix();
-    let right_points = right.control_points.matrix();
-    let left_knots = left.knots.vector();
-    let right_knots = right.knots.vector();
-
-    let mut kconst = DMatrix::zeros(dimension, degree);
-    let mut sum = DVector::zeros(dimension);
-
-    // At the joint, the last left and the first right basis function are 1 and all others are 0.
-    for derivative in 0..=degree - 1 {
-        sum.fill(0.0);
-
-        for i in left_polygon_segments - degree..=left_polygon_segments {
-            let factor = prefactor(degree, left_polygon_segments - derivative, i, derivative, left_points, left_knots);
-            sum += factor * left_points.column(i);
-        }
-
-        for j in 0..=degree {
-            sum -= prefactor(degree, 0, j, derivative, right_points, right_knots) * right_points.column(j);
-        }
-        kconst.column_mut(derivative).sub_assign(&sum);
-    }
-    kconst
+    // At its ends, each derivative of a clamped curve equals the first or the last control point of that derivative.
+    DMatrix::from_fn(left.dimension(), left.degree(), |row, derivative| {
+        let left_points = left.control_points.matrix_derivative(derivative);
+        let right_points = right.control_points.matrix_derivative(derivative);
+        right_points[(row, 0)] - left_points[(row, left_points.ncols() - 1)]
+    })
 }
 
 fn calculate_constant_terms(left: &Curve, right: &Curve, total_constraints: usize) -> DMatrix<f64> {
