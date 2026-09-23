@@ -240,9 +240,9 @@ impl Knots {
     pub(crate) fn calculate_basis_matrix(&self, parameters: &DVector<f64>) -> DMatrix<f64> {
         let mut basis_matrix = DMatrix::zeros(parameters.len(), self.polygon_segments() + 1);
         with_buffer(self.degree + 1, |basis_values| {
-            for (g, &u) in parameters.iter().enumerate() {
+            for (mut row, &u) in basis_matrix.row_iter_mut().zip(parameters) {
                 let first = self.calculate_nonzero_basis(0, u, basis_values);
-                basis_matrix.view_mut((g, first), (1, basis_values.len())).copy_from_slice(basis_values);
+                row.columns_mut(first, basis_values.len()).copy_from_slice(basis_values);
             }
         });
         basis_matrix
