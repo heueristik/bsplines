@@ -151,6 +151,11 @@ pub enum Error {
         degree: usize,
     },
 
+    /// The merge cannot keep every constrained point, for example the end of the left curve and the start of
+    /// the right curve when the two points differ.
+    #[error("the constraints contradict each other, so the merged curve cannot keep every constrained point")]
+    ConflictingConstraints,
+
     /// The penalization strength must be finite and not negative.
     #[error("the penalization strength {strength} must be finite and not negative")]
     InvalidPenalizationStrength {

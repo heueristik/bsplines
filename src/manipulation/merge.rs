@@ -20,6 +20,7 @@ use crate::{
 ///
 /// The fields name the side of the joint, for [`Curve::append_constrained`] and
 /// [`Curve::prepend_constrained`] alike. Both curves together take fewer than p constraints, each in [0, 1].
+/// The constraints must not contradict each other: two curves that do not meet cannot keep both joined ends.
 ///
 /// | The end of the left curve fixed.      | The start of the right curve fixed.      |
 /// |:-------------------------------------:|:----------------------------------------:|
@@ -83,7 +84,26 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
 
     let merged_points = merge_control_points(left, right, &left_points, &right_points);
 
-    Curve::new(Knots::new(left_degree, merged_knots)?, ControlPoints::new(merged_points))
+    let merged = Curve::new(Knots::new(left_degree, merged_knots)?, ControlPoints::new(merged_points))?;
+    check_constraints(left, right, constraints, &merged)?;
+    Ok(merged)
+}
+
+/// Checks that the merged curve keeps every constrained point. The merged curve runs through the left curve
+/// on [0, 1/2] and through the right curve on [1/2, 1]. Contradicting constraints leave the linear system
+/// without a solution, and the least-squares result keeps none of them.
+fn check_constraints(left: &Curve, right: &Curve, constraints: &Constraints, merged: &Curve) -> Result<()> {
+    let scale = 1.0 + left.control_points.matrix().amax().max(right.control_points.matrix().amax());
+    let tolerance = f64::EPSILON.sqrt() * scale;
+
+    let left_parameters = constraints.left.iter().map(|&u| (left, u, u / 2.0));
+    let right_parameters = constraints.right.iter().map(|&u| (right, u, (1.0 + u) / 2.0));
+    for (curve, u, merged_u) in left_parameters.chain(right_parameters) {
+        if (merged.evaluate(merged_u)? - curve.evaluate(u)?).amax() > tolerance {
+            return Err(Error::ConflictingConstraints);
+        }
+    }
+    Ok(())
 }
 
 // The names of the block matrices (kv, kw, iv, jw, gv, hw, ipv, jppw, kconst) follow the notation in `Tai2003`.
@@ -645,6 +665,22 @@ mod tests {
 
         assert_eq!(merged.evaluate(0.0).unwrap(), left.evaluate(0.0).unwrap());
         assert_eq!(merged.evaluate(1.0).unwrap(), right.evaluate(1.0).unwrap());
+    }
+
+    #[test]
+    fn merge_errors_for_fixed_ends_that_do_not_meet() {
+        let degree = 3;
+        let left = test_curve(degree, dmatrix![0., 1., 2., 3.;]);
+        let apart = test_curve(degree, dmatrix![10., 11., 12., 13.;]);
+        let touching = test_curve(degree, dmatrix![3., 4., 5., 6.;]);
+        let both_ends = Constraints { left: vec![1.0], right: vec![0.0] };
+
+        assert_ne!(left.evaluate(1.0).unwrap(), apart.evaluate(0.0).unwrap(), "the curves do not meet");
+        assert_eq!(merge(&left, &apart, &both_ends).err(), Some(Error::ConflictingConstraints));
+
+        assert_eq!(left.evaluate(1.0).unwrap(), touching.evaluate(0.0).unwrap(), "the curves meet");
+        let merged = merge(&left, &touching, &both_ends).unwrap();
+        approx::assert_relative_eq!(merged.evaluate(0.5).unwrap(), left.evaluate(1.0).unwrap(), epsilon = 1e-9);
     }
 
     #[test]
