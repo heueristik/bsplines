@@ -12,7 +12,6 @@ use crate::{
     knots::{Knots, normalize},
     points::{ControlPoints, Points},
     svd::decompose,
-    vector_views::VectorViews,
 };
 
 /// The parameters at which the points of two merged curves stay fixed.
@@ -210,15 +209,9 @@ fn shift_boundary_control_points(left: &Curve, right: &Curve, shifts: &DMatrix<f
 /// Returns the knots of the left curve up to the joint, followed by the internal and the end knots of the right curve
 /// moved behind the joint at 1.
 fn concatenate_knot_vectors(left: &Curve, right: &Curve) -> DVector<f64> {
-    let left_polygon_segments = left.polygon_segments();
-    let right_polygon_segments = right.polygon_segments();
-
-    let mut knots = DVector::zeros(left_polygon_segments + 2 + right_polygon_segments + 1);
-    knots.head_mut(left_polygon_segments + 2).copy_from(&left.knots.vector().head(left_polygon_segments + 2));
-    knots
-        .tail_mut(right_polygon_segments + 1)
-        .copy_from(&right.knots.vector().tail(right_polygon_segments + 1).add_scalar(1.));
-    knots
+    let left_knots = &left.knots.vector().as_slice()[..left.polygon_segments() + 2];
+    let right_knots = &right.knots.vector().as_slice()[right.degree() + 1..];
+    DVector::from_vec(left_knots.iter().copied().chain(right_knots.iter().map(|knot| knot + 1.0)).collect())
 }
 
 /// Returns the shifted control points of the left curve with the last p − 1 points recalculated for the adjusted
