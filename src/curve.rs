@@ -562,6 +562,25 @@ mod tests {
     }
 
     #[test]
+    fn reversed_curve_has_the_derivatives_of_the_chain_rule() {
+        let degree = 3;
+        let points =
+            DMatrix::from_fn(2, 7, |row, column| if row == 0 { column as f64 } else { (column as f64 * 1.3).sin() });
+        let curve = Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap();
+        let mut reversed = curve.clone();
+        reversed.reverse();
+
+        // The parameters avoid the knots, where the derivative of order p jumps.
+        for u in (0..20).map(|step| f64::from(step) / 20.0 + 0.013) {
+            for derivative in 0..=degree {
+                let sign = if derivative % 2 == 0 { 1.0 } else { -1.0 };
+                let expected = sign * curve.evaluate_derivative(1.0 - u, derivative).unwrap();
+                assert_relative_eq!(reversed.evaluate_derivative(u, derivative).unwrap(), expected, epsilon = 1e-9);
+            }
+        }
+    }
+
+    #[test]
     fn reverse() {
         let mut curve = Curve::with_uniform_knots(
             ControlPoints::new(dmatrix![
