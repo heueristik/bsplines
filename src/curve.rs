@@ -265,18 +265,13 @@ impl Curve {
     /// assert_relative_eq!(merged.control_points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn prepend(&mut self, other: &Self) -> Result<&mut Self> {
-        let merged = merge(other, self, &Constraints::default())?;
-        self.knots = merged.knots;
-        self.control_points = merged.control_points;
-        Ok(self)
+        self.prepend_constrained(other, Constraints::default())
     }
 
     /// Prepends another curve like [`Curve::prepend`], but keeps the points at the constrained
     /// parameters fixed. The other curve is the left one, this curve is the right one.
     pub fn prepend_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
-        let merged = merge(other, self, &constraints)?;
-        self.knots = merged.knots;
-        self.control_points = merged.control_points;
+        *self = merge(other, self, &constraints)?;
         Ok(self)
     }
 
@@ -305,10 +300,7 @@ impl Curve {
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-before", "doc-images/plots/manipulation/merge-before.svg"))]
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-after", "doc-images/plots/manipulation/merge-after.svg"))]
     pub fn append(&mut self, other: &Self) -> Result<&mut Self> {
-        let merged = merge(self, other, &Constraints::default())?;
-        self.knots = merged.knots;
-        self.control_points = merged.control_points;
-        Ok(self)
+        self.append_constrained(other, Constraints::default())
     }
 
     /// Appends another curve like [`Curve::append`], but keeps the points at the constrained
@@ -331,9 +323,7 @@ impl Curve {
     /// assert_relative_eq!(curve.evaluate(0.5).unwrap(), end, epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn append_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
-        let merged = merge(self, other, &constraints)?;
-        self.knots = merged.knots;
-        self.control_points = merged.control_points;
+        *self = merge(self, other, &constraints)?;
         Ok(self)
     }
 
