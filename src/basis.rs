@@ -50,6 +50,33 @@ pub(crate) fn basis(knots: &DVector<f64>, index: usize, degree: usize, u: f64) -
     })
 }
 
+/// Evaluates the p + 1 basis functions of degree `p` that are not zero in the knot span `span` at the parameter `u`
+/// by the recurrence of [`Knots::basis`](crate::knots::Knots::basis) — algorithm A2.2 in `Piegl1997`. The value at
+/// the offset r belongs to the basis function span − p + r. Each degree reuses the values of the degree below for all
+/// functions together, so the time grows with p².
+///
+/// The span must be a knot span from [`Knots::find_span`](crate::knots::Knots::find_span), so no knot interval
+/// in the recurrence has zero length.
+pub(crate) fn calculate_basis_values(knots: &DVector<f64>, span: usize, degree: usize, u: f64, values: &mut [f64]) {
+    debug_assert_eq!(values.len(), degree + 1, "a span has p + 1 basis functions that are not zero");
+    values[0] = 1.0;
+
+    // Each level raises the degree by one and adds one basis function.
+    for level in 1..=degree {
+        // The first summand of the next basis function comes from the same basis function of the degree below.
+        let mut first_summand = 0.0;
+        for offset in 0..level {
+            let lower_value = values[offset];
+            let left_knot = knots[span + offset + 1 - level];
+            let right_knot = knots[span + offset + 1];
+
+            values[offset] = first_summand + (right_knot - u) / (right_knot - left_knot) * lower_value;
+            first_summand = (u - left_knot) / (right_knot - left_knot) * lower_value;
+        }
+        values[level] = first_summand;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
@@ -143,103 +170,61 @@ mod tests {
         let derivative = 1;
         let degree = 4;
         let knots = Knots::new(degree, dvector![0., 0., 0., 0., 0., 1. / 3., 2. / 3., 1., 1., 1., 1., 1.]).unwrap();
+        let derivative_knots = knots.derivative_knots(derivative).unwrap();
+        let basis = |index, u| derivative_knots.basis(index, u).unwrap();
 
         let mut i = 0;
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 0.0), 1.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 6.), 1. / 8.);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 3.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 2.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 2. / 3.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 5. / 6.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1.), 0.0);
+        assert_eq!(basis(i, 0.0), 1.0);
+        assert_eq!(basis(i, 1. / 6.), 1. / 8.);
+        assert_eq!(basis(i, 1. / 3.), 0.0);
+        assert_eq!(basis(i, 1. / 2.), 0.0);
+        assert_eq!(basis(i, 2. / 3.), 0.0);
+        assert_eq!(basis(i, 5. / 6.), 0.0);
+        assert_eq!(basis(i, 1.), 0.0);
 
         i = 1;
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 0.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 6.), 19. / 32.);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 3.), 1. / 4.);
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 1. / 2.),
-            1. / 32.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 2. / 3.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 5. / 6.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1.), 0.0);
+        assert_eq!(basis(i, 0.), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 19. / 32.);
+        assert_eq!(basis(i, 1. / 3.), 1. / 4.);
+        assert_relative_eq!(basis(i, 1. / 2.), 1. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 2. / 3.), 0.0);
+        assert_eq!(basis(i, 5. / 6.), 0.0);
+        assert_eq!(basis(i, 1.), 0.0);
 
         i = 2;
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 0.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 6.), 25. / 96.);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 3.), 7. / 12.);
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 1. / 2.),
-            15. / 32.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 2. / 3.),
-            1. / 6.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 5. / 6.),
-            1. / 48.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1.0), 0.0);
+        assert_eq!(basis(i, 0.), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 25. / 96.);
+        assert_eq!(basis(i, 1. / 3.), 7. / 12.);
+        assert_relative_eq!(basis(i, 1. / 2.), 15. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 2. / 3.), 1. / 6., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 5. / 6.), 1. / 48., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 1.0), 0.0);
 
         i = 3;
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 0.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 6.), 1. / 48.);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 3.), 1. / 6.);
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 1. / 2.),
-            15. / 32.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 2. / 3.),
-            7. / 12.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 5. / 6.),
-            25. / 96.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1.0), 0.0);
+        assert_eq!(basis(i, 0.), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 1. / 48.);
+        assert_eq!(basis(i, 1. / 3.), 1. / 6.);
+        assert_relative_eq!(basis(i, 1. / 2.), 15. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 2. / 3.), 7. / 12., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 5. / 6.), 25. / 96., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 1.0), 0.0);
 
         i = 4;
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 0.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 6.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 3.), 0.0);
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 1. / 2.),
-            1. / 32.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 2. / 3.),
-            1. / 4.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 5. / 6.),
-            19. / 32.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1.0), 0.0);
+        assert_eq!(basis(i, 0.), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 0.0);
+        assert_eq!(basis(i, 1. / 3.), 0.0);
+        assert_relative_eq!(basis(i, 1. / 2.), 1. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 2. / 3.), 1. / 4., epsilon = f64::EPSILON.sqrt());
+        assert_relative_eq!(basis(i, 5. / 6.), 19. / 32., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 1.0), 0.0);
 
         i = 5;
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 0.0), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 6.), 0.);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 3.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1. / 2.), 0.0);
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 2. / 3.), 0.0);
-        assert_relative_eq!(
-            knots.basis_of_derivative_curve(derivative, i, 5. / 6.),
-            1. / 8.,
-            epsilon = f64::EPSILON.sqrt()
-        );
-        assert_eq!(knots.basis_of_derivative_curve(derivative, i, 1.), 1.0);
+        assert_eq!(basis(i, 0.0), 0.0);
+        assert_eq!(basis(i, 1. / 6.), 0.);
+        assert_eq!(basis(i, 1. / 3.), 0.0);
+        assert_eq!(basis(i, 1. / 2.), 0.0);
+        assert_eq!(basis(i, 2. / 3.), 0.0);
+        assert_relative_eq!(basis(i, 5. / 6.), 1. / 8., epsilon = f64::EPSILON.sqrt());
+        assert_eq!(basis(i, 1.), 1.0);
     }
 }

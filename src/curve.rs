@@ -3,6 +3,7 @@
 use nalgebra::DVector;
 
 use crate::{
+    buffer::with_buffer,
     error::{Error, Result},
     fit::FitBuilder,
     interpolation,
@@ -220,12 +221,13 @@ impl Curve {
         let mut value = DVector::zeros(self.control_points.dimension());
 
         if derivative <= degree {
-            let span = self.knots.find_span(u, derivative);
-
             let points = self.control_points.matrix_derivative(derivative);
-            for i in span - (degree - derivative)..=span {
-                value.axpy(self.knots.basis_of_derivative_curve(derivative, i, u), &points.column(i), 1.0);
-            }
+            with_buffer(degree - derivative + 1, |basis_values| {
+                let first = self.knots.calculate_nonzero_basis(derivative, u, basis_values);
+                for (offset, &basis_value) in basis_values.iter().enumerate() {
+                    value.axpy(basis_value, &points.column(first + offset), 1.0);
+                }
+            });
         }
 
         // The derivative over very close knots can exceed the range of f64.
