@@ -155,15 +155,14 @@ impl Knots {
     }
 
     /// Derives the knot vectors of all derivative orders from the curve's knot vector.
-    /// The `k`-th derivative knot vector drops the first and last knot of the previous order.
+    /// The `k`-th derivative knot vector drops the first and last k knots.
     pub(crate) fn derive(&mut self) {
         self.derivatives.truncate(1);
-        for derivative in 1..=self.degree {
-            let previous = &self.derivatives[derivative - 1];
-            let trimmed = previous.segment(1, previous.len() - 2).clone_owned();
-
-            self.derivatives.push(trimmed);
-        }
+        let knots = &self.derivatives[0];
+        let derived: Vec<DVector<f64>> = (1..=self.degree)
+            .map(|derivative| knots.rows(derivative, knots.len() - 2 * derivative).into_owned())
+            .collect();
+        self.derivatives.extend(derived);
     }
 
     /// Returns the knot span of `u` on the knot vector of the `k`-th derivative curve: the index of the last
