@@ -11,15 +11,8 @@ use crate::{
 pub fn interpolate(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> Result<DMatrix<f64>> {
     let polyline_segments = points.polyline_segments();
 
-    let u_bar = parameters.vector();
-
     // Interpolation uses one control point per data point, so the system is square.
-    let mut basis_matrix = DMatrix::zeros(points.count(), points.count());
-    for i in 0..=polyline_segments {
-        for g in 0..=polyline_segments {
-            basis_matrix[(g, i)] = knots.basis_of_derivative_curve(0, i, u_bar[g]);
-        }
-    }
+    let basis_matrix = knots.calculate_basis_matrix(parameters.vector());
 
     // A basis function that is zero at its own parameter makes the system singular (Schoenberg-Whitney).
     if let Some(index) = (0..=polyline_segments).find(|&i| basis_matrix[(i, i)] == 0.0) {

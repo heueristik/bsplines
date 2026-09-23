@@ -1,6 +1,6 @@
 //! Merges two curves into one — see `Tai2003`.
 
-use std::ops::{AddAssign, DivAssign, SubAssign};
+use std::ops::AddAssign;
 
 use nalgebra::{DMatrix, DVector};
 
@@ -9,8 +9,7 @@ use crate::{
     basis::basis,
     buffer::with_buffer,
     error::{Error, Result},
-    knots::{Knots, reversed},
-    points,
+    knots::{Knots, normalize},
     points::{ControlPoints, Points},
     svd::decompose,
     vector_views::VectorViews,
@@ -69,20 +68,12 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
     let shifts = solve_linear_equation_system(left, right, constraints)?;
     let (left_shifted, right_shifted) = shift_boundary_control_points(left, right, &shifts);
 
-    let (left_adjusted, right_reversed, right_adjusted) = adjust_knot_vectors(left, right);
-    let merged_knots = merge_knot_vectors(left, right, &left_adjusted, &right_adjusted);
+    // The right knots move behind the joint at 1, so the concatenated knot vector spans [0, 2].
+    let mut merged_knots = concatenate_knot_vectors(left, right);
+    let left_points = adjust_shifted_control_points(left_shifted, &left.knots, &merged_knots);
+    normalize(&mut merged_knots);
 
-    let (left_points, right_points) = adjust_control_points_of_both_curves(
-        left,
-        right,
-        &left_shifted,
-        &right_shifted,
-        &left_adjusted,
-        &right_reversed,
-        &right_adjusted,
-    );
-
-    let merged_points = merge_control_points(left, right, &left_points, &right_points);
+    let merged_points = merge_control_points(left_degree, &left_points, &right_shifted);
 
     let merged = Curve::new(Knots::new(left_degree, merged_knots)?, ControlPoints::new(merged_points))?;
     check_constraints(left, right, constraints, &merged)?;
@@ -116,29 +107,29 @@ fn calculate_system_matrix(left: &Curve, right: &Curve, constraints: &Constraint
     let dimension = 3 * degree + left_constraints + right_constraints;
     let mut system_matrix = DMatrix::zeros(dimension, dimension);
 
-    system_matrix.view_mut((0, 0), (2 * degree, 2 * degree)).copy_from(&DMatrix::identity(2 * degree, 2 * degree));
+    system_matrix.view_mut((0, 0), (2 * degree, 2 * degree)).fill_with_identity();
 
-    system_matrix.view_mut((2 * degree, 0), (degree, degree)).copy_from(&calculate_kv(left));
-    system_matrix.view_mut((2 * degree, degree), (degree, degree)).copy_from(&calculate_kw(right));
-
-    system_matrix.view_mut((0, 2 * degree), (degree, degree)).copy_from(&calculate_iv(left));
-    system_matrix.view_mut((degree, 2 * degree), (degree, degree)).copy_from(&calculate_jw(right));
+    // Each upper block is the transpose of a lower block, scaled by 1/2 or −1/2.
+    let kv = calculate_kv(left);
+    let kw = calculate_kw(right);
+    let iv = kv.transpose() * 0.5;
+    let jw = kw.transpose() * 0.5;
+    system_matrix.view_mut((2 * degree, 0), (degree, degree)).copy_from(&kv);
+    system_matrix.view_mut((2 * degree, degree), (degree, degree)).copy_from(&kw);
+    system_matrix.view_mut((0, 2 * degree), (degree, degree)).copy_from(&iv);
+    system_matrix.view_mut((degree, 2 * degree), (degree, degree)).copy_from(&jw);
 
     if left_constraints > 0 {
-        system_matrix
-            .view_mut((3 * degree, 0), (left_constraints, degree))
-            .copy_from(&calculate_gv(left, &constraints.left));
-        system_matrix
-            .view_mut((0, 3 * degree), (degree, left_constraints))
-            .copy_from(&calculate_ipv(left, &constraints.left));
+        let gv = calculate_gv(left, &constraints.left);
+        let ipv = gv.transpose() * -0.5;
+        system_matrix.view_mut((3 * degree, 0), (left_constraints, degree)).copy_from(&gv);
+        system_matrix.view_mut((0, 3 * degree), (degree, left_constraints)).copy_from(&ipv);
     }
     if right_constraints > 0 {
-        system_matrix
-            .view_mut((3 * degree + left_constraints, degree), (right_constraints, degree))
-            .copy_from(&calculate_hw(right, &constraints.right));
-        system_matrix
-            .view_mut((degree, 3 * degree + left_constraints), (degree, right_constraints))
-            .copy_from(&calculate_jppw(right, &constraints.right));
+        let hw = calculate_hw(right, &constraints.right);
+        let jppw = hw.transpose() * -0.5;
+        system_matrix.view_mut((3 * degree + left_constraints, degree), (right_constraints, degree)).copy_from(&hw);
+        system_matrix.view_mut((degree, 3 * degree + left_constraints), (degree, right_constraints)).copy_from(&jppw);
     }
 
     system_matrix
@@ -147,124 +138,21 @@ fn calculate_system_matrix(left: &Curve, right: &Curve, constraints: &Constraint
 fn calculate_kv(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
     let polygon_segments = curve.polygon_segments();
+    let knot_values = curve.knots.vector();
 
-    let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.control_points.matrix();
-
-    let mut kv = DMatrix::zeros(degree, degree);
-
-    for derivative in 0..=degree - 1 {
-        for i in polygon_segments - degree + 1..=polygon_segments {
-            let mut sum = 0.;
-
-            for basis_index in polygon_segments - degree..=polygon_segments - derivative {
-                sum += prefactor(degree, basis_index, i, derivative, point_matrix, &knot_derivatives[0]) *
-                    basis(
-                        &knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        0,
-                        polygon_segments - derivative,
-                        knot_derivatives[0][polygon_segments + 1],
-                    );
-            }
-            kv[(derivative, i - (polygon_segments + 1 - degree))] = sum;
-        }
-    }
-    kv
+    // At u = 1, the last basis function of each derivative curve is 1 and all others are 0.
+    DMatrix::from_fn(degree, degree, |derivative, column| {
+        let i = polygon_segments + 1 - degree + column;
+        prefactor(degree, polygon_segments - derivative, i, derivative, knot_values)
+    })
 }
 
 fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
-    let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.control_points.matrix();
+    let knot_values = curve.knots.vector();
 
-    let mut kw = DMatrix::zeros(degree, degree);
-
-    for derivative in 0..=degree - 1 {
-        for j in 0..=degree - 1 {
-            let mut sum = 0.;
-
-            for basis_index in 0..=degree - derivative {
-                sum += prefactor(degree, basis_index, j, derivative, point_matrix, &knot_derivatives[0]) *
-                    basis(
-                        &knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        0,
-                        polygon_segments - derivative,
-                        knot_derivatives[0][degree],
-                    );
-            }
-            kw[(derivative, j)] = sum;
-        }
-    }
-    kw *= -1.0;
-
-    kw
-}
-
-fn calculate_iv(curve: &Curve) -> DMatrix<f64> {
-    let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
-    let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.control_points.matrix();
-
-    let mut iv = DMatrix::zeros(degree, degree);
-
-    for i in polygon_segments - degree + 1..=polygon_segments {
-        for derivative in 0..=degree - 1 {
-            let mut sum = 0.;
-
-            for basis_index in polygon_segments - degree..=polygon_segments - derivative {
-                sum += prefactor(degree, basis_index, i, derivative, point_matrix, &knot_derivatives[0]) *
-                    basis(
-                        &knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        0,
-                        polygon_segments - derivative,
-                        knot_derivatives[0][polygon_segments + 1],
-                    );
-            }
-            iv[(i - (polygon_segments + 1 - degree), derivative)] = sum;
-        }
-    }
-    iv *= 0.5;
-
-    iv
-}
-
-fn calculate_jw(curve: &Curve) -> DMatrix<f64> {
-    let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
-    let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.control_points.matrix();
-
-    let mut jw = DMatrix::zeros(degree, degree);
-
-    for j in 0..=degree - 1 {
-        for derivative in 0..=degree - 1 {
-            let mut sum = 0.;
-
-            for basis_index in 0..=degree - derivative {
-                sum += prefactor(degree, basis_index, j, derivative, point_matrix, &knot_derivatives[0]) *
-                    basis(
-                        &knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        0,
-                        polygon_segments - derivative,
-                        knot_derivatives[0][degree],
-                    );
-            }
-            jw[(j, derivative)] = sum;
-        }
-    }
-    jw *= -0.5;
-
-    jw
+    // At u = 0, the first basis function of each derivative curve is 1 and all others are 0.
+    DMatrix::from_fn(degree, degree, |derivative, j| -prefactor(degree, 0, j, derivative, knot_values))
 }
 
 fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
@@ -276,7 +164,7 @@ fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
 
     for (g, &u) in parameters.iter().enumerate() {
         for i in polygon_segments - degree + 1..=polygon_segments {
-            gv[(g, i - (polygon_segments - degree + 1))] = basis(knot_values, i, degree, 0, polygon_segments, u);
+            gv[(g, i - (polygon_segments - degree + 1))] = basis(knot_values, i, degree, u);
         }
     }
     gv
@@ -284,123 +172,38 @@ fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
 
 fn calculate_hw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
     let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
     let knot_values = curve.knots.vector();
 
     let mut hw = DMatrix::zeros(parameters.len(), degree);
 
     for (h, &u) in parameters.iter().enumerate() {
         for i in 0..=degree - 1 {
-            hw[(h, i)] = basis(knot_values, i, degree, 0, polygon_segments, u);
+            hw[(h, i)] = basis(knot_values, i, degree, u);
         }
     }
 
     hw
 }
 
-fn calculate_ipv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
-    let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
-    let knot_values = curve.knots.vector();
-
-    let mut ipv = DMatrix::zeros(degree, parameters.len());
-
-    for i in polygon_segments - degree + 1..=polygon_segments {
-        for (g, &u) in parameters.iter().enumerate() {
-            ipv[(i - (polygon_segments + 1 - degree), g)] = basis(knot_values, i, degree, 0, polygon_segments, u);
-        }
-    }
-    ipv *= -0.5;
-    ipv
-}
-
-fn calculate_jppw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
-    let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
-    let knot_values = curve.knots.vector();
-
-    let mut jppw = DMatrix::zeros(degree, parameters.len());
-
-    for j in 0..=degree - 1 {
-        for (h, &u) in parameters.iter().enumerate() {
-            jppw[(j, h)] = basis(knot_values, j, degree, 0, polygon_segments, u);
-        }
-    }
-    jppw *= -0.5;
-    jppw
-}
-
 fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
-    let degree = left.degree();
-    let dimension = left.dimension();
-
-    let mut kconst = DMatrix::zeros(dimension, degree);
-    let mut sum = DVector::zeros(dimension);
-
-    let left_polygon_segments = left.polygon_segments();
-    let right_polygon_segments = right.polygon_segments();
-
-    let left_knot_derivatives = &left.knots.derivatives;
-    let right_knot_derivatives = &right.knots.derivatives;
-
-    let left_points = left.control_points.matrix();
-    let right_points = right.control_points.matrix();
-
-    for derivative in 0..=degree - 1 {
-        sum.fill(0.0);
-
-        for i in left_polygon_segments - degree..=left_polygon_segments {
-            for basis_index in left_polygon_segments - degree..=left_polygon_segments - derivative {
-                sum += prefactor(degree, basis_index, i, derivative, left_points, &left_knot_derivatives[0]) *
-                    basis(
-                        &left_knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        0,
-                        left_polygon_segments - derivative,
-                        left_knot_derivatives[0][left_polygon_segments + 1],
-                    ) *
-                    left_points.column(i);
-            }
-        }
-
-        for j in 0..=degree {
-            for basis_index in 0..=degree - derivative {
-                sum -= prefactor(degree, basis_index, j, derivative, right_points, &right_knot_derivatives[0]) *
-                    basis(
-                        &right_knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        0,
-                        right_polygon_segments - derivative,
-                        right_knot_derivatives[0][degree],
-                    ) *
-                    right_points.column(j);
-            }
-        }
-        kconst.column_mut(derivative).sub_assign(&sum);
-    }
-    kconst
-}
-
-fn calculate_constant_terms(left: &Curve, right: &Curve, total_constraints: usize) -> DMatrix<f64> {
-    let degree = left.degree();
-    let dimension = left.dimension();
-
-    let mut constant_terms = DMatrix::zeros(dimension, 3 * degree + total_constraints);
-
-    let kconst = calculate_kconst(left, right);
-    constant_terms.view_mut((0, 2 * degree), (dimension, degree)).copy_from(&kconst);
-
-    constant_terms
+    // At its ends, each derivative of a clamped curve equals the first or the last control point of that derivative.
+    DMatrix::from_fn(left.dimension(), left.degree(), |row, derivative| {
+        let left_points = left.control_points.matrix_derivative(derivative);
+        let right_points = right.control_points.matrix_derivative(derivative);
+        right_points[(row, 0)] - left_points[(row, left_points.ncols() - 1)]
+    })
 }
 
 fn solve_linear_equation_system(left: &Curve, right: &Curve, constraints: &Constraints) -> Result<DMatrix<f64>> {
+    let degree = left.degree();
     let system_matrix = calculate_system_matrix(left, right, constraints);
-    let constant_terms = calculate_constant_terms(left, right, constraints.count());
+
+    // Only the rows of the continuity conditions have constant terms.
+    let mut constant_terms = DMatrix::zeros(system_matrix.nrows(), left.dimension());
+    constant_terms.rows_mut(2 * degree, degree).tr_copy_from(&calculate_kconst(left, right));
 
     Ok(decompose(system_matrix)?
-        .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
+        .solve(&constant_terms, f64::EPSILON.sqrt())
         .expect("the SVD was computed with both U and V^T")
         .transpose())
 }
@@ -417,225 +220,102 @@ fn shift_boundary_control_points(left: &Curve, right: &Curve, shifts: &DMatrix<f
     (left_shifted, right_shifted)
 }
 
-fn adjust_knot_vectors(left: &Curve, right: &Curve) -> (DVector<f64>, DVector<f64>, DVector<f64>) {
-    let degree = left.degree();
-
+/// Returns the knots of the left curve up to the joint, followed by the internal and the end knots of the right curve
+/// moved behind the joint at 1.
+fn concatenate_knot_vectors(left: &Curve, right: &Curve) -> DVector<f64> {
     let left_polygon_segments = left.polygon_segments();
     let right_polygon_segments = right.polygon_segments();
 
-    let left_knots = left.knots.vector();
-    let right_knots = right.knots.vector();
-
-    let left_adjusted = adjust_knots(degree, left_knots, left_polygon_segments, right_knots);
-
-    let left_reversed = reversed(left_knots);
-    let right_reversed = reversed(right_knots);
-    let right_adjusted_reversed = adjust_knots(degree, &right_reversed, right_polygon_segments, &left_reversed);
-    let right_adjusted = reversed(&right_adjusted_reversed).add_scalar(1.);
-
-    (left_adjusted, right_reversed, right_adjusted)
+    let mut knots = DVector::zeros(left_polygon_segments + 2 + right_polygon_segments + 1);
+    knots.head_mut(left_polygon_segments + 2).copy_from(&left.knots.vector().head(left_polygon_segments + 2));
+    knots
+        .tail_mut(right_polygon_segments + 1)
+        .copy_from(&right.knots.vector().tail(right_polygon_segments + 1).add_scalar(1.));
+    knots
 }
 
-fn adjust_knots(
-    degree: usize,
-    knots: &DVector<f64>,
-    polygon_segments: usize,
-    next_knots: &DVector<f64>,
-) -> DVector<f64> {
-    let mut adjusted = DVector::zeros(polygon_segments + degree + 2);
-
-    adjusted.head_mut(polygon_segments + 2).copy_from(&knots.head(polygon_segments + 2));
-
-    adjusted.tail_mut(degree).copy_from(&next_knots.segment(degree + 1, degree).add_scalar(1.));
-
-    adjusted
-}
-
-fn merge_knot_vectors(
-    left: &Curve,
-    right: &Curve,
-    left_adjusted: &DVector<f64>,
-    right_adjusted: &DVector<f64>,
-) -> DVector<f64> {
-    let left_polygon_segments = left.polygon_segments();
-    let right_polygon_segments = right.polygon_segments();
-
-    let mut merged_knots = DVector::zeros(left_polygon_segments + 2 + right_polygon_segments + 1);
-
-    merged_knots.head_mut(left_polygon_segments + 2).copy_from(&left_adjusted.head(left_polygon_segments + 2));
-    merged_knots.tail_mut(right_polygon_segments + 1).copy_from(&right_adjusted.tail(right_polygon_segments + 1));
-
-    // The concatenated knot vector spans [0, 2]. Normalize it to [0, 1].
-    merged_knots.div_assign(merged_knots[left_polygon_segments + right_polygon_segments + 2]);
-
-    merged_knots
-}
-
-fn calculate_derivative_control_point(
-    index: usize,
-    derivative: usize,
-    points: &DMatrix<f64>,
-    knot_values: &DVector<f64>,
-    degree: usize,
-    polygon_segments: usize,
-    dimension: usize,
-) -> DVector<f64> {
-    let mut control_point = DVector::zeros(dimension);
-
-    assert!(
-        index <= polygon_segments - derivative,
-        "the index {} exceeds the last control point {} of the derivative {}",
-        index,
-        polygon_segments - derivative,
-        derivative
-    );
-    for zero_order_index in 0..=polygon_segments {
-        control_point += prefactor(degree, index, zero_order_index, derivative, points, knot_values) *
-            points.column(zero_order_index);
-    }
-    control_point
-}
-
+/// Returns the shifted control points of the left curve with the last p − 1 points recalculated for the adjusted
+/// knots ũ: the left knots up to the joint, followed by the internal knots of the right curve. The control points
+/// of all derivative curves at the index n − p + 1 stay the same, and the derivative formula of [`ControlPoints`],
+/// solved for the higher index, gives the points after it:
+///
+/// Pᵢ⁽ᵏ⁾ = Pᵢ₋₁⁽ᵏ⁾ + (ũᵢ₊ₚ − ũᵢ₊ₖ) ∕ (p − k) · Pᵢ₋₁⁽ᵏ⁺¹⁾,   i = n − p + 2, …, n,   k = 0, …, n − i
+///
+/// with the control points P, the adjusted knots ũ, the degree p, the derivative order k, and the number of polygon
+/// segments n.
 fn adjust_shifted_control_points(
-    points: &DMatrix<f64>,
-    knot_values: &DVector<f64>,
+    points: DMatrix<f64>,
+    knots: &Knots,
     adjusted_knot_values: &DVector<f64>,
-    degree: usize,
-    polygon_segments: usize,
-    dimension: usize,
 ) -> DMatrix<f64> {
-    let mut adjusted = DMatrix::zeros(dimension, polygon_segments + 1);
-    let mut derivative_points: Vec<Vec<DVector<f64>>> = vec![Vec::new(); polygon_segments + 1];
+    let degree = knots.degree();
+    let polygon_segments = points.ncols() - 1;
+    let first = polygon_segments + 1 - degree;
 
-    for (i, elem) in derivative_points.iter_mut().enumerate().take(polygon_segments + 1) {
-        elem.push(points.column(i).into());
-    }
+    let mut control_points = ControlPoints::new(points);
+    control_points.derive(knots);
+    let mut derivative_points = DMatrix::from_fn(control_points.dimension(), degree, |row, derivative| {
+        control_points.matrix_derivative(derivative)[(row, first)]
+    });
 
-    for derivative in 1..=degree - 1 {
-        let derivative_point = calculate_derivative_control_point(
-            polygon_segments - degree + 1,
-            derivative,
-            points,
-            knot_values,
-            degree,
-            polygon_segments,
-            dimension,
-        );
-        derivative_points[polygon_segments - degree + 1].push(derivative_point);
-    }
-
-    for i in polygon_segments - degree + 2..=polygon_segments {
-        derivative_points[i].resize(polygon_segments - i + 1, DVector::zeros(dimension));
-        for derivative in (0..=polygon_segments - i).rev() {
-            derivative_points[i][derivative] = ((adjusted_knot_values[i + degree] -
-                adjusted_knot_values[i + derivative]) /
-                ((degree - derivative) as f64)) *
-                &derivative_points[i - 1][derivative + 1] +
-                &derivative_points[i - 1][derivative];
+    let mut adjusted = control_points.matrix().clone();
+    for i in first + 1..=polygon_segments {
+        // The derivatives run upward, so the next higher derivative still holds its point at the index i − 1.
+        for derivative in 0..=polygon_segments - i {
+            let scale = (adjusted_knot_values[i + degree] - adjusted_knot_values[i + derivative]) /
+                (degree - derivative) as f64;
+            let (mut lower, higher) = derivative_points.columns_range_pair_mut(derivative, derivative + 1);
+            lower.axpy(scale, &higher, 1.0);
         }
+        adjusted.set_column(i, &derivative_points.column(0));
     }
-
-    for (i, elem) in derivative_points.iter_mut().enumerate().take(polygon_segments + 1) {
-        adjusted.set_column(i, &elem[0]);
-    }
-
     adjusted
 }
 
-fn adjust_control_points_of_both_curves(
-    left: &Curve,
-    right: &Curve,
-    left_shifted: &DMatrix<f64>,
-    right_shifted: &DMatrix<f64>,
-    left_adjusted: &DVector<f64>,
-    right_reversed: &DVector<f64>,
-    right_adjusted: &DVector<f64>,
-) -> (DMatrix<f64>, DMatrix<f64>) {
-    let degree = left.degree();
-    let dimension = left.dimension();
+/// Returns the control points of the merged curve: the adjusted left points without the last one, followed by the
+/// shifted right points from the index p − 1 on. The merged curve has p control points fewer than both curves.
+fn merge_control_points(degree: usize, left_points: &DMatrix<f64>, right_points: &DMatrix<f64>) -> DMatrix<f64> {
+    let left_count = left_points.ncols() - 1;
+    let right_count = right_points.ncols() + 1 - degree;
 
-    let left_points = adjust_shifted_control_points(
-        left_shifted,
-        left.knots.vector(),
-        left_adjusted,
-        degree,
-        left.polygon_segments(),
-        dimension,
-    );
-
-    // The right curve is adjusted in its reversed orientation and then reversed back.
-    let right_shifted_reversed = points::reversed(right_shifted);
-    let right_points_reversed = adjust_shifted_control_points(
-        &right_shifted_reversed,
-        right_reversed,
-        right_adjusted,
-        degree,
-        right.polygon_segments(),
-        dimension,
-    );
-    let right_points = points::reversed(&right_points_reversed);
-
-    (left_points, right_points)
-}
-
-fn merge_control_points(
-    left: &Curve,
-    right: &Curve,
-    left_points: &DMatrix<f64>,
-    right_points: &DMatrix<f64>,
-) -> DMatrix<f64> {
-    let degree = left.degree();
-    let dimension = left.dimension();
-    let left_count = left.control_points.count();
-    let right_count = right.control_points.count();
-
-    let mut merged_points = DMatrix::zeros(dimension, left_count + right_count - degree);
-
-    merged_points.columns_mut(0, left_count).copy_from(left_points);
-
-    let tail_count = right_count + 1 - degree;
-    merged_points
-        .columns_mut(merged_points.ncols() - tail_count, tail_count)
-        .copy_from(&right_points.columns(right_points.ncols() - tail_count, tail_count));
-
+    let mut merged_points = DMatrix::zeros(left_points.nrows(), left_count + right_count);
+    merged_points.columns_mut(0, left_count).copy_from(&left_points.columns(0, left_count));
+    merged_points.columns_mut(left_count, right_count).copy_from(&right_points.columns(degree - 1, right_count));
     merged_points
 }
 
-fn kronecker_delta(i: usize, j: usize) -> bool {
-    i == j
-}
-
-/// Returns the factor that ties a control point of the `k`-th derivative curve
-/// to a zero-order control point — see `Tai2003`. It evaluates the orders from 0 upward,
-/// so the time grows with k² and not with 2ᵏ.
+/// Returns the factor that ties the control point `index` of the `k`-th derivative curve to the control point
+/// `zero_order_index` of the curve — see `Tai2003`. It evaluates the orders from 0 upward, so the time grows with k²
+/// and not with 2ᵏ.
 fn prefactor(
     degree: usize,
     index: usize,
     zero_order_index: usize,
     derivative: usize,
-    points: &DMatrix<f64>,
     knot_values: &DVector<f64>,
 ) -> f64 {
-    let polygon_segments = points.ncols() - 1;
+    debug_assert!(
+        index + derivative + degree + 2 <= knot_values.len(),
+        "the derivative curve has no control point {index}"
+    );
 
     with_buffer(derivative + 1, |factors| {
         // The factors of order 0 from the index i to i + k.
         for (offset, factor) in factors.iter_mut().enumerate() {
-            let j = index + offset;
-            *factor = if j <= polygon_segments && kronecker_delta(j, zero_order_index) { 1. } else { 0. };
+            *factor = if index + offset == zero_order_index { 1. } else { 0. };
         }
 
         // Each order combines two neighbors of the order below and keeps one factor fewer.
         for order in 1..=derivative {
             for offset in 0..=derivative - order {
                 let j = index + offset;
-                factors[offset] =
-                    if j + order > polygon_segments || knot_values[j + degree + 1] == knot_values[j + order] {
-                        0.
-                    } else {
-                        (degree + 1 - order) as f64 / (knot_values[j + degree + 1] - knot_values[j + order]) *
-                            (factors[offset + 1] - factors[offset])
-                    };
+                let width = knot_values[j + degree + 1] - knot_values[j + order];
+                // Equal knots give a zero factor instead of a division by zero.
+                factors[offset] = if width == 0.0 {
+                    0.
+                } else {
+                    (degree + 1 - order) as f64 / width * (factors[offset + 1] - factors[offset])
+                };
             }
         }
         factors[0]

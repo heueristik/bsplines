@@ -1,10 +1,5 @@
 #![warn(missing_docs)]
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("eq-curve", "doc-images/equations/curve.svg"),
-doc = ::embed_doc_image::embed_image!("eq-knots", "doc-images/equations/knots.svg"),
-doc = ::embed_doc_image::embed_image!("eq-control-points", "doc-images/equations/control-points.svg"),
-doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulation/insert-before.svg")))]
+#![cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulation/insert-before.svg"))]
 //! **bsplines** is a library for vectorized, N-dimensional B-spline curves and their derivatives based on
 //! [nalgebra].
 //!

@@ -3,6 +3,7 @@
 use nalgebra::DVector;
 
 use crate::{
+    buffer::with_buffer,
     error::{Error, Result},
     fit::FitBuilder,
     interpolation,
@@ -61,7 +62,7 @@ impl Curve {
     /// let curve = Curve::new(knots, control_points).unwrap();
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
-    pub fn new(knots: Knots, control_points: ControlPoints) -> Result<Self> {
+    pub fn new(knots: Knots, mut control_points: ControlPoints) -> Result<Self> {
         if !knots.is_clamped() {
             return Err(Error::UnclampedKnots);
         }
@@ -79,13 +80,17 @@ impl Curve {
             return Err(Error::NonFiniteControlPoint { index });
         }
 
-        let mut curve = Self { knots, control_points };
-        curve.derive();
-        Ok(curve)
+        // Every knot vector arrives with the knot vectors of its derivatives.
+        control_points.derive(&knots);
+        Ok(Self { knots, control_points })
     }
 
     /// Returns a curve of the given degree with the given control points
     /// on a clamped, uniform knot vector.
+    ///
+    /// | 18 points.                | A curve of degree 2 with the points as control points. |
+    /// |:-------------------------:|:------------------------------------------------------:|
+    /// | ![][generation-points]    | ![][generation-manual]                                 |
     ///
     /// # Examples
     /// ```
@@ -94,6 +99,8 @@ impl Curve {
     ///
     /// let curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-2.0,-1.0, 0.5, 1.5;]), 2).unwrap();
     /// ```
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-points", "doc-images/plots/generation/points.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-manual", "doc-images/plots/generation/manual.svg"))]
     pub fn with_uniform_knots(control_points: ControlPoints, degree: usize) -> Result<Self> {
         let knots = Knots::uniform(degree, control_points.polygon_segments())?;
         Self::new(knots, control_points)
@@ -101,6 +108,10 @@ impl Curve {
 
     /// Returns a curve of the given degree interpolating the data points,
     /// using equally spaced parameters and a uniform knot vector.
+    ///
+    /// | 18 data points.           | The curve of degree 2 that interpolates them. |
+    /// |:-------------------------:|:---------------------------------------------:|
+    /// | ![][generation-points]    | ![][generation-interpolation]                 |
     ///
     /// # Examples
     /// ```
@@ -113,6 +124,8 @@ impl Curve {
     /// ]);
     /// let curve = Curve::interpolate(&data, 2).unwrap();
     /// ```
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-points", "doc-images/plots/generation/points.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-interpolation", "doc-images/plots/generation/interpolation.svg"))]
     pub fn interpolate(data: &DataPoints, degree: usize) -> Result<Self> {
         Self::interpolate_with(data, degree, ParameterMethod::EquallySpaced, KnotMethod::Uniform)
     }
@@ -134,6 +147,12 @@ impl Curve {
     /// Returns a builder for a least-squares fit of the data points
     /// with a curve of the given degree.
     ///
+    /// The plots fit curves of degree 2 with loose ends to 18 data points.
+    ///
+    /// | 17 polygon segments.         | 6 polygon segments.           | 6 polygon segments, penalized with λ = 0.5 and κ = 2. |
+    /// |:----------------------------:|:-----------------------------:|:-----------------------------------------------------:|
+    /// | ![][generation-fit-loose-all] | ![][generation-fit-loose-half] | ![][generation-fit-loose-half-penalized]             |
+    ///
     /// # Examples
     /// ```
     /// use bsplines::{Curve, DataPoints};
@@ -145,6 +164,9 @@ impl Curve {
     /// ]);
     /// let curve = Curve::fit(&data, 2).polygon_segments(3).loose_ends().build().unwrap();
     /// ```
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-fit-loose-all", "doc-images/plots/generation/fit-loose-all.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-fit-loose-half", "doc-images/plots/generation/fit-loose-half.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-fit-loose-half-penalized", "doc-images/plots/generation/fit-loose-half-penalized.svg"))]
     pub fn fit<'a>(data: &'a DataPoints, degree: usize) -> FitBuilder<'a> {
         FitBuilder::new(data, degree)
     }
@@ -199,12 +221,13 @@ impl Curve {
         let mut value = DVector::zeros(self.control_points.dimension());
 
         if derivative <= degree {
-            let span = self.knots.find_span(u, derivative);
-
-            for i in span - (degree - derivative)..=span {
-                value += self.knots.basis_of_derivative_curve(derivative, i, u) *
-                    self.control_points.matrix_derivative(derivative).column(i);
-            }
+            let points = self.control_points.matrix_derivative(derivative);
+            with_buffer(degree - derivative + 1, |basis_values| {
+                let first = self.knots.calculate_nonzero_basis(derivative, u, basis_values);
+                for (offset, &basis_value) in basis_values.iter().enumerate() {
+                    value.axpy(basis_value, &points.column(first + offset), 1.0);
+                }
+            });
         }
 
         // The derivative over very close knots can exceed the range of f64.
@@ -244,18 +267,13 @@ impl Curve {
     /// assert_relative_eq!(merged.control_points().matrix(), &dmatrix![-3.0,-2.0, 2.0, 3.0;], epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn prepend(&mut self, other: &Self) -> Result<&mut Self> {
-        let merged = merge(other, self, &Constraints::default())?;
-        self.knots = merged.knots;
-        self.control_points = merged.control_points;
-        Ok(self)
+        self.prepend_constrained(other, Constraints::default())
     }
 
     /// Prepends another curve like [`Curve::prepend`], but keeps the points at the constrained
     /// parameters fixed. The other curve is the left one, this curve is the right one.
     pub fn prepend_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
-        let merged = merge(other, self, &constraints)?;
-        self.knots = merged.knots;
-        self.control_points = merged.control_points;
+        *self = merge(other, self, &constraints)?;
         Ok(self)
     }
 
@@ -284,10 +302,7 @@ impl Curve {
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-before", "doc-images/plots/manipulation/merge-before.svg"))]
     #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-after", "doc-images/plots/manipulation/merge-after.svg"))]
     pub fn append(&mut self, other: &Self) -> Result<&mut Self> {
-        let merged = merge(self, other, &Constraints::default())?;
-        self.knots = merged.knots;
-        self.control_points = merged.control_points;
-        Ok(self)
+        self.append_constrained(other, Constraints::default())
     }
 
     /// Appends another curve like [`Curve::append`], but keeps the points at the constrained
@@ -310,9 +325,7 @@ impl Curve {
     /// assert_relative_eq!(curve.evaluate(0.5).unwrap(), end, epsilon = f64::EPSILON.sqrt());
     /// ```
     pub fn append_constrained(&mut self, other: &Self, constraints: Constraints) -> Result<&mut Self> {
-        let merged = merge(self, other, &constraints)?;
-        self.knots = merged.knots;
-        self.control_points = merged.control_points;
+        *self = merge(self, other, &constraints)?;
         Ok(self)
     }
 

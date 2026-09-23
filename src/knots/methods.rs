@@ -14,6 +14,20 @@ fn check_input(degree: usize, polygon_segments: usize) -> Result<()> {
     }
 }
 
+/// Returns the clamped knot vector of the degree p and the n polygon segments: p + 1 zeros, the n − p internal
+/// knots uₚ₊ⱼ = `internal_knot(j)` for j = 1, …, n − p, and p + 1 ones. It calls `internal_knot` only after
+/// the input check, so the function may assume p ≤ n.
+fn clamped_knots(degree: usize, polygon_segments: usize, internal_knot: impl Fn(usize) -> f64) -> Result<Knots> {
+    check_input(degree, polygon_segments)?;
+
+    let knots = DVector::from_fn(degree + polygon_segments + 2, |index, _| match index {
+        index if index <= degree => 0.0,
+        index if index <= polygon_segments => internal_knot(index - degree),
+        _ => 1.0,
+    });
+    Knots::new(degree, knots)
+}
+
 /// Generates a clamped, uniform knot vector — eq. (9.7) in `Piegl1997`:
 ///
 /// uᵢ₊ₚ = i ∕ (n − p + 1),   i = 1, …, n − p
@@ -23,22 +37,7 @@ fn check_input(degree: usize, polygon_segments: usize) -> Result<()> {
 /// ## Note
 /// Use this method only if the control points are evenly distributed.
 pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
-    check_input(degree, polygon_segments)?;
-
-    let internal_knot_count = polygon_segments - degree;
-
-    let mut knots = DVector::zeros(degree + polygon_segments + 2);
-
-    for i in 1..=internal_knot_count {
-        knots[degree + i] = i as f64 / (internal_knot_count + 1) as f64
-    }
-
-    // Set the tail clamp to one.
-    for i in polygon_segments + 1..knots.len() {
-        knots[i] = 1.;
-    }
-
-    Knots::new(degree, knots)
+    clamped_knots(degree, polygon_segments, |i| i as f64 / (polygon_segments - degree + 1) as f64)
 }
 
 /// Generates the knot vector by averaging consecutive parameters — eq. (9.8) in `Piegl1997`:
@@ -47,29 +46,8 @@ pub fn uniform(degree: usize, polygon_segments: usize) -> Result<Knots> {
 ///
 /// with the knots u, the parameters ū, the degree p, and the number of polygon segments n.
 pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots> {
-    check_input(degree, polygon_segments)?;
-
-    let internal_knot_count = polygon_segments - degree;
-
     let u_bar = parameters.vector();
-
-    let mut knots = DVector::zeros(degree + polygon_segments + 2);
-
-    for j in 1..=internal_knot_count {
-        let mut parameter_sum = 0.;
-
-        for i in j..j + degree {
-            parameter_sum += u_bar[i];
-        }
-        knots[degree + j] = parameter_sum / degree as f64;
-    }
-
-    // Set the tail clamp to one.
-    for j in polygon_segments + 1..knots.len() {
-        knots[j] = 1.;
-    }
-
-    Knots::new(degree, knots)
+    clamped_knots(degree, polygon_segments, |j| (j..j + degree).map(|i| u_bar[i]).sum::<f64>() / degree as f64)
 }
 
 /// Generates the knot vector by de Boor's averaging over parameter spans — eqs. (9.68) and (9.69) in `Piegl1997`:
@@ -86,32 +64,14 @@ pub fn averaging(degree: usize, polygon_segments: usize, parameters: &Parameters
 /// According to de Boor, this ensures that the coefficient matrix is positive definite and
 /// well-conditioned, which is important for the least-squares fitting and interpolation of data points.
 pub fn de_boor(degree: usize, polygon_segments: usize, parameters: &Parameters) -> Result<Knots> {
-    check_input(degree, polygon_segments)?;
-
     let u_bar = parameters.vector();
-
-    let internal_knot_count = polygon_segments - degree;
-    let internal_knot_spans = internal_knot_count + 1;
-
-    let span_width = (parameters.polyline_segments() + 1) as f64 / internal_knot_spans as f64;
-
-    let mut knots = DVector::zeros(degree + polygon_segments + 2);
-
-    for j in 1..=internal_knot_count {
+    clamped_knots(degree, polygon_segments, |j| {
+        let span_width = (parameters.polyline_segments() + 1) as f64 / (polygon_segments - degree + 1) as f64;
         let position = j as f64 * span_width;
-
         let i = position as usize;
         let alpha = position - i as f64;
-
-        knots[degree + j] = (1f64 - alpha) * u_bar[i - 1] + alpha * u_bar[i];
-    }
-
-    // Set the tail clamp to one.
-    for j in polygon_segments + 1..knots.len() {
-        knots[j] = 1.;
-    }
-
-    Knots::new(degree, knots)
+        (1f64 - alpha) * u_bar[i - 1] + alpha * u_bar[i]
+    })
 }
 
 #[cfg(test)]
@@ -121,6 +81,15 @@ mod tests {
     use crate::parameters::methods::equally_spaced;
 
     use super::*;
+
+    #[test]
+    fn uniform_errors_for_a_degree_above_the_polygon_segments() {
+        let (degree, polygon_segments) = (5, 2);
+        assert_eq!(
+            uniform(degree, polygon_segments).err(),
+            Some(Error::TooFewPolygonSegments { degree, polygon_segments })
+        );
+    }
 
     mod uniform {
         use rstest::rstest;

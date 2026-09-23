@@ -130,11 +130,11 @@ impl ControlPoints {
             for (i, mut column) in new_points.column_iter_mut().enumerate() {
                 // Equal knots give a zero control point instead of a division by zero.
                 if knot_values[i + degree + 1] != knot_values[i + derivative] {
-                    column.copy_from(
-                        &((degree - derivative + 1) as f64 /
-                            (knot_values[i + degree + 1] - knot_values[i + derivative]) *
-                            (previous.column(i + 1) - previous.column(i))),
-                    );
+                    let scale =
+                        (degree - derivative + 1) as f64 / (knot_values[i + degree + 1] - knot_values[i + derivative]);
+                    column.copy_from(&previous.column(i + 1));
+                    column -= previous.column(i);
+                    column *= scale;
                 }
             }
             self.derivatives.push(new_points);
@@ -164,6 +164,7 @@ pub(crate) fn reverse(points: &mut DMatrix<f64>) {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn reversed(points: &DMatrix<f64>) -> DMatrix<f64> {
     let mut copy = points.clone();
     reverse(&mut copy);

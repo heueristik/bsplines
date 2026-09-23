@@ -2,7 +2,7 @@ use nalgebra::DMatrix;
 
 use crate::{
     error::Result,
-    fit::{Penalization, check_input, decompose_normal_matrix, difference_operator},
+    fit::{Penalization, check_input, decompose_normal_matrix},
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
@@ -16,49 +16,14 @@ pub fn fit(
 ) -> Result<DMatrix<f64>> {
     check_input(knots, points, parameters, &penalization, knots.polygon_segments() + 1)?;
 
-    let basis_matrix = calculate_basis_matrix(knots, points, parameters);
+    let basis_matrix = knots.calculate_basis_matrix(parameters.vector());
 
-    let svd =
-        decompose_normal_matrix(knots, &basis_matrix, &penalization, Box::new(calculate_finite_difference_matrix))?;
+    let svd = decompose_normal_matrix(knots, &basis_matrix, &penalization)?;
     let constant_terms = basis_matrix.transpose() * points.matrix().transpose();
     let control_points =
         svd.solve(&constant_terms, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T").transpose();
 
     Ok(control_points)
-}
-
-fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
-    let polygon_segments = knots.polygon_segments();
-    let polyline_segments = points.polyline_segments();
-
-    let u_bar = parameters.vector();
-
-    let mut basis_matrix = DMatrix::zeros(polyline_segments + 1, polygon_segments + 1);
-    for g in 0..=polyline_segments {
-        let u = u_bar[g];
-        for i in 0..=polygon_segments {
-            basis_matrix[(g, i)] = knots.basis_of_derivative_curve(0, i, u);
-        }
-    }
-    basis_matrix
-}
-
-fn calculate_finite_difference_matrix(difference_order: usize, knots: &Knots) -> DMatrix<f64> {
-    let polygon_segments = knots.polygon_segments();
-    debug_assert!(
-        difference_order <= polygon_segments,
-        "the difference order must be smaller than the n + 1 control points"
-    );
-
-    let mut difference_matrix = DMatrix::zeros(polygon_segments + 1 - difference_order, polygon_segments + 1);
-
-    for i in 0..=polygon_segments - difference_order {
-        for j in 0..=polygon_segments {
-            difference_matrix[(i, j)] = difference_operator(i, j, difference_order);
-        }
-    }
-
-    difference_matrix
 }
 
 #[cfg(test)]
@@ -75,50 +40,6 @@ mod tests {
 
     use super::*;
     use crate::fit::test_data_points;
-
-    #[test]
-    fn finite_difference_matrix_order_0_is_the_identity() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
-        let control_point_count = knots.polygon_segments() + 1;
-        let matrix = calculate_finite_difference_matrix(0, &knots);
-        assert_eq!(matrix, DMatrix::identity(control_point_count, control_point_count));
-    }
-
-    #[test]
-    fn finite_difference_matrix_rows_of_order_40_sum_to_zero() {
-        let difference_order = 40;
-        let knots = Knots::uniform(1, difference_order + 4).unwrap();
-        let matrix = calculate_finite_difference_matrix(difference_order, &knots);
-
-        for row in matrix.row_iter() {
-            assert_eq!(row.sum(), 0.0, "the differences of a constant vanish");
-        }
-    }
-
-    #[test]
-    fn finite_difference_matrix_order_1() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
-        let matrix = calculate_finite_difference_matrix(1, &knots);
-        let expected = dmatrix![
-            -1.0, 1.0, 0.0, 0.0, 0.0;
-             0.0,-1.0, 1.0, 0.0, 0.0;
-             0.0, 0.0,-1.0, 1.0, 0.0;
-             0.0, 0.0, 0.0,-1.0, 1.0;
-        ];
-        assert_eq!(matrix, expected);
-    }
-
-    #[test]
-    fn finite_difference_matrix_order_2() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
-        let matrix = calculate_finite_difference_matrix(2, &knots);
-        let expected = dmatrix![
-             1.0,-2.0, 1.0, 0.0, 0.0;
-             0.0, 1.0,-2.0, 1.0, 0.0;
-             0.0, 0.0, 1.0,-2.0, 1.0;
-        ];
-        assert_eq!(matrix, expected);
-    }
 
     #[test]
     fn unpenalized_linear() {

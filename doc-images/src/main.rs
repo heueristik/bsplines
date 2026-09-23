@@ -73,7 +73,7 @@ fn manual_plot() {
 }
 
 fn derivatives_plot() {
-    let mut bs_k0 = Curve::with_uniform_knots(
+    let bs_k0 = Curve::with_uniform_knots(
         ControlPoints::new(dmatrix![
             -0.25, -0.05, 0.0, 0.05, 0.25;
         ]),
@@ -92,23 +92,12 @@ fn derivatives_plot() {
         vec![(&bs_k0, RED_100), (&bs_k1, PURPLE_100), (&bs_k2, BLUE_100), (&bs_k3, TEAL.to_rgba())],
         &lim,
     );
-
-    bs_k0.reverse(); // p = 3 CORRECT
-    let bs_k1_rev = bs_k0.derivative_curve(1).unwrap(); // p = 2 WRONG
-    let bs_k2_rev = bs_k0.derivative_curve(2).unwrap(); // p = 1 CORRECT
-    let bs_k3_rev = bs_k0.derivative_curve(3).unwrap(); // p = 0 WRONG
-
-    visualization::generate_1d_plot(
-        "derivatives-reversed.svg",
-        vec![(&bs_k0, RED_100), (&bs_k1_rev, PURPLE_100), (&bs_k2_rev, BLUE_100), (&bs_k3_rev, TEAL.to_rgba())],
-        &lim,
-    );
 }
 
 fn insert_plots() {
     let p = 2;
     let mut c = example_spline(p);
-    let lim = Limits { min: vec![-3., -3.], max: vec![3., 3.] };
+    let lim = limits();
     let u = 0.8;
     visualization::generate_2d_plot("manipulation/insert-before.svg", vec![(&c, RED_100)], &lim, None);
 
@@ -119,7 +108,7 @@ fn insert_plots() {
 
 fn split_plots() {
     let c = example_spline(2);
-    let lim = Limits { min: vec![-3., -3.], max: vec![3., 3.] };
+    let lim = limits();
     visualization::generate_2d_plot("manipulation/split-before.svg", vec![(&c, PURPLE_100)], &lim, None);
     let (a, b) = c.split(0.5).unwrap();
     visualization::generate_2d_plot("manipulation/split-after.svg", vec![(&a, RED_100), (&b, BLUE_100)], &lim, None);
@@ -127,7 +116,7 @@ fn split_plots() {
 
 fn reverse_plots() {
     let mut c = example_spline(2);
-    let lim = Limits { min: vec![-3., -3.], max: vec![3., 3.] };
+    let lim = limits();
     visualization::generate_2d_plot("manipulation/reverse-before.svg", vec![(&c, RED_100)], &lim, None);
     c.reverse();
     visualization::generate_2d_plot("manipulation/reverse-after.svg", vec![(&c, PURPLE_100)], &lim, None);
