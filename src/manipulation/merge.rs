@@ -491,7 +491,7 @@ fn adjust_shifted_control_points(
         elem.push(points.column(i).into());
     }
 
-    for derivative in 0..=degree - 1 {
+    for derivative in 1..=degree - 1 {
         let derivative_point = calculate_derivative_control_point(
             polygon_segments - degree + 1,
             derivative,
@@ -645,6 +645,28 @@ mod tests {
 
         assert_eq!(merged.evaluate(0.0).unwrap(), left.evaluate(0.0).unwrap());
         assert_eq!(merged.evaluate(1.0).unwrap(), right.evaluate(1.0).unwrap());
+    }
+
+    #[test]
+    fn merge_of_the_halves_of_a_split_curve_restores_the_curve() {
+        for degree in 1..=5 {
+            let points =
+                DMatrix::from_fn(
+                    2,
+                    2 * degree + 2,
+                    |row, column| {
+                        if row == 0 { column as f64 } else { (column as f64 * 1.1).sin() }
+                    },
+                );
+            let curve = test_curve(degree, points);
+            let (left, right) = curve.split(0.5).unwrap();
+
+            let merged = merge(&left, &right, &Constraints::default()).unwrap();
+
+            for u in (0..=20).map(|step| f64::from(step) / 20.0) {
+                approx::assert_relative_eq!(merged.evaluate(u).unwrap(), curve.evaluate(u).unwrap(), epsilon = 1e-9);
+            }
+        }
     }
 
     #[test]
