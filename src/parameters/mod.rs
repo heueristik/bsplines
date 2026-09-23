@@ -156,8 +156,17 @@ mod tests {
     }
 
     #[test]
-    fn chord_length_errors_when_the_chord_lengths_overflow() {
-        let data = DataPoints::new(dmatrix![0.0, 1e200, 2e200;]);
+    fn chord_length_parameters_do_not_depend_on_the_scale_of_the_data() {
+        for scale in [1e200, 1.0, 1e-200] {
+            let data = DataPoints::new(dmatrix![0.0, 1.0, 3.0;] * scale);
+            let parameters = Parameters::generate(&data, ParameterMethod::ChordLength).unwrap();
+            assert_relative_eq!(parameters.vector(), &dvector![0.0, 1.0 / 3.0, 1.0], epsilon = f64::EPSILON.sqrt());
+        }
+    }
+
+    #[test]
+    fn chord_length_errors_when_a_chord_overflows() {
+        let data = DataPoints::new(dmatrix![-f64::MAX, f64::MAX;]);
         assert_eq!(Parameters::generate(&data, ParameterMethod::ChordLength).err(), Some(Error::NonFiniteValue));
     }
 }

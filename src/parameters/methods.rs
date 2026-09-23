@@ -6,6 +6,18 @@ use crate::{
     points::{DataPoints, Points},
 };
 
+/// Returns the length of the vector. The vector is divided by a power of two near its largest component first,
+/// so the squares neither overflow nor underflow. A power of two scales exactly, so the length equals the
+/// direct norm wherever that one neither overflows nor underflows.
+fn norm_without_overflow(vector: &DVector<f64>) -> f64 {
+    let largest = vector.amax();
+    if largest == 0.0 || !largest.is_finite() {
+        return largest;
+    }
+    let scale = largest.log2().floor().exp2();
+    (vector / scale).norm() * scale
+}
+
 /// Checks that the chord sum can divide the chords: it is positive and finite.
 fn check_chord_sum(sum: f64) -> Result<()> {
     if sum == 0.0 {
@@ -49,7 +61,7 @@ pub fn centripetal(points: &DataPoints) -> Result<Parameters> {
 
     for g in 1..=polyline_segments {
         let chord = points.matrix().column(g) - points.matrix().column(g - 1);
-        sum += chord.norm().sqrt()
+        sum += norm_without_overflow(&chord).sqrt()
     }
     check_chord_sum(sum)?;
 
@@ -57,7 +69,7 @@ pub fn centripetal(points: &DataPoints) -> Result<Parameters> {
 
     for g in 1..polyline_segments {
         let chord = points.matrix().column(g) - points.matrix().column(g - 1);
-        u_bar[g] = u_bar[g - 1] + chord.norm().sqrt() / sum;
+        u_bar[g] = u_bar[g - 1] + norm_without_overflow(&chord).sqrt() / sum;
     }
 
     u_bar[polyline_segments] = 1.0;
@@ -77,14 +89,14 @@ pub fn chord_length(points: &DataPoints) -> Result<Parameters> {
 
     for g in 1..=polyline_segments {
         let chord = points.matrix().column(g) - points.matrix().column(g - 1);
-        sum += chord.norm();
+        sum += norm_without_overflow(&chord);
     }
     check_chord_sum(sum)?;
 
     let mut u_bar = DVector::zeros(polyline_segments + 1);
     for g in 1..polyline_segments {
         let chord = points.matrix().column(g) - points.matrix().column(g - 1);
-        u_bar[g] = u_bar[g - 1] + chord.norm() / sum;
+        u_bar[g] = u_bar[g - 1] + norm_without_overflow(&chord) / sum;
     }
 
     u_bar[polyline_segments] = 1f64;
