@@ -1,6 +1,4 @@
-use std::ops::SubAssign;
-
-use nalgebra::{DMatrix, DVector};
+use nalgebra::DMatrix;
 
 use crate::{
     error::Result,
@@ -31,20 +29,14 @@ pub fn fit(
     }
 
     let basis_matrix = knots.calculate_basis_matrix(parameters.vector());
-    let residuals = calculate_residuals(points, &basis_matrix);
-    let constant_terms = calculate_constant_terms(&residuals, &basis_matrix);
     // The internal parameters and the internal basis functions form the system of the internal control points.
     let internal_basis_matrix = basis_matrix.view((1, 1), (polyline_segments - 1, polygon_segments - 1)).into_owned();
+    let constant_terms = internal_basis_matrix.transpose() * calculate_residuals(points, &basis_matrix).transpose();
 
     let svd = decompose_normal_matrix(knots, &internal_basis_matrix, &penalization)?;
-    let internal_control_points = svd
-        .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
-        .expect("the SVD was computed with both U and V^T")
-        .transpose();
-
-    for i in 1..=polygon_segments - 1 {
-        control_points.column_mut(i).copy_from(&internal_control_points.column(i - 1));
-    }
+    let internal_control_points =
+        svd.solve(&constant_terms, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T");
+    control_points.columns_mut(1, polygon_segments - 1).tr_copy_from(&internal_control_points);
 
     Ok(control_points)
 }
@@ -54,38 +46,15 @@ pub fn fit(
 fn calculate_residuals(points: &DataPoints, basis_matrix: &DMatrix<f64>) -> DMatrix<f64> {
     let polygon_segments = basis_matrix.ncols() - 1;
     let polyline_segments = points.polyline_segments();
+    let point_matrix = points.matrix();
 
-    let mut residuals = DMatrix::zeros(points.dimension(), polyline_segments + 1);
+    // The basis functions of the two end control points at the internal parameters.
+    let first_basis_values = basis_matrix.view((1, 0), (polyline_segments - 1, 1));
+    let last_basis_values = basis_matrix.view((1, polygon_segments), (polyline_segments - 1, 1));
 
-    for g in 1..=polyline_segments - 1 {
-        residuals.column_mut(g).copy_from(&points.matrix().column(g));
-        residuals.column_mut(g).sub_assign(basis_matrix[(g, 0)] * points.matrix().column(0));
-        residuals
-            .column_mut(g)
-            .sub_assign(basis_matrix[(g, polygon_segments)] * points.matrix().column(polyline_segments));
-    }
-
-    residuals
-}
-
-fn calculate_constant_terms(residuals: &DMatrix<f64>, basis_matrix: &DMatrix<f64>) -> DMatrix<f64> {
-    let polygon_segments = basis_matrix.ncols() - 1;
-    let polyline_segments = basis_matrix.nrows() - 1;
-    let dimension = residuals.nrows();
-
-    let mut constant_terms = DMatrix::zeros(dimension, polygon_segments - 1);
-
-    let mut sum = DVector::zeros(dimension);
-    for i in 1..=polygon_segments - 1 {
-        sum *= 0.0;
-
-        for g in 1..=polyline_segments - 1 {
-            sum += basis_matrix[(g, i)] * residuals.column(g);
-        }
-        constant_terms.column_mut(i - 1).copy_from(&sum);
-    }
-
-    constant_terms
+    point_matrix.columns(1, polyline_segments - 1) -
+        point_matrix.column(0) * first_basis_values.transpose() -
+        point_matrix.column(polyline_segments) * last_basis_values.transpose()
 }
 
 #[cfg(test)]
