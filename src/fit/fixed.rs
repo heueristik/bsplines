@@ -4,7 +4,7 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::{
     error::Result,
-    fit::{Penalization, check_input, decompose_normal_matrix, difference_operator},
+    fit::{Penalization, check_input, decompose_normal_matrix},
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
@@ -36,12 +36,7 @@ pub fn fit(
     // The internal parameters and the internal basis functions form the system of the internal control points.
     let internal_basis_matrix = basis_matrix.view((1, 1), (polyline_segments - 1, polygon_segments - 1)).into_owned();
 
-    let svd = decompose_normal_matrix(
-        knots,
-        &internal_basis_matrix,
-        &penalization,
-        Box::new(calculate_finite_difference_matrix),
-    )?;
+    let svd = decompose_normal_matrix(knots, &internal_basis_matrix, &penalization)?;
     let internal_control_points = svd
         .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
         .expect("the SVD was computed with both U and V^T")
@@ -93,24 +88,6 @@ fn calculate_constant_terms(residuals: &DMatrix<f64>, basis_matrix: &DMatrix<f64
     constant_terms
 }
 
-fn calculate_finite_difference_matrix(difference_order: usize, knots: &Knots) -> DMatrix<f64> {
-    let polygon_segments = knots.polygon_segments();
-    debug_assert!(
-        difference_order + 2 <= polygon_segments,
-        "the difference order must be smaller than the n − 1 internal control points"
-    );
-
-    let mut difference_matrix = DMatrix::zeros(polygon_segments - 1 - difference_order, polygon_segments - 1);
-
-    for i in 0..=polygon_segments - difference_order - 2 {
-        for j in 0..=polygon_segments - 2 {
-            difference_matrix[(i, j)] = difference_operator(i, j, difference_order);
-        }
-    }
-
-    difference_matrix
-}
-
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
@@ -125,27 +102,6 @@ mod tests {
 
     use super::*;
     use crate::fit::test_data_points;
-
-    #[test]
-    fn finite_difference_matrix_order_1() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
-        let matrix = calculate_finite_difference_matrix(1, &knots);
-        let expected = dmatrix![
-            -1.0, 1.0, 0.0;
-             0.0,-1.0, 1.0;
-        ];
-        assert_eq!(matrix, expected);
-    }
-
-    #[test]
-    fn finite_difference_matrix_order_2() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
-        let matrix = calculate_finite_difference_matrix(2, &knots);
-        let expected = dmatrix![
-             1.0,-2.0, 1.0;
-        ];
-        assert_eq!(matrix, expected);
-    }
 
     #[test]
     fn unpenalized_linear() {
