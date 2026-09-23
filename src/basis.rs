@@ -8,17 +8,10 @@ use crate::buffer::with_buffer;
 /// by the Cox-de Boor-Mansfield recurrence — see [`Knots::basis`](crate::knots::Knots::basis).
 /// It evaluates the recurrence from degree 0 upward, so the time grows with p² and not with 2ᵖ.
 ///
-/// The derivative order `k` and the number of polygon segments `n` close the
-/// last interval, so the last basis function covers `u = 1`.
-pub(crate) fn basis(
-    knots: &DVector<f64>,
-    index: usize,
-    degree: usize,
-    derivative: usize,
-    polygon_segments: usize,
-    u: f64,
-) -> f64 {
-    let last = polygon_segments - derivative;
+/// The last basis function also covers the end of the domain, so it is 1 at the last knot.
+pub(crate) fn basis(knots: &DVector<f64>, index: usize, degree: usize, u: f64) -> f64 {
+    // A knot vector of n + p + 2 knots has the basis functions 0 to n.
+    let last = knots.len() - degree - 2;
 
     with_buffer(degree + 1, |values| {
         // The basis functions of degree 0 from the index i to i + p.

@@ -242,7 +242,7 @@ impl Knots {
         let knots = &self.derivatives[derivative];
         let basis_degree = self.degree - derivative;
 
-        basis::basis(knots, index, basis_degree, derivative, self.polygon_segments(), u)
+        basis::basis(knots, index, basis_degree, u)
     }
 
     /// Returns whether exactly the first p + 1 knots are equal and exactly the last p + 1 knots are equal,
