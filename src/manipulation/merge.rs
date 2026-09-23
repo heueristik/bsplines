@@ -1,617 +1,418 @@
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("merge-before", "doc-images/plots/manipulation/merge-before.svg"),
-doc = ::embed_doc_image::embed_image!("merge-after", "doc-images/plots/manipulation/merge-after.svg"),
-doc = ::embed_doc_image::embed_image!("merge-after-left-end-constrained", "doc-images/plots/manipulation/merge-after-left-end-constrained.svg"),
-doc = ::embed_doc_image::embed_image!("merge-after-right-start-constrained", "doc-images/plots/manipulation/merge-after-right-start-constrained.svg")))]
-//! Combine two independent curves into one.
-//!
-//! | Two curves before merging.                   | The resulting curve after merging.              |
-//! |:--------------------------------------------:|:-----------------------------------------------:|
-//! | ![][merge-before]                            | ![][merge-after]                                |
-//!
-//! Constraints can be set so that certain points on the curve stay fixed.
-//!
-//! | After merging with the left end constrained. | After merging with the right start constrained. |
-//! |:--------------------------------------------:|:-----------------------------------------------:|
-//! | ![][merge-after-left-end-constrained]        | ![][merge-after-right-start-constrained]        |
+//! Merges two curves into one — see `Tai2003`.
 
-use std::ops::{AddAssign, DivAssign, SubAssign};
+use std::ops::AddAssign;
 
-use nalgebra::SVD;
-use thiserror::Error;
+use nalgebra::{DMatrix, DVector};
 
 use crate::{
-    curve,
-    curve::{
-        basis::basis,
-        knots::{is_clamped, is_normed, reversed, Knots},
-        points::{ControlPoints, Points},
-        Curve, CurveError,
-    },
-    manipulation::merge::MergeError::CurveGenerationFailure,
-    types::{MatD, VecD, VecHelpers},
+    Curve,
+    basis::basis,
+    buffer::with_buffer,
+    error::{Error, Result},
+    knots::{Knots, normalize},
+    points::{ControlPoints, Points},
+    svd::decompose,
 };
 
+/// The parameters at which the points of two merged curves stay fixed.
+///
+/// The fields name the side of the joint, for [`Curve::append_constrained`] and
+/// [`Curve::prepend_constrained`] alike. Both curves together take fewer than p constraints, each in [0, 1].
+/// The constraints must not contradict each other: two curves that do not meet cannot keep both joined ends.
+///
+/// | The end of the left curve fixed.      | The start of the right curve fixed.      |
+/// |:-------------------------------------:|:----------------------------------------:|
+/// | ![][merge-after-left-end-constrained] | ![][merge-after-right-start-constrained] |
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-after-left-end-constrained", "doc-images/plots/manipulation/merge-after-left-end-constrained.svg"))]
+#[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("merge-after-right-start-constrained", "doc-images/plots/manipulation/merge-after-right-start-constrained.svg"))]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Constraints {
-    pub params: Vec<f64>,
+    /// The parameters of the left curve whose points stay fixed.
+    pub left: Vec<f64>,
+    /// The parameters of the right curve whose points stay fixed.
+    pub right: Vec<f64>,
 }
 
 impl Constraints {
-    pub fn count(&self) -> usize {
-        self.params.len()
-    }
-
-    pub fn segments(&self) -> usize {
-        self.count() - 1
+    fn count(&self) -> usize {
+        self.left.len() + self.right.len()
     }
 }
 
-pub struct ConstrainedCurve<'a> {
-    pub(crate) curve: &'a Curve,
-    pub(crate) constraints: Constraints,
-}
+/// Merges two curves into one, attaching the end of the left curve to the start
+/// of the right one while maintaining continuity of all derivatives — see `Tai2003`.
+pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> Result<Curve> {
+    let left_degree = left.degree();
+    let right_degree = right.degree();
 
-#[derive(Error, Debug, PartialEq)]
-pub enum MergeError {
-    #[error("The degree of the left curve `p = {left}` differs from the right curve `p = {right}`.")]
-    DegreeMismatch { left: usize, right: usize },
-
-    #[error("The dimension of the left curve `dim = {left}` differs from the right curve `dim = {right}`.")]
-    DimensionMismatch { left: usize, right: usize },
-
-    #[error("Curves must be clamped")]
-    UnclampedCurve,
-
-    #[error("Curves must be normed.")]
-    UnnormedCurve,
-
-    #[error(
-        "The total number of constrained points `{totalConstraints}` must be \
-        less than the curve degree `p = {degree}`. \
-        Otherwise no solution for the linear system of equations exists."
-    )]
-    TooManyConstraints { totalConstraints: usize, degree: usize },
-
-    #[error("Curve generation failed with error {err}.")]
-    CurveGenerationFailure { err: CurveError },
-}
-
-// Keeps the start of spline 1 fixed
-pub fn merge_from(a: &Curve, b: &Curve) -> Result<Curve, MergeError> {
-    merge_with_constraints(
-        &ConstrainedCurve { curve: a, constraints: Constraints { params: vec![1.] } },
-        &ConstrainedCurve { curve: b, constraints: Constraints { params: vec![] } },
-    )
-}
-
-// Keeps the end of spline 2 fixed
-pub fn merge_to(a: &Curve, b: &Curve) -> Result<Curve, MergeError> {
-    merge_with_constraints(
-        &ConstrainedCurve { curve: a, constraints: Constraints { params: vec![] } },
-        &ConstrainedCurve { curve: b, constraints: Constraints { params: vec![0.] } },
-    )
-}
-
-pub fn merge(a: &Curve, b: &Curve) -> Result<Curve, MergeError> {
-    merge_with_constraints(
-        &ConstrainedCurve { curve: a, constraints: Constraints { params: vec![] } },
-        &ConstrainedCurve { curve: b, constraints: Constraints { params: vec![] } },
-    )
-}
-
-pub(crate) fn merge_with_constraints(a: &ConstrainedCurve, b: &ConstrainedCurve) -> Result<Curve, MergeError> {
-    let p_a = a.curve.degree();
-    let p_b = b.curve.degree();
-
-    if p_a != p_b {
-        return Err(MergeError::DegreeMismatch { left: p_a, right: p_b });
+    if left_degree != right_degree {
+        return Err(Error::DegreeMismatch { left: left_degree, right: right_degree });
+    }
+    if left_degree == 0 {
+        return Err(Error::DegreeTooLow { degree: left_degree });
     }
 
-    if a.curve.dimension() != b.curve.dimension() {
-        return Err(MergeError::DimensionMismatch { left: a.curve.dimension(), right: b.curve.dimension() });
+    if left.dimension() != right.dimension() {
+        return Err(Error::DimensionMismatch { left: left.dimension(), right: right.dimension() });
     }
 
-    if !is_clamped(&a.curve.knots) || !is_clamped(&b.curve.knots) {
-        return Err(MergeError::UnclampedCurve);
+    let total_constraints = constraints.count();
+    if total_constraints >= left_degree {
+        return Err(Error::TooManyConstraints { total: total_constraints, degree: left_degree });
+    }
+    if let Some(&u) = constraints.left.iter().chain(&constraints.right).find(|u| !(0.0..=1.0).contains(*u)) {
+        return Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 });
     }
 
-    if !is_normed(&a.curve.knots) || !is_normed(&b.curve.knots) {
-        return Err(MergeError::UnnormedCurve);
-    }
+    let shifts = solve_linear_equation_system(left, right, constraints)?;
+    let (left_shifted, right_shifted) = shift_boundary_control_points(left, right, &shifts);
 
-    let totalConstraints = a.constraints.count() + b.constraints.count();
-    if totalConstraints >= p_a {
-        return Err(MergeError::TooManyConstraints { totalConstraints, degree: p_a });
-    }
+    // The right knots move behind the joint at 1, so the concatenated knot vector spans [0, 2].
+    let mut merged_knots = concatenate_knot_vectors(left, right);
+    let left_points = adjust_shifted_control_points(left_shifted, &left.knots, &merged_knots);
+    normalize(&mut merged_knots);
 
-    let shifts = solve_linear_equation_system(a, b);
-    let (Sshifted, Tshifted) = generate_shifted_control_point_vectors_of_spline1and2(a.curve, b.curve, &shifts);
+    let merged_points = merge_control_points(left_degree, &left_points, &right_shifted);
 
-    // adjust and merge knot vectors
-    let (Vadj, Wrev, Wadj) = adjust_knots_of_both_splines(a.curve, b.curve);
-    let U_merged = create_merged_knot_vector(a.curve, b.curve, &Vadj, &Wadj);
-
-    // adjust control points
-    let (Sadj, Tadj) =
-        adjust_shifted_control_points_of_both_splines(a.curve, &Sshifted, &Tshifted, &Vadj, &Wrev, &Wadj);
-
-    // do actual merge
-    let P_merged = generate_control_point_vector_of_merged_spline(a.curve, b.curve, &Sadj, &Tadj);
-
-    Curve::new(Knots::new(p_a, U_merged), ControlPoints::new(P_merged)).map_err(|err| CurveGenerationFailure { err })
+    let merged = Curve::new(Knots::new(left_degree, merged_knots)?, ControlPoints::new(merged_points))?;
+    check_constraints(left, right, constraints, &merged)?;
+    Ok(merged)
 }
 
-fn construct_Nmat(a: &ConstrainedCurve, b: &ConstrainedCurve) -> MatD {
-    let p = a.curve.degree();
+/// Checks that the merged curve keeps every constrained point. The merged curve runs through the left curve
+/// on [0, 1/2] and through the right curve on [1/2, 1]. Contradicting constraints leave the linear system
+/// without a solution, and the least-squares result keeps none of them.
+fn check_constraints(left: &Curve, right: &Curve, constraints: &Constraints, merged: &Curve) -> Result<()> {
+    let scale = 1.0 + left.control_points.matrix().amax().max(right.control_points.matrix().amax());
+    let tolerance = f64::EPSILON.sqrt() * scale;
 
-    let n_constraints_a = a.constraints.count();
-    let n_constraints_b = b.constraints.count();
-
-    let nmat_dim = 3 * p + n_constraints_a + n_constraints_b;
-    let mut Nmat = MatD::zeros(nmat_dim, nmat_dim);
-
-    Nmat.view_mut((0, 0), (2 * p, 2 * p)).copy_from(&MatD::identity(2 * p, 2 * p));
-
-    Nmat.view_mut((2 * p, 0), (p, p)).copy_from(&calculateKV(a.curve));
-    Nmat.view_mut((2 * p, p), (p, p)).copy_from(&calculateKW(b.curve));
-
-    Nmat.view_mut((0, 2 * p), (p, p)).copy_from(&calculateIV(a.curve));
-    Nmat.view_mut((p, 2 * p), (p, p)).copy_from(&calculateJW(b.curve));
-
-    // calculate block matrices for the constraints
-    if n_constraints_a > 0 {
-        Nmat.view_mut((3 * p, 0), (n_constraints_a, p)).copy_from(&calculateGV(a));
-        Nmat.view_mut((0, 3 * p), (p, n_constraints_a)).copy_from(&calculateIpV(a));
-    }
-    if n_constraints_b > 0 {
-        Nmat.view_mut((3 * p + n_constraints_a, p), (n_constraints_b, p)).copy_from(&calculateHW(b));
-        Nmat.view_mut((p, 3 * p + n_constraints_a), (p, n_constraints_b)).copy_from(&calculateJppW(b));
-    }
-
-    Nmat
-}
-
-fn calculateKV(a: &Curve) -> MatD {
-    let p = a.degree();
-    let m = a.segments();
-
-    let Vk = &a.knots.Uk;
-    let S = a.points.matrix();
-
-    let mut KV = MatD::zeros(p, p);
-
-    for k in 0..=p - 1 {
-        for i in m - p + 1..=m {
-            let mut sum = 0.;
-
-            for a in m - p..=m - k {
-                sum += prefactor(p, a, i, k, S, &Vk[0]) * basis(&Vk[k], a, p - k, 0, m - k, Vk[0][m + 1]);
-            }
-            KV[(k, i - (m + 1 - p))] = sum;
+    let left_parameters = constraints.left.iter().map(|&u| (left, u, u / 2.0));
+    let right_parameters = constraints.right.iter().map(|&u| (right, u, (1.0 + u) / 2.0));
+    for (curve, u, merged_u) in left_parameters.chain(right_parameters) {
+        if (merged.evaluate(merged_u)? - curve.evaluate(u)?).amax() > tolerance {
+            return Err(Error::ConflictingConstraints);
         }
     }
-    KV
+    Ok(())
 }
 
-fn calculateKW(b: &Curve) -> MatD {
-    let p = b.degree();
-    let o = b.segments();
-    let Wk = &b.knots.Uk;
-    let T = b.points.matrix();
+// The names of the block matrices (kv, kw, iv, jw, gv, hw, ipv, jppw, kconst) follow the notation in `Tai2003`.
+fn calculate_system_matrix(left: &Curve, right: &Curve, constraints: &Constraints) -> DMatrix<f64> {
+    let degree = left.degree();
 
-    let mut KW = MatD::zeros(p, p);
+    let left_constraints = constraints.left.len();
+    let right_constraints = constraints.right.len();
 
-    for k in 0..=p - 1 {
-        for j in 0..=p - 1 {
-            let mut sum = 0.;
+    let dimension = 3 * degree + left_constraints + right_constraints;
+    let mut system_matrix = DMatrix::zeros(dimension, dimension);
 
-            for b in 0..=p - k {
-                sum += prefactor(p, b, j, k, T, &Wk[0]) * basis(&Wk[k], b, p - k, 0, o - k, Wk[0][p]);
-            }
-            KW[(k, j)] = sum;
-        }
+    system_matrix.view_mut((0, 0), (2 * degree, 2 * degree)).fill_with_identity();
+
+    // Each upper block is the transpose of a lower block, scaled by 1/2 or −1/2.
+    let kv = calculate_kv(left);
+    let kw = calculate_kw(right);
+    let iv = kv.transpose() * 0.5;
+    let jw = kw.transpose() * 0.5;
+    system_matrix.view_mut((2 * degree, 0), (degree, degree)).copy_from(&kv);
+    system_matrix.view_mut((2 * degree, degree), (degree, degree)).copy_from(&kw);
+    system_matrix.view_mut((0, 2 * degree), (degree, degree)).copy_from(&iv);
+    system_matrix.view_mut((degree, 2 * degree), (degree, degree)).copy_from(&jw);
+
+    if left_constraints > 0 {
+        let gv = calculate_gv(left, &constraints.left);
+        let ipv = gv.transpose() * -0.5;
+        system_matrix.view_mut((3 * degree, 0), (left_constraints, degree)).copy_from(&gv);
+        system_matrix.view_mut((0, 3 * degree), (degree, left_constraints)).copy_from(&ipv);
     }
-    KW *= -1.0;
-
-    KW
-}
-
-fn calculateIV(a: &Curve) -> MatD {
-    let p = a.degree();
-    let m = a.segments();
-    let Vk = &a.knots.Uk;
-    let S = a.points.matrix();
-
-    let mut IV = MatD::zeros(p, p);
-
-    for i in m - p + 1..=m {
-        for k in 0..=p - 1 {
-            let mut sum = 0.;
-
-            for a in m - p..=m - k {
-                sum += prefactor(p, a, i, k, S, &Vk[0]) * basis(&Vk[k], a, p - k, 0, m - k, Vk[0][m + 1]);
-            }
-            IV[(i - (m + 1 - p), k)] = sum;
-        }
-    }
-    IV *= 0.5;
-
-    IV
-}
-
-fn calculateJW(b: &Curve) -> MatD {
-    let p = b.degree();
-    let o = b.segments();
-    let Wk = &b.knots.Uk;
-    let T = b.points.matrix();
-
-    let mut JW = MatD::zeros(p, p);
-
-    for j in 0..=p - 1 {
-        for k in 0..=p - 1 {
-            let mut sum = 0.;
-
-            for b in 0..=p - k {
-                sum += prefactor(p, b, j, k, T, &Wk[0]) * basis(&Wk[k], b, p - k, 0, o - k, Wk[0][p]);
-            }
-            JW[(j, k)] = sum;
-        }
-    }
-    JW *= -0.5;
-
-    JW
-}
-
-fn calculateGV(a: &ConstrainedCurve) -> MatD {
-    let p = a.curve.degree();
-    let m = a.curve.segments();
-    let Vk0 = a.curve.knots.vector();
-
-    let mg = a.constraints.segments();
-
-    let mut GV = MatD::zeros(mg + 1, p);
-
-    for g in 0..=mg {
-        for i in m - p + 1..=m {
-            GV[(g, i - (m - p + 1))] = basis(Vk0, i, p, 0, m, a.constraints.params[g]);
-        }
-    }
-    GV
-}
-
-fn calculateHW(b: &ConstrainedCurve) -> MatD {
-    let p = b.curve.degree();
-    let o = b.curve.segments();
-    let Wk0 = b.curve.knots.vector();
-
-    let oh = b.constraints.segments();
-    let mut HW = MatD::zeros(oh + 1, p);
-
-    for h in 0..=oh {
-        for i in 0..=p - 1 {
-            HW[(h, i)] = basis(Wk0, i, p, 0, o, b.constraints.params[h]);
-        }
+    if right_constraints > 0 {
+        let hw = calculate_hw(right, &constraints.right);
+        let jppw = hw.transpose() * -0.5;
+        system_matrix.view_mut((3 * degree + left_constraints, degree), (right_constraints, degree)).copy_from(&hw);
+        system_matrix.view_mut((degree, 3 * degree + left_constraints), (degree, right_constraints)).copy_from(&jppw);
     }
 
-    // TODO use below
-    /*let mut HW = MatD::zeros(constraints_b.count(), p);
-
-    for (h, u) in constraints_b.params.iter().enumerate() {
-        for i in 0..=p - 1 {
-            HW[(h, i)] = evaluate(i, p, o, Wk0, *u);
-        }
-    }*/
-    HW
+    system_matrix
 }
 
-fn calculateIpV(a: &ConstrainedCurve) -> MatD {
-    let p = a.curve.degree();
-    let m = a.curve.segments();
-    let Vk0 = a.curve.knots.vector();
+fn calculate_kv(curve: &Curve) -> DMatrix<f64> {
+    let degree = curve.degree();
+    let polygon_segments = curve.polygon_segments();
+    let knot_values = curve.knots.vector();
 
-    let mg = a.constraints.segments();
-
-    let mut IpV = MatD::zeros(p, mg + 1);
-
-    for i in m - p + 1..=m {
-        for g in 0..=mg {
-            IpV[(i - (m + 1 - p), g)] = basis(Vk0, i, p, 0, m, a.constraints.params[g]);
-        }
-    }
-    IpV *= -0.5;
-    IpV
+    // At u = 1, the last basis function of each derivative curve is 1 and all others are 0.
+    DMatrix::from_fn(degree, degree, |derivative, column| {
+        let i = polygon_segments + 1 - degree + column;
+        prefactor(degree, polygon_segments - derivative, i, derivative, knot_values)
+    })
 }
 
-fn calculateJppW(b: &ConstrainedCurve) -> MatD {
-    let p_ = b.curve.degree();
-    let o_ = b.curve.segments();
-    let Wk0 = b.curve.knots.vector();
+fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
+    let degree = curve.degree();
+    let knot_values = curve.knots.vector();
 
-    let oh_ = b.constraints.segments();
-
-    let mut JppW = MatD::zeros(p_, oh_ + 1);
-
-    for j in 0..=p_ - 1 {
-        for h in 0..=oh_ {
-            JppW[(j, h)] = basis(Wk0, j, p_, 0, o_, b.constraints.params[h]);
-        }
-    }
-    JppW *= -0.5;
-    JppW
+    // At u = 0, the first basis function of each derivative curve is 1 and all others are 0.
+    DMatrix::from_fn(degree, degree, |derivative, j| -prefactor(degree, 0, j, derivative, knot_values))
 }
 
-fn calculateKconst(a: &Curve, b: &Curve) -> MatD {
-    let p = a.degree();
-    let dim = a.dimension();
+fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
+    let degree = curve.degree();
+    let first = curve.polygon_segments() + 1 - degree;
+    let knot_values = curve.knots.vector();
 
-    let mut Kconst = MatD::zeros(dim, p);
-    let mut sum = VecD::zeros(dim);
-
-    let m = a.segments();
-    let o = b.segments();
-
-    let Vk = &a.knots.Uk;
-    let Wk = &b.knots.Uk;
-
-    let S = a.points.matrix();
-    let T = b.points.matrix();
-
-    for k in 0..=p - 1 {
-        sum.fill(0.0);
-
-        for i in m - p..=m {
-            for a in m - p..=m - k {
-                // TODO use point getter instead of .column(i)
-                sum += prefactor(p, a, i, k, S, &Vk[0]) * basis(&Vk[k], a, p - k, 0, m - k, Vk[0][m + 1]) * S.column(i);
-            }
-        }
-
-        for j in 0..=p {
-            for b in 0..=p - k {
-                //sumB += -prefactor(p, b, j, k, &T, &Wk[0]) * evaluate(b, p - k, o - k, &Wk[k], Wk[0][p]) * T.row(j);
-                // TODO use point getter instead of .column(j)
-                sum -= prefactor(p, b, j, k, T, &Wk[0]) * basis(&Wk[k], b, p - k, 0, o - k, Wk[0][p]) * T.column(j);
-            }
-        }
-        Kconst.column_mut(k).sub_assign(&sum);
-    }
-    Kconst
+    // The columns belong to the last p basis functions.
+    DMatrix::from_fn(parameters.len(), degree, |g, column| basis(knot_values, first + column, degree, parameters[g]))
 }
 
-fn constructConstMat(a: &Curve, b: &Curve, total_constraints: usize) -> MatD {
-    let p = a.degree();
-    let dim = a.dimension();
+fn calculate_hw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
+    let degree = curve.degree();
+    let knot_values = curve.knots.vector();
 
-    let mut mat = MatD::zeros(dim, 3 * p + total_constraints);
-
-    let Kconst = calculateKconst(a, b);
-    mat.view_mut((0, 2 * p), (dim, p)).copy_from(&Kconst);
-
-    mat
+    // The columns belong to the first p basis functions.
+    DMatrix::from_fn(parameters.len(), degree, |h, i| basis(knot_values, i, degree, parameters[h]))
 }
 
-fn solve_linear_equation_system(a: &ConstrainedCurve, b: &ConstrainedCurve) -> MatD {
-    let total_constraints = a.constraints.count() + b.constraints.count();
-
-    let Nmat = construct_Nmat(a, b);
-    let const_mat = constructConstMat(a.curve, b.curve, total_constraints);
-
-    SVD::new(Nmat, true, true).solve(&const_mat.transpose(), f64::EPSILON.sqrt()).unwrap().transpose()
+fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
+    // At its ends, each derivative of a clamped curve equals the first or the last control point of that derivative.
+    DMatrix::from_fn(left.dimension(), left.degree(), |row, derivative| {
+        let left_points = left.control_points.matrix_derivative(derivative);
+        let right_points = right.control_points.matrix_derivative(derivative);
+        right_points[(row, 0)] - left_points[(row, left_points.ncols() - 1)]
+    })
 }
 
-fn generate_shifted_control_point_vectors_of_spline1and2(a: &Curve, b: &Curve, shifts: &MatD) -> (MatD, MatD) {
-    let p = a.degree();
-    let mut Sshifted = a.points.matrix().clone();
-    let mut Tshifted = b.points.matrix().clone();
+fn solve_linear_equation_system(left: &Curve, right: &Curve, constraints: &Constraints) -> Result<DMatrix<f64>> {
+    let degree = left.degree();
+    let system_matrix = calculate_system_matrix(left, right, constraints);
 
-    Sshifted.columns_mut(Sshifted.ncols() - p, p).add_assign(shifts.columns(0, p));
+    // Only the rows of the continuity conditions have constant terms.
+    let mut constant_terms = DMatrix::zeros(system_matrix.nrows(), left.dimension());
+    constant_terms.rows_mut(2 * degree, degree).tr_copy_from(&calculate_kconst(left, right));
 
-    Tshifted.columns_mut(0, p).add_assign(shifts.columns(p, p));
-
-    (Sshifted, Tshifted)
+    Ok(decompose(system_matrix)?
+        .solve(&constant_terms, f64::EPSILON.sqrt())
+        .expect("the SVD was computed with both U and V^T")
+        .transpose())
 }
 
-fn adjust_knots_of_both_splines(a: &Curve, b: &Curve) -> (VecD, VecD, VecD) {
-    let p = a.degree();
+fn shift_boundary_control_points(left: &Curve, right: &Curve, shifts: &DMatrix<f64>) -> (DMatrix<f64>, DMatrix<f64>) {
+    let degree = left.degree();
+    let mut left_shifted = left.control_points.matrix().clone();
+    let mut right_shifted = right.control_points.matrix().clone();
 
-    let m = a.segments();
-    let o = b.segments();
+    left_shifted.columns_mut(left_shifted.ncols() - degree, degree).add_assign(shifts.columns(0, degree));
 
-    let V0 = a.knots.vector();
-    let W0 = b.knots.vector();
+    right_shifted.columns_mut(0, degree).add_assign(shifts.columns(degree, degree));
 
-    // Adjust left knots
-    let Vadj = adjust_knots(p, V0, m, W0);
-
-    // Adjust right knots
-    let Vrev = reversed(V0);
-    let Wrev = reversed(W0);
-    let Wadjrev = adjust_knots(p, &Wrev, o, &Vrev);
-    let Wadj = reversed(&Wadjrev).add_scalar(1.);
-
-    (Vadj, Wrev, Wadj)
+    (left_shifted, right_shifted)
 }
 
-fn adjust_knots(p: usize, Uleft: &VecD, nLeft: usize, Uright: &VecD) -> VecD {
-    let mut UleftAdj = VecD::zeros(nLeft + p + 2);
-
-    UleftAdj.head_mut(nLeft + 2).copy_from(&Uleft.head(nLeft + 2));
-
-    UleftAdj.tail_mut(p).copy_from(&Uright.segment(p + 1, p).add_scalar(1.));
-
-    UleftAdj
+/// Returns the knots of the left curve up to the joint, followed by the internal and the end knots of the right curve
+/// moved behind the joint at 1.
+fn concatenate_knot_vectors(left: &Curve, right: &Curve) -> DVector<f64> {
+    let left_knots = &left.knots.vector().as_slice()[..left.polygon_segments() + 2];
+    let right_knots = &right.knots.vector().as_slice()[right.degree() + 1..];
+    DVector::from_vec(left_knots.iter().copied().chain(right_knots.iter().map(|knot| knot + 1.0)).collect())
 }
 
-fn create_merged_knot_vector(a: &Curve, b: &Curve, Vadj: &VecD, Wadj: &VecD) -> VecD {
-    let m = a.segments();
-    let o = b.segments();
-
-    // construct the knot vector of the merged spline
-    let mut Umerged = VecD::zeros(m + 2 + o + 1);
-
-    Umerged.head_mut(m + 2).copy_from(&Vadj.head(m + 2));
-    Umerged.tail_mut(o + 1).copy_from(&Wadj.tail(o + 1));
-
-    // rescale the knot vector of the merged spline (u in [0,2]) to [0,1] by dividing through the last element
-    Umerged.div_assign(Umerged[m + o + 2]);
-
-    Umerged
-}
-
-fn generateDerivativeControlPoint(
-    idx: usize,
-    k: usize,
-    Pshifted: &MatD,
-    U0: &VecD,
-    p: usize,
-    n: usize,
-    dim: usize,
-) -> VecD {
-    let mut controlPoint = VecD::zeros(dim);
-
-    assert!(idx <= n - k, "Index out of bounds: only n-k control points exist");
-    for zeroOrderIdx in 0..=n {
-        controlPoint += prefactor(p, idx, zeroOrderIdx, k, Pshifted, U0) * Pshifted.column(zeroOrderIdx);
-    }
-    controlPoint
-}
-
+/// Returns the shifted control points of the left curve with the last p − 1 points recalculated for the adjusted
+/// knots ũ: the left knots up to the joint, followed by the internal knots of the right curve. The control points
+/// of all derivative curves at the index n − p + 1 stay the same, and the derivative formula of [`ControlPoints`],
+/// solved for the higher index, gives the points after it:
+///
+/// Pᵢ⁽ᵏ⁾ = Pᵢ₋₁⁽ᵏ⁾ + (ũᵢ₊ₚ − ũᵢ₊ₖ) ∕ (p − k) · Pᵢ₋₁⁽ᵏ⁺¹⁾,   i = n − p + 2, …, n,   k = 0, …, n − i
+///
+/// with the control points P, the adjusted knots ũ, the degree p, the derivative order k, and the number of polygon
+/// segments n.
 fn adjust_shifted_control_points(
-    Pshifted: &MatD, //shifted_control_points: &MatD,
-    U0: &VecD,       //original_knot_vector: &VecD,
-    Uadj: &VecD,     //adjusted_knot_vector: &VecD,
-    p: usize,
-    n: usize,
-    dim: usize,
-) -> MatD {
-    let mut padj = MatD::zeros(dim, n + 1);
-    let mut qki: Vec<Vec<VecD>> = vec![Vec::new(); n + 1];
+    points: DMatrix<f64>,
+    knots: &Knots,
+    adjusted_knot_values: &DVector<f64>,
+) -> DMatrix<f64> {
+    let degree = knots.degree();
+    let polygon_segments = points.ncols() - 1;
+    let first = polygon_segments + 1 - degree;
 
-    for (i, elem) in qki.iter_mut().enumerate().take(n + 1) {
-        elem.push(Pshifted.column(i).into());
-    }
+    let mut control_points = ControlPoints::new(points);
+    control_points.derive(knots);
+    let mut derivative_points = DMatrix::from_fn(control_points.dimension(), degree, |row, derivative| {
+        control_points.matrix_derivative(derivative)[(row, first)]
+    });
 
-    for k in 0..=p - 1 {
-        let derivative_point = generateDerivativeControlPoint(n - p + 1, k, Pshifted, U0, p, n, dim); //generateDerivativeControlPoint(n - p + 1, k, shifted_control_points, original_knot_vector);
-        qki[n - p + 1].push(derivative_point);
-    }
-
-    for i in n - p + 2..=n {
-        qki[i].resize(n - i + 1, VecD::zeros(dim));
-        for k in (0..=n - i).rev() {
-            qki[i][k] = ((Uadj[i + p] - Uadj[i + k]) / ((p - k) as f64)) * &qki[i - 1][k + 1] + &qki[i - 1][k];
+    let mut adjusted = control_points.matrix().clone();
+    for i in first + 1..=polygon_segments {
+        // The derivatives run upward, so the next higher derivative still holds its point at the index i − 1.
+        for derivative in 0..=polygon_segments - i {
+            let scale = (adjusted_knot_values[i + degree] - adjusted_knot_values[i + derivative]) /
+                (degree - derivative) as f64;
+            let (mut lower, higher) = derivative_points.columns_range_pair_mut(derivative, derivative + 1);
+            lower.axpy(scale, &higher, 1.0);
         }
+        adjusted.set_column(i, &derivative_points.column(0));
     }
-
-    for (i, elem) in qki.iter_mut().enumerate().take(n + 1) {
-        padj.set_column(i, &elem[0]);
-    }
-
-    padj
+    adjusted
 }
 
-fn adjust_shifted_control_points_of_both_splines(
-    a: &Curve,
-    Sshifted: &MatD,
-    Tshifted: &MatD,
-    Vadj: &VecD,
-    Wrev: &VecD,
-    Wadjrev: &VecD,
-) -> (MatD, MatD) {
-    let p = a.degree();
-    let n = a.segments();
-    let dim = a.dimension();
+/// Returns the control points of the merged curve: the adjusted left points without the last one, followed by the
+/// shifted right points from the index p − 1 on. The merged curve has p control points fewer than both curves.
+fn merge_control_points(degree: usize, left_points: &DMatrix<f64>, right_points: &DMatrix<f64>) -> DMatrix<f64> {
+    let left_count = left_points.ncols() - 1;
+    let right_count = right_points.ncols() + 1 - degree;
 
-    let V0 = a.knots.vector();
-
-    // obtain adjusted, shifted control points of the second spline
-    let Sadj = adjust_shifted_control_points(Sshifted, V0, Vadj, p, n, dim);
-
-    // reverse control points of the second spline
-    let P2shiftedrev = curve::points::reversed(Tshifted);
-
-    // obtain adjusted, shifted control points of the reversed second spline
-    let Tadjrev = adjust_shifted_control_points(&P2shiftedrev, Wrev, Wadjrev, p, n, dim);
-
-    // obtain adjusted, shifted control points of the second spline
-    let Tadj = curve::points::reversed(&Tadjrev);
-
-    (Sadj, Tadj)
+    let mut merged_points = DMatrix::zeros(left_points.nrows(), left_count + right_count);
+    merged_points.columns_mut(0, left_count).copy_from(&left_points.columns(0, left_count));
+    merged_points.columns_mut(left_count, right_count).copy_from(&right_points.columns(degree - 1, right_count));
+    merged_points
 }
 
-fn generate_control_point_vector_of_merged_spline(a: &Curve, b: &Curve, Sadj: &MatD, Tadj: &MatD) -> MatD {
-    let p = a.degree();
-    let dim = a.dimension();
-    let n_points1 = a.points.count();
-    let n_points2 = b.points.count();
+/// Returns the factor that ties the control point `index` of the `k`-th derivative curve to the control point
+/// `zero_order_index` of the curve — see `Tai2003`. It evaluates the orders from 0 upward, so the time grows with k²
+/// and not with 2ᵏ.
+fn prefactor(
+    degree: usize,
+    index: usize,
+    zero_order_index: usize,
+    derivative: usize,
+    knot_values: &DVector<f64>,
+) -> f64 {
+    debug_assert!(
+        index + derivative + degree + 2 <= knot_values.len(),
+        "the derivative curve has no control point {index}"
+    );
 
-    let mut P_merged = MatD::zeros(dim, n_points1 + n_points2 - p);
+    with_buffer(derivative + 1, |factors| {
+        // The factors of order 0 from the index i to i + k.
+        for (offset, factor) in factors.iter_mut().enumerate() {
+            *factor = if index + offset == zero_order_index { 1. } else { 0. };
+        }
 
-    P_merged.columns_mut(0, n_points1).copy_from(Sadj);
-
-    let right_cols = n_points2 + 1 - p;
-    P_merged
-        .columns_mut(P_merged.ncols() - right_cols, right_cols)
-        .copy_from(&Tadj.columns(Tadj.ncols() - right_cols, right_cols));
-
-    P_merged
-}
-
-fn kronecker_delta(i: usize, j: usize) -> bool {
-    i == j
-}
-
-/// `p` degree
-/// `i` index
-/// `i0` 0th order index
-/// `k` derivative order
-/// `U0` 0th order knot vector
-/// `P0` 0th order control point matrix
-fn prefactor(p: usize, i: usize, i0: usize, k: usize, P0: &MatD, U0: &VecD) -> f64 {
-    let n = P0.ncols() - 1; // TODO use points
-
-    if i <= n - k {
-        if k == 0 {
-            if kronecker_delta(i, i0) {
-                1.
-            } else {
-                0.
+        // Each order combines two neighbors of the order below and keeps one factor fewer.
+        for order in 1..=derivative {
+            for offset in 0..=derivative - order {
+                let j = index + offset;
+                let width = knot_values[j + degree + 1] - knot_values[j + order];
+                // Equal knots give a zero factor instead of a division by zero.
+                factors[offset] = if width == 0.0 {
+                    0.
+                } else {
+                    (degree + 1 - order) as f64 / width * (factors[offset + 1] - factors[offset])
+                };
             }
-        } else if U0[i + p + 1] == U0[i + k] {
-            0.
-        } else {
-            (p + 1 - k) as f64 / (U0[i + p + 1] - U0[i + k]) *
-                (prefactor(p, i + 1, i0, k - 1, P0, U0) - prefactor(p, i, i0, k - 1, P0, U0))
         }
-    } else {
-        0.
-    }
+        factors[0]
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use nalgebra::{dmatrix, dvector};
 
-    use crate::curve::{
-        generation::{generate, Generation::Manual},
-        knots::Generation::Uniform,
-        Curve,
-    };
+    use crate::Curve;
 
     use super::*;
 
-    fn test_bspline(degree: usize, points: MatD) -> Curve {
-        generate(Manual { degree, points: ControlPoints::new(points), knots: Uniform }).unwrap()
+    fn test_curve(degree: usize, points: DMatrix<f64>) -> Curve {
+        Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap()
+    }
+
+    #[test]
+    fn merge_of_degree_20_keeps_the_outer_end_points() {
+        let degree = 20;
+        let count = degree + 2;
+        let left = test_curve(degree, DMatrix::from_fn(1, count, |_, column| column as f64));
+        let right = test_curve(degree, DMatrix::from_fn(1, count, |_, column| (count + column) as f64));
+
+        let merged = merge(&left, &right, &Constraints::default()).unwrap();
+
+        assert_eq!(merged.evaluate(0.0).unwrap(), left.evaluate(0.0).unwrap());
+        assert_eq!(merged.evaluate(1.0).unwrap(), right.evaluate(1.0).unwrap());
+    }
+
+    #[test]
+    fn merge_errors_for_fixed_ends_that_do_not_meet() {
+        let degree = 3;
+        let left = test_curve(degree, dmatrix![0., 1., 2., 3.;]);
+        let apart = test_curve(degree, dmatrix![10., 11., 12., 13.;]);
+        let touching = test_curve(degree, dmatrix![3., 4., 5., 6.;]);
+        let both_ends = Constraints { left: vec![1.0], right: vec![0.0] };
+
+        assert_ne!(left.evaluate(1.0).unwrap(), apart.evaluate(0.0).unwrap(), "the curves do not meet");
+        assert_eq!(merge(&left, &apart, &both_ends).err(), Some(Error::ConflictingConstraints));
+
+        assert_eq!(left.evaluate(1.0).unwrap(), touching.evaluate(0.0).unwrap(), "the curves meet");
+        let merged = merge(&left, &touching, &both_ends).unwrap();
+        approx::assert_relative_eq!(merged.evaluate(0.5).unwrap(), left.evaluate(1.0).unwrap(), epsilon = 1e-9);
+    }
+
+    #[test]
+    fn merge_of_the_halves_of_a_split_curve_restores_the_curve() {
+        for degree in 1..=5 {
+            let points =
+                DMatrix::from_fn(
+                    2,
+                    2 * degree + 2,
+                    |row, column| {
+                        if row == 0 { column as f64 } else { (column as f64 * 1.1).sin() }
+                    },
+                );
+            let curve = test_curve(degree, points);
+            let (left, right) = curve.split(0.5).unwrap();
+
+            let merged = merge(&left, &right, &Constraints::default()).unwrap();
+
+            for u in (0..=20).map(|step| f64::from(step) / 20.0) {
+                approx::assert_relative_eq!(merged.evaluate(u).unwrap(), curve.evaluate(u).unwrap(), epsilon = 1e-9);
+            }
+        }
+    }
+
+    #[test]
+    fn merge_accepts_curves_with_different_numbers_of_control_points() {
+        let degree = 2;
+        let long = test_curve(degree, dmatrix![-6., -5., -4., -3., -2., -1.;]);
+        let short = test_curve(degree, dmatrix![1., 2., 3.;]);
+
+        for (left, right) in [(&long, &short), (&short, &long)] {
+            let merged = merge(left, right, &Constraints::default()).unwrap();
+
+            let expected_count = left.control_points.count() + right.control_points.count() - degree;
+            assert_eq!(merged.control_points.count(), expected_count);
+            assert_eq!(merged.evaluate(0.0).unwrap(), left.evaluate(0.0).unwrap());
+            assert_eq!(merged.evaluate(1.0).unwrap(), right.evaluate(1.0).unwrap());
+        }
+    }
+
+    #[test]
+    fn merge_errors_for_degree_0() {
+        let curve = test_curve(1, dmatrix![0., 1.;]).derivative_curve(1).unwrap();
+        assert_eq!(curve.degree(), 0, "the first derivative of a line has degree 0");
+        assert_eq!(merge(&curve, &curve, &Constraints::default()).err(), Some(Error::DegreeTooLow { degree: 0 }));
+    }
+
+    #[test]
+    fn merge_errors_for_a_constraint_outside_the_domain() {
+        let left = test_curve(3, dmatrix![-4., -3., -2., -1.;]);
+        let right = test_curve(3, dmatrix![1., 2., 3., 4.;]);
+
+        let u = 1.5;
+        let constraints = Constraints { left: vec![u], right: vec![] };
+        assert_eq!(merge(&left, &right, &constraints).err(), Some(Error::OutsideDomain { u, min: 0.0, max: 1.0 }));
+
+        let constraints = Constraints { left: vec![], right: vec![f64::NAN] };
+        assert!(matches!(merge(&left, &right, &constraints), Err(Error::OutsideDomain { .. })));
     }
 
     mod knots {
         use super::*;
 
         #[test]
-        fn knots() {
-            let c = merge(&test_bspline(1, dmatrix![-2.,-1.,0.;]), &test_bspline(1, dmatrix![0.,1.,2.;])).unwrap();
-            assert_eq!(c.knots.vector(), &dvector![0., 0., 0.25, 0.5, 0.75, 1., 1.]);
+        fn merge_concatenates_the_knot_vectors() {
+            let curve = merge(
+                &test_curve(1, dmatrix![-2.,-1.,0.;]),
+                &test_curve(1, dmatrix![0.,1.,2.;]),
+                &Constraints::default(),
+            )
+            .unwrap();
+            assert_eq!(curve.knots.vector(), &dvector![0., 0., 0.25, 0.5, 0.75, 1., 1.]);
         }
     }
 
@@ -620,20 +421,25 @@ mod tests {
 
         use approx::assert_relative_eq;
 
-        use crate::curve::points;
+        use crate::points;
 
         use super::*;
 
         #[test]
         fn no_shift_degree_1() {
-            let p = 1;
-            let mat = dmatrix![
+            let degree = 1;
+            let points = dmatrix![
                 0.,1.,2.;
                 0.,1.,2.;
             ];
-            let c = merge(&test_bspline(p, points::reversed(&mat).mul(-1.)), &test_bspline(p, mat)).unwrap();
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints::default(),
+            )
+            .unwrap();
             assert_relative_eq!(
-                c.points.matrix(),
+                curve.control_points.matrix(),
                 &dmatrix![
                     -2.,-1.,0.,1.,2.;
                     -2.,-1.,0.,1.,2.;
@@ -644,48 +450,93 @@ mod tests {
 
         #[test]
         fn no_shift_degree_2() {
-            let p = 2;
-            let mat = dmatrix![0.,1.,2.;];
-            let c = merge(&test_bspline(p, points::reversed(&mat).mul(-1.)), &test_bspline(p, mat)).unwrap();
-            assert_relative_eq!(c.points.matrix(), &dmatrix![-2.,-1.,1.,2.;], epsilon = f64::EPSILON.sqrt());
+            let degree = 2;
+            let points = dmatrix![0.,1.,2.;];
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints::default(),
+            )
+            .unwrap();
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-1.,1.,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
 
         #[test]
         fn shift_degree_1() {
-            let p = 1;
-            let mat = dmatrix![0.5,1.,2.;];
-            let c = merge(&test_bspline(p, points::reversed(&mat).mul(-1.)), &test_bspline(p, mat)).unwrap();
-            assert_relative_eq!(c.points.matrix(), &dmatrix![-2.,-1.,0.,1.,2.;], epsilon = f64::EPSILON.sqrt());
+            let degree = 1;
+            let points = dmatrix![0.5,1.,2.;];
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints::default(),
+            )
+            .unwrap();
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-1.,0.,1.,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
 
         #[test]
         fn shift_degree_2() {
-            let p = 2;
-            let mat = dmatrix![0.5,1.,2.;];
-            let c = merge(&test_bspline(p, points::reversed(&mat).mul(-1.)), &test_bspline(p, mat)).unwrap();
-            assert_relative_eq!(c.points.matrix(), &dmatrix![-2.,-1.,1.,2.;], epsilon = f64::EPSILON.sqrt());
+            let degree = 2;
+            let points = dmatrix![0.5,1.,2.;];
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints::default(),
+            )
+            .unwrap();
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-1.,1.,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
 
         #[test]
         fn shift_constrain_left_degree_2() {
-            let p = 2;
-            let mat = dmatrix![0.5,1.,2.;];
-            let c = merge_from(&test_bspline(p, points::reversed(&mat).mul(-1.)), &test_bspline(p, mat)).unwrap();
+            let degree = 2;
+            let points = dmatrix![0.5,1.,2.;];
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints { left: vec![1.], right: vec![] },
+            )
+            .unwrap();
 
-            assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
+            assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
 
-            assert_relative_eq!(c.points.matrix(), &dmatrix![-2.,-1.5,0.5,2.;], epsilon = f64::EPSILON.sqrt());
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-1.5,0.5,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
 
         #[test]
         fn shift_constrain_right_degree_2() {
-            let p = 2;
-            let mat = dmatrix![0.5,1.,2.;];
-            let c = merge_to(&test_bspline(p, points::reversed(&mat).mul(-1.)), &test_bspline(p, mat)).unwrap();
+            let degree = 2;
+            let points = dmatrix![0.5,1.,2.;];
+            let curve = merge(
+                &test_curve(degree, points::reversed(&points).mul(-1.)),
+                &test_curve(degree, points),
+                &Constraints { left: vec![], right: vec![0.] },
+            )
+            .unwrap();
 
-            assert_eq!(c.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
+            assert_eq!(curve.knots.vector(), &dvector![0., 0., 0., 0.5, 1., 1., 1.]);
 
-            assert_relative_eq!(c.points.matrix(), &dmatrix![-2.,-0.5,1.5,2.;], epsilon = f64::EPSILON.sqrt());
+            assert_relative_eq!(
+                curve.control_points.matrix(),
+                &dmatrix![-2.,-0.5,1.5,2.;],
+                epsilon = f64::EPSILON.sqrt()
+            );
         }
     }
 }

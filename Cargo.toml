@@ -1,23 +1,17 @@
 [package]
 name = "bsplines"
 license = "Apache-2.0"
-version = "0.0.1-alpha.9"
-authors = [
-    "Michael A. Heuer <decentralised.systems@gmail.com>",
-]
-edition = "2021"
+version = "1.0.0-rc.0"
+authors = ["Michael A. Heuer <decentralised.systems@gmail.com>"]
+edition = "2024"
+rust-version = "1.89"
 description = "N-dimensional B-spline curves and their derivatives built on top of nalgebra"
 keywords = ["b-spline", "spline", "curve", "derivatives", "nalgebra"]
-categories = [
-    "mathematics",
-    "algorithms",
-    "graphics",
-    "no-std",
-]
+categories = ["mathematics", "algorithms", "graphics"]
 
 readme = "README.md"
-homepage = "https://github.com/michael-a-heuer/bsplines"
-repository = "https://github.com/michael-a-heuer/bsplines"
+homepage = "https://github.com/heueristik/bsplines"
+repository = "https://github.com/heueristik/bsplines"
 documentation = "https://docs.rs/bsplines"
 
 [package.metadata.docs.rs]
@@ -36,8 +30,6 @@ path = "doc-images/src/main.rs"
 
 [lints.rust]
 unsafe_code = "forbid"
-non_snake_case = "allow"
-dead_code = "allow"
 
 [lints.clippy]
 enum_glob_use = "deny"
@@ -45,13 +37,11 @@ type_complexity = "allow"
 
 [dependencies]
 embed-doc-image = "0.1.4"
-nalgebra = "0.32.3"
-thiserror = "1.0.56"
-
+nalgebra = "0.35.0"
+thiserror = "2.0.20"
 
 [dev-dependencies]
-rstest = "0.18.2"
+rstest = "0.27.0"
 approx = "0.5.1"
-plotters = "0.3.5"
+plotters = "0.3.7"
 plotters-arrows = "0.1.0"
-num-traits = "0.2.17"
