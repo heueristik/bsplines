@@ -199,16 +199,9 @@ impl Curve {
         let mut value = DVector::zeros(self.control_points.dimension());
 
         if derivative <= degree {
-            let basis_degree = degree - derivative;
-            let knots = self.knots.vector_derivative(derivative).as_slice();
-            // The basis functions that are not zero at u end at the last knot at or below u,
-            // limited to the n − k + 1 basis functions of the derivative curve.
-            let last = knots
-                .partition_point(|&knot| knot <= u)
-                .saturating_sub(1)
-                .clamp(basis_degree, self.polygon_segments() - derivative);
+            let span = self.knots.find_span(u, derivative);
 
-            for i in last - basis_degree..=last {
+            for i in span - (degree - derivative)..=span {
                 value += self.knots.basis_of_derivative_curve(derivative, i, u) *
                     self.control_points.matrix_derivative(derivative).column(i);
             }

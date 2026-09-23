@@ -79,6 +79,24 @@ mod tests {
     }
 
     #[test]
+    fn insert_after_a_repeated_knot_keeps_the_knots_sorted_and_the_shape() {
+        let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![0., 1., 3., 2., 4.;]), 2).unwrap();
+        insert(&mut curve, 0.5).unwrap();
+        insert(&mut curve, 0.5).unwrap();
+        assert_eq!(curve.knots.multiplicity(0.5), 2, "the knot 0.5 repeats");
+        let parameters: Vec<f64> = (0..=20).map(|step| f64::from(step) / 20.0).collect();
+        let before: Vec<_> = parameters.iter().map(|&u| curve.evaluate(u).unwrap()).collect();
+
+        insert(&mut curve, 0.7).unwrap();
+
+        let knot_values = curve.knots.vector();
+        assert!(knot_values.as_slice().is_sorted(), "the knots {knot_values:?} are sorted");
+        for (&u, point) in parameters.iter().zip(&before) {
+            approx::assert_relative_eq!(curve.evaluate(u).unwrap(), point, epsilon = 1e-12);
+        }
+    }
+
+    #[test]
     fn degree_1() {
         let mut curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-1., 1.;]), 1).unwrap();
         assert_eq!(curve.knots.vector(), &dvector![0., 0., 1., 1.]);

@@ -20,74 +20,45 @@ pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
 
     let degree = curve.degree();
 
-    let mut inserted = curve.clone();
-
-    let span = curve.knots.find_span(u, 0);
-    let multiplicity = curve.knots.vector().iter().skip(span).take_while(|&&x| x == u).count();
-
+    let multiplicity = curve.knots.multiplicity(u);
     if multiplicity > degree {
         return Err(Error::MultiplicityExceedsDegree { u, multiplicity, degree });
     }
 
+    // With the multiplicity p, the knot u cuts the curve into two pieces that share the control point at u.
+    let mut inserted = curve.clone();
     for _ in 0..degree - multiplicity {
         insert(&mut inserted, u)?;
     }
 
     let knots = inserted.knots.vector();
     let points = inserted.control_points.matrix();
+    let first = knots.as_slice().partition_point(|&knot| knot < u);
 
-    if multiplicity > 0 {
-        let left = {
-            let mut left_knots = DVector::zeros(span + degree + 1);
-            left_knots.head_mut(span + degree).copy_from(&knots.head(span + degree));
-            left_knots[span + degree] = u;
+    let left = {
+        let mut left_knots = DVector::zeros(first + degree + 1);
+        left_knots.head_mut(first + degree).copy_from(&knots.head(first + degree));
+        left_knots[first + degree] = u;
 
-            normalize(&mut left_knots);
-            let point_count = left_knots.len() - (degree + 2) + 1;
-            let left_points: DMatrix<f64> = points.columns(0, point_count).into();
+        normalize(&mut left_knots);
+        let left_points: DMatrix<f64> = points.columns(0, first).into();
 
-            Curve::new(Knots::new(degree, left_knots)?, ControlPoints::new(left_points))?
-        };
+        Curve::new(Knots::new(degree, left_knots)?, ControlPoints::new(left_points))?
+    };
 
-        let right = {
-            let mut right_knots = DVector::zeros(knots.len() + 1 - span);
-            right_knots[0] = u;
-            right_knots.tail_mut(knots.len() - span).copy_from(&knots.tail(knots.len() - span));
+    let right = {
+        let tail_count = knots.len() - first;
+        let mut right_knots = DVector::zeros(tail_count + 1);
+        right_knots[0] = u;
+        right_knots.tail_mut(tail_count).copy_from(&knots.tail(tail_count));
 
-            normalize(&mut right_knots);
-            let point_count = right_knots.len() - (degree + 2) + 1;
-            let right_points: DMatrix<f64> = points.columns(points.ncols() - point_count, point_count).into();
+        normalize(&mut right_knots);
+        let point_count = right_knots.len() - (degree + 2) + 1;
+        let right_points: DMatrix<f64> = points.columns(points.ncols() - point_count, point_count).into();
 
-            Curve::new(Knots::new(degree, right_knots)?, ControlPoints::new(right_points))?
-        };
-        Ok((left, right))
-    } else {
-        let left = {
-            let mut left_knots = DVector::zeros(span + degree + 1 + 1);
-            left_knots.head_mut(span + degree + 1).copy_from(&knots.head(span + degree + 1));
-            left_knots[span + degree + 1] = u;
-
-            normalize(&mut left_knots);
-
-            let point_count = left_knots.len() + 1 - (degree + 2);
-            let left_points: DMatrix<f64> = points.columns(0, point_count).into();
-
-            Curve::new(Knots::new(degree, left_knots)?, ControlPoints::new(left_points))?
-        };
-
-        let right = {
-            let mut right_knots = DVector::zeros(knots.len() + 1 - (span + 1));
-            right_knots[0] = u;
-            right_knots.tail_mut(knots.len() - (span + 1)).copy_from(&knots.tail(knots.len() - (span + 1)));
-
-            normalize(&mut right_knots);
-            let point_count = right_knots.len() + 1 - (degree + 2);
-            let right_points: DMatrix<f64> = points.columns(points.ncols() - point_count, point_count).into();
-
-            Curve::new(Knots::new(degree, right_knots)?, ControlPoints::new(right_points))?
-        };
-        Ok((left, right))
-    }
+        Curve::new(Knots::new(degree, right_knots)?, ControlPoints::new(right_points))?
+    };
+    Ok((left, right))
 }
 
 #[cfg(test)]

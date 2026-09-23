@@ -103,11 +103,6 @@ impl Knots {
         &self.derivatives[0]
     }
 
-    /// Returns the knot vector of the `k`-th derivative curve.
-    pub(crate) fn vector_derivative(&self, derivative: usize) -> &DVector<f64> {
-        &self.derivatives[derivative]
-    }
-
     /// Returns the degree p of the curve the knots parametrize.
     pub fn degree(&self) -> usize {
         self.degree
@@ -172,21 +167,15 @@ impl Knots {
         }
     }
 
-    /// Returns the index `i` of the last domain knot on the interval
-    /// `[u_{p-k}^{(k)}, u_{n+1-k}^{(k)}]` that is less than or equal to `u`,
-    /// stopping at the first knot of a repeated run (cf. algorithm A2.1 in `Piegl1997`).
+    /// Returns the knot span of `u` on the knot vector of the `k`-th derivative curve: the index of the last
+    /// knot at or below `u`, limited to the domain from p − k to n − k, so the basis functions from the
+    /// span − (p − k) to the span are the ones that are not zero at `u` (cf. algorithm A2.1 in `Piegl1997`).
     pub(crate) fn find_span(&self, u: f64, derivative: usize) -> usize {
-        let knots = self.vector_derivative(derivative);
-        let last = self.polygon_segments() + 1 - derivative;
-        let mut span = self.degree() - derivative;
-
-        while u >= knots[span + 1] && span + 1 < last {
-            span += 1;
-            if knots[span + 1] == knots[span] {
-                break;
-            }
-        }
-        span
+        self.derivatives[derivative]
+            .as_slice()
+            .partition_point(|&knot| knot <= u)
+            .saturating_sub(1)
+            .clamp(self.degree - derivative, self.polygon_segments() - derivative)
     }
 
     /// Evaluates the `i`-th basis function of degree p at the parameter `u`
@@ -409,10 +398,10 @@ mod tests {
         let u2 = dvector![0.0, 0.0, 0.5, 1.0, 1.0];
         let u3 = dvector![0.0, 0.5, 1.0];
 
-        assert_eq!(knots.vector_derivative(0), &u0);
-        assert_eq!(knots.vector_derivative(1), &u1);
-        assert_eq!(knots.vector_derivative(2), &u2);
-        assert_eq!(knots.vector_derivative(3), &u3);
+        assert_eq!(&knots.derivatives[0], &u0);
+        assert_eq!(&knots.derivatives[1], &u1);
+        assert_eq!(&knots.derivatives[2], &u2);
+        assert_eq!(&knots.derivatives[3], &u3);
     }
 
     #[test]
@@ -421,7 +410,7 @@ mod tests {
 
         for derivative in 0..=knots.degree() {
             let derivative_knots = knots.derivative_knots(derivative).unwrap();
-            assert_eq!(derivative_knots.vector(), knots.vector_derivative(derivative));
+            assert_eq!(derivative_knots.vector(), &knots.derivatives[derivative]);
 
             for index in 0..=derivative_knots.polygon_segments() {
                 for u in (0..=8).map(|eighth| f64::from(eighth) / 8.0) {
@@ -531,5 +520,11 @@ mod tests {
     #[rstest(u, expected, case(0.24, 1), case(0.25, 2), case(0.26, 2), case(0.74, 3), case(0.75, 4), case(0.76, 4))]
     fn find_span_test(u: f64, expected: usize) {
         assert_eq!(knots_example(1).find_span(u, 0), expected);
+    }
+
+    #[rstest(u, expected, case(0.49, 2), case(0.5, 4), case(0.7, 4))]
+    fn find_span_returns_the_last_knot_of_a_repeated_run(u: f64, expected: usize) {
+        let knots = Knots::new(2, dvector![0., 0., 0., 0.5, 0.5, 1., 1., 1.]).unwrap();
+        assert_eq!(knots.find_span(u, 0), expected);
     }
 }
