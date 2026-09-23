@@ -59,6 +59,19 @@ fn fit_plots() {
     );
 }
 
+fn fit_3d_plot() {
+    // Keep the data and the fit equal to the usage example in README.md and src/lib.rs.
+    let dp = DataPoints::new(dmatrix![
+        -1.9,-0.8, 0.2, 0.8, 1.9, 2.0, 1.8, 1.9, 2.0, 2.0, 2.1, 1.9, 2.1; // x
+         1.9, 2.1, 2.1, 1.9, 2.1, 2.2, 2.2, 1.8, 1.9, 1.0,-0.2,-1.1,-2.0; // y
+        -2.0,-1.9,-2.1,-1.9,-2.1,-0.9, 0.1, 0.9, 2.1, 2.2, 2.2, 1.8, 1.9; // z
+    ]);
+    let c = Curve::fit(&dp, 3).loose_ends().penalized(0.5, 2).build().unwrap();
+    let lim = Limits { min: vec![-3.0; 3], max: vec![3.0; 3] };
+
+    visualization::generate_3d_plot("generation/fit-loose-penalized-3d.svg", vec![(&c, RED_100)], &lim, Some(&dp));
+}
+
 fn interpolation_plot() {
     let dp = scattered_data_points();
     let c = Curve::interpolate(&dp, 2).unwrap();
@@ -171,6 +184,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     manual_plot();
     interpolation_plot();
     fit_plots();
+    fit_3d_plot();
 
     // Manipulation
     reverse_plots();

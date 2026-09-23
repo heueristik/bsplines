@@ -13,10 +13,12 @@ on [nalgebra](https://docs.rs/nalgebra/latest/nalgebra/).
 use bsplines::{Curve, DataPoints};
 use nalgebra::dmatrix;
 
-// Five 2D data points, one column per point.
+// Thirteen noisy 3D data points, one column per point.
+// They run along +x, then +z, then -y.
 let data = DataPoints::new(dmatrix![
-    -2.0,-1.0, 0.0, 1.0, 2.0; // x
-     0.5,-0.5, 1.5,-1.5, 0.5; // y
+    -1.9,-0.8, 0.2, 0.8, 1.9, 2.0, 1.8, 1.9, 2.0, 2.0, 2.1, 1.9, 2.1; // x
+     1.9, 2.1, 2.1, 1.9, 2.1, 2.2, 2.2, 1.8, 1.9, 1.0,-0.2,-1.1,-2.0; // y
+    -2.0,-1.9,-2.1,-1.9,-2.1,-0.9, 0.1, 0.9, 2.1, 2.2, 2.2, 1.8, 1.9; // z
 ]);
 
 // Interpolate the data with a cubic curve and evaluate it.
@@ -27,6 +29,11 @@ let velocity = curve.evaluate_derivative(0.5, 1)?;
 // Or approximate it with a penalized least-squares fit.
 let fitted = Curve::fit(&data, 3).loose_ends().penalized(0.5, 2).build()?;
 ```
+
+The fitted curve (red) follows the three straight legs of the data (black) and rounds
+only the two corners. The plot also shows its control polygon.
+
+![The penalized fit of the 3D data points](doc-images/plots/generation/fit-loose-penalized-3d.svg)
 
 Curves can also be built directly from control points (`Curve::with_uniform_knots`,
 `Curve::new`) and manipulated afterwards: knot insertion, splitting, merging with
