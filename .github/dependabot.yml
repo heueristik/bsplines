@@ -1,0 +1,8 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    # Development happens on next, not on the default branch main.
+    target-branch: next
+    schedule:
+      interval: weekly

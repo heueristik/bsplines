@@ -4,19 +4,19 @@ default:
 
 # Build all targets.
 build:
-    cargo build --all-targets
+    cargo build --all-targets --locked
 
 # Run all tests.
 test:
-    cargo test
+    cargo test --locked
 
 # Lint all targets. Warnings are errors.
 clippy:
-    cargo clippy --all-targets -- -D warnings
+    cargo clippy --all-targets --locked -- -D warnings
 
 # Build the documentation. Warnings are errors.
 doc:
-    RUSTDOCFLAGS="-D warnings" cargo doc --package bsplines --features doc-images --no-deps
+    RUSTDOCFLAGS="-D warnings" cargo doc --package bsplines --features doc-images --no-deps --locked
 
 # Format the Rust code.
 fmt:
