@@ -1,6 +1,6 @@
 //! Merges two curves into one — see `Tai2003`.
 
-use std::ops::{AddAssign, DivAssign, SubAssign};
+use std::ops::{AddAssign, SubAssign};
 
 use nalgebra::{DMatrix, DVector};
 
@@ -9,7 +9,7 @@ use crate::{
     basis::basis,
     buffer::with_buffer,
     error::{Error, Result},
-    knots::Knots,
+    knots::{Knots, normalize},
     points::{ControlPoints, Points},
     svd::decompose,
     vector_views::VectorViews,
@@ -332,8 +332,8 @@ fn merge_knot_vectors(left: &Curve, right: &Curve) -> DVector<f64> {
         .tail_mut(right_polygon_segments + 1)
         .copy_from(&right.knots.vector().tail(right_polygon_segments + 1).add_scalar(1.));
 
-    // The concatenated knot vector spans [0, 2]. Normalize it to [0, 1].
-    merged_knots.div_assign(merged_knots[left_polygon_segments + right_polygon_segments + 2]);
+    // The concatenated knot vector spans [0, 2].
+    normalize(&mut merged_knots);
 
     merged_knots
 }
