@@ -217,14 +217,15 @@ pub enum Error {
         index: usize,
     },
 
-    /// A basis function is zero at its own parameter, so the interpolation system is singular and no curve passes
-    /// through all data points (the Schoenberg-Whitney condition). Uniform knots with uneven parameters cause this.
+    /// The interpolation system is singular or nearly singular, so no curve passes through all data points: a basis
+    /// function is zero or almost zero at its own parameter (the Schoenberg-Whitney condition). Uniform knots with
+    /// uneven parameters cause this.
     #[error(
-        "the basis function {index} is zero at its parameter, so no curve interpolates the data; \
-         choose other parameter or knot methods"
+        "the interpolation system is singular at the data point {index}, so no curve passes through all data \
+         points; choose other parameter or knot methods"
     )]
     SingularInterpolation {
-        /// The index of the basis function and of its parameter.
+        /// The index of the data point that the curve cannot pass through.
         index: usize,
     },
 
