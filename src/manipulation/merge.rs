@@ -157,32 +157,19 @@ fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
 
 fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
     let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
+    let first = curve.polygon_segments() + 1 - degree;
     let knot_values = curve.knots.vector();
 
-    let mut gv = DMatrix::zeros(parameters.len(), degree);
-
-    for (g, &u) in parameters.iter().enumerate() {
-        for i in polygon_segments - degree + 1..=polygon_segments {
-            gv[(g, i - (polygon_segments - degree + 1))] = basis(knot_values, i, degree, u);
-        }
-    }
-    gv
+    // The columns belong to the last p basis functions.
+    DMatrix::from_fn(parameters.len(), degree, |g, column| basis(knot_values, first + column, degree, parameters[g]))
 }
 
 fn calculate_hw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
     let degree = curve.degree();
     let knot_values = curve.knots.vector();
 
-    let mut hw = DMatrix::zeros(parameters.len(), degree);
-
-    for (h, &u) in parameters.iter().enumerate() {
-        for i in 0..=degree - 1 {
-            hw[(h, i)] = basis(knot_values, i, degree, u);
-        }
-    }
-
-    hw
+    // The columns belong to the first p basis functions.
+    DMatrix::from_fn(parameters.len(), degree, |h, i| basis(knot_values, i, degree, parameters[h]))
 }
 
 fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
