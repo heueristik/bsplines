@@ -144,57 +144,23 @@ fn calculate_system_matrix(left: &Curve, right: &Curve, constraints: &Constraint
 fn calculate_kv(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
     let polygon_segments = curve.polygon_segments();
-
-    let knot_derivatives = &curve.knots.derivatives;
     let point_matrix = curve.control_points.matrix();
+    let knot_values = curve.knots.vector();
 
-    let mut kv = DMatrix::zeros(degree, degree);
-
-    for derivative in 0..=degree - 1 {
-        for i in polygon_segments - degree + 1..=polygon_segments {
-            let mut sum = 0.;
-
-            for basis_index in polygon_segments - degree..=polygon_segments - derivative {
-                sum += prefactor(degree, basis_index, i, derivative, point_matrix, &knot_derivatives[0]) *
-                    basis(
-                        &knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        knot_derivatives[0][polygon_segments + 1],
-                    );
-            }
-            kv[(derivative, i - (polygon_segments + 1 - degree))] = sum;
-        }
-    }
-    kv
+    // At u = 1, the last basis function of each derivative curve is 1 and all others are 0.
+    DMatrix::from_fn(degree, degree, |derivative, column| {
+        let i = polygon_segments + 1 - degree + column;
+        prefactor(degree, polygon_segments - derivative, i, derivative, point_matrix, knot_values)
+    })
 }
 
 fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
-    let knot_derivatives = &curve.knots.derivatives;
     let point_matrix = curve.control_points.matrix();
+    let knot_values = curve.knots.vector();
 
-    let mut kw = DMatrix::zeros(degree, degree);
-
-    for derivative in 0..=degree - 1 {
-        for j in 0..=degree - 1 {
-            let mut sum = 0.;
-
-            for basis_index in 0..=degree - derivative {
-                sum += prefactor(degree, basis_index, j, derivative, point_matrix, &knot_derivatives[0]) *
-                    basis(
-                        &knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        knot_derivatives[0][degree],
-                    );
-            }
-            kw[(derivative, j)] = sum;
-        }
-    }
-    kw *= -1.0;
-
-    kw
+    // At u = 0, the first basis function of each derivative curve is 1 and all others are 0.
+    DMatrix::from_fn(degree, degree, |derivative, j| -prefactor(degree, 0, j, derivative, point_matrix, knot_values))
 }
 
 fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
@@ -230,45 +196,27 @@ fn calculate_hw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
 fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
     let degree = left.degree();
     let dimension = left.dimension();
+    let left_polygon_segments = left.polygon_segments();
+
+    let left_points = left.control_points.matrix();
+    let right_points = right.control_points.matrix();
+    let left_knots = left.knots.vector();
+    let right_knots = right.knots.vector();
 
     let mut kconst = DMatrix::zeros(dimension, degree);
     let mut sum = DVector::zeros(dimension);
 
-    let left_polygon_segments = left.polygon_segments();
-
-    let left_knot_derivatives = &left.knots.derivatives;
-    let right_knot_derivatives = &right.knots.derivatives;
-
-    let left_points = left.control_points.matrix();
-    let right_points = right.control_points.matrix();
-
+    // At the joint, the last left and the first right basis function are 1 and all others are 0.
     for derivative in 0..=degree - 1 {
         sum.fill(0.0);
 
         for i in left_polygon_segments - degree..=left_polygon_segments {
-            for basis_index in left_polygon_segments - degree..=left_polygon_segments - derivative {
-                sum += prefactor(degree, basis_index, i, derivative, left_points, &left_knot_derivatives[0]) *
-                    basis(
-                        &left_knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        left_knot_derivatives[0][left_polygon_segments + 1],
-                    ) *
-                    left_points.column(i);
-            }
+            let factor = prefactor(degree, left_polygon_segments - derivative, i, derivative, left_points, left_knots);
+            sum += factor * left_points.column(i);
         }
 
         for j in 0..=degree {
-            for basis_index in 0..=degree - derivative {
-                sum -= prefactor(degree, basis_index, j, derivative, right_points, &right_knot_derivatives[0]) *
-                    basis(
-                        &right_knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        right_knot_derivatives[0][degree],
-                    ) *
-                    right_points.column(j);
-            }
+            sum -= prefactor(degree, 0, j, derivative, right_points, right_knots) * right_points.column(j);
         }
         kconst.column_mut(derivative).sub_assign(&sum);
     }
