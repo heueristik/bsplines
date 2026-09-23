@@ -68,10 +68,11 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
     let shifts = solve_linear_equation_system(left, right, constraints)?;
     let (left_shifted, right_shifted) = shift_boundary_control_points(left, right, &shifts);
 
-    let left_adjusted = adjust_knots(left, right);
-    let left_points = adjust_shifted_control_points(left_shifted, &left.knots, &left_adjusted);
+    // The right knots move behind the joint at 1, so the concatenated knot vector spans [0, 2].
+    let mut merged_knots = concatenate_knot_vectors(left, right);
+    let left_points = adjust_shifted_control_points(left_shifted, &left.knots, &merged_knots);
+    normalize(&mut merged_knots);
 
-    let merged_knots = merge_knot_vectors(left, right);
     let merged_points = merge_control_points(left, right, &left_points, &right_shifted);
 
     let merged = Curve::new(Knots::new(left_degree, merged_knots)?, ControlPoints::new(merged_points))?;
@@ -219,38 +220,24 @@ fn shift_boundary_control_points(left: &Curve, right: &Curve, shifts: &DMatrix<f
     (left_shifted, right_shifted)
 }
 
-/// Returns the knot vector of the left curve with its last p knots replaced by the first p internal knots
-/// of the right curve, moved behind the joint at 1.
-fn adjust_knots(left: &Curve, right: &Curve) -> DVector<f64> {
-    let degree = left.degree();
-    let polygon_segments = left.polygon_segments();
-
-    let mut adjusted = DVector::zeros(polygon_segments + degree + 2);
-    adjusted.head_mut(polygon_segments + 2).copy_from(&left.knots.vector().head(polygon_segments + 2));
-    adjusted.tail_mut(degree).copy_from(&right.knots.vector().segment(degree + 1, degree).add_scalar(1.));
-    adjusted
-}
-
-fn merge_knot_vectors(left: &Curve, right: &Curve) -> DVector<f64> {
+/// Returns the knots of the left curve up to the joint, followed by the internal and the end knots of the right curve
+/// moved behind the joint at 1.
+fn concatenate_knot_vectors(left: &Curve, right: &Curve) -> DVector<f64> {
     let left_polygon_segments = left.polygon_segments();
     let right_polygon_segments = right.polygon_segments();
 
-    let mut merged_knots = DVector::zeros(left_polygon_segments + 2 + right_polygon_segments + 1);
-
-    merged_knots.head_mut(left_polygon_segments + 2).copy_from(&left.knots.vector().head(left_polygon_segments + 2));
-    merged_knots
+    let mut knots = DVector::zeros(left_polygon_segments + 2 + right_polygon_segments + 1);
+    knots.head_mut(left_polygon_segments + 2).copy_from(&left.knots.vector().head(left_polygon_segments + 2));
+    knots
         .tail_mut(right_polygon_segments + 1)
         .copy_from(&right.knots.vector().tail(right_polygon_segments + 1).add_scalar(1.));
-
-    // The concatenated knot vector spans [0, 2].
-    normalize(&mut merged_knots);
-
-    merged_knots
+    knots
 }
 
 /// Returns the shifted control points of the left curve with the last p − 1 points recalculated for the adjusted
-/// knots ũ. The control points of all derivative curves at the index n − p + 1 stay the same, and the derivative
-/// formula of [`ControlPoints`], solved for the higher index, gives the points after it:
+/// knots ũ: the left knots up to the joint, followed by the internal knots of the right curve. The control points
+/// of all derivative curves at the index n − p + 1 stay the same, and the derivative formula of [`ControlPoints`],
+/// solved for the higher index, gives the points after it:
 ///
 /// Pᵢ⁽ᵏ⁾ = Pᵢ₋₁⁽ᵏ⁾ + (ũᵢ₊ₚ − ũᵢ₊ₖ) ∕ (p − k) · Pᵢ₋₁⁽ᵏ⁺¹⁾,   i = n − p + 2, …, n,   k = 0, …, n − i
 ///
