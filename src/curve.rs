@@ -87,6 +87,10 @@ impl Curve {
     /// Returns a curve of the given degree with the given control points
     /// on a clamped, uniform knot vector.
     ///
+    /// | 18 points.                | A curve of degree 2 with the points as control points. |
+    /// |:-------------------------:|:------------------------------------------------------:|
+    /// | ![][generation-points]    | ![][generation-manual]                                 |
+    ///
     /// # Examples
     /// ```
     /// use bsplines::{ControlPoints, Curve};
@@ -94,6 +98,8 @@ impl Curve {
     ///
     /// let curve = Curve::with_uniform_knots(ControlPoints::new(dmatrix![-2.0,-1.0, 0.5, 1.5;]), 2).unwrap();
     /// ```
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-points", "doc-images/plots/generation/points.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-manual", "doc-images/plots/generation/manual.svg"))]
     pub fn with_uniform_knots(control_points: ControlPoints, degree: usize) -> Result<Self> {
         let knots = Knots::uniform(degree, control_points.polygon_segments())?;
         Self::new(knots, control_points)
@@ -101,6 +107,10 @@ impl Curve {
 
     /// Returns a curve of the given degree interpolating the data points,
     /// using equally spaced parameters and a uniform knot vector.
+    ///
+    /// | 18 data points.           | The curve of degree 2 that interpolates them. |
+    /// |:-------------------------:|:---------------------------------------------:|
+    /// | ![][generation-points]    | ![][generation-interpolation]                 |
     ///
     /// # Examples
     /// ```
@@ -113,6 +123,8 @@ impl Curve {
     /// ]);
     /// let curve = Curve::interpolate(&data, 2).unwrap();
     /// ```
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-points", "doc-images/plots/generation/points.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-interpolation", "doc-images/plots/generation/interpolation.svg"))]
     pub fn interpolate(data: &DataPoints, degree: usize) -> Result<Self> {
         Self::interpolate_with(data, degree, ParameterMethod::EquallySpaced, KnotMethod::Uniform)
     }
@@ -134,6 +146,12 @@ impl Curve {
     /// Returns a builder for a least-squares fit of the data points
     /// with a curve of the given degree.
     ///
+    /// The plots fit curves of degree 2 with loose ends to 18 data points.
+    ///
+    /// | 17 polygon segments.         | 6 polygon segments.           | 6 polygon segments, penalized with λ = 0.5 and κ = 2. |
+    /// |:----------------------------:|:-----------------------------:|:-----------------------------------------------------:|
+    /// | ![][generation-fit-loose-all] | ![][generation-fit-loose-half] | ![][generation-fit-loose-half-penalized]             |
+    ///
     /// # Examples
     /// ```
     /// use bsplines::{Curve, DataPoints};
@@ -145,6 +163,9 @@ impl Curve {
     /// ]);
     /// let curve = Curve::fit(&data, 2).polygon_segments(3).loose_ends().build().unwrap();
     /// ```
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-fit-loose-all", "doc-images/plots/generation/fit-loose-all.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-fit-loose-half", "doc-images/plots/generation/fit-loose-half.svg"))]
+    #[cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("generation-fit-loose-half-penalized", "doc-images/plots/generation/fit-loose-half-penalized.svg"))]
     pub fn fit<'a>(data: &'a DataPoints, degree: usize) -> FitBuilder<'a> {
         FitBuilder::new(data, degree)
     }
