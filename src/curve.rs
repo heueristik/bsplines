@@ -206,6 +206,11 @@ impl Curve {
                     self.control_points.matrix_derivative(derivative).column(i);
             }
         }
+
+        // The derivative over very close knots can exceed the range of f64.
+        if value.iter().any(|coordinate| !coordinate.is_finite()) {
+            return Err(Error::NonFiniteValue);
+        }
         Ok(value)
     }
 
@@ -447,6 +452,15 @@ mod tests {
                     assert_relative_eq!(curve.evaluate_derivative(u, derivative).unwrap(), sum, epsilon = 1e-9);
                 }
             }
+        }
+
+        #[test]
+        fn evaluate_derivative_errors_when_the_derivative_overflows() {
+            let knots = Knots::new(2, dvector![0., 0., 0., 1e-310, 1., 1., 1.]).unwrap();
+            let curve = Curve::new(knots, ControlPoints::new(dmatrix![0., 1., 2., 3.;])).unwrap();
+
+            assert!(curve.evaluate(0.0).unwrap()[0].is_finite(), "the point exists");
+            assert_eq!(curve.evaluate_derivative(0.0, 1), Err(Error::NonFiniteValue));
         }
 
         #[rstest]
