@@ -78,7 +78,6 @@ mod manipulation;
 mod parameters;
 mod points;
 mod svd;
-mod vector_views;
 
 pub use curve::Curve;
 pub use error::{Error, Result};

@@ -7,7 +7,6 @@ use crate::{
     buffer::with_buffer,
     error::{Error, Result},
     parameters::Parameters,
-    vector_views::VectorViews,
 };
 
 pub(crate) mod methods;
@@ -118,7 +117,7 @@ impl Knots {
 
     /// Returns a view of the internal knots.
     pub fn internal(&self) -> DVectorView<'_, f64> {
-        self.derivatives[0].segment(self.degree + 1, self.internal_count())
+        self.derivatives[0].rows(self.degree + 1, self.internal_count())
     }
 
     fn domain_count(&self) -> usize {
@@ -131,7 +130,7 @@ impl Knots {
     }
 
     fn domain_derivative(&self, derivative: usize) -> DVectorView<'_, f64> {
-        self.derivatives[derivative].segment(self.degree - derivative, self.domain_count())
+        self.derivatives[derivative].rows(self.degree - derivative, self.domain_count())
     }
 
     /// Returns how often the knot value `u` occurs in the domain.
