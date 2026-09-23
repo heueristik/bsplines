@@ -115,27 +115,27 @@ fn calculate_system_matrix(left: &Curve, right: &Curve, constraints: &Constraint
 
     system_matrix.view_mut((0, 0), (2 * degree, 2 * degree)).copy_from(&DMatrix::identity(2 * degree, 2 * degree));
 
-    system_matrix.view_mut((2 * degree, 0), (degree, degree)).copy_from(&calculate_kv(left));
-    system_matrix.view_mut((2 * degree, degree), (degree, degree)).copy_from(&calculate_kw(right));
-
-    system_matrix.view_mut((0, 2 * degree), (degree, degree)).copy_from(&calculate_iv(left));
-    system_matrix.view_mut((degree, 2 * degree), (degree, degree)).copy_from(&calculate_jw(right));
+    // Each upper block is the transpose of a lower block, scaled by 1/2 or −1/2.
+    let kv = calculate_kv(left);
+    let kw = calculate_kw(right);
+    let iv = kv.transpose() * 0.5;
+    let jw = kw.transpose() * 0.5;
+    system_matrix.view_mut((2 * degree, 0), (degree, degree)).copy_from(&kv);
+    system_matrix.view_mut((2 * degree, degree), (degree, degree)).copy_from(&kw);
+    system_matrix.view_mut((0, 2 * degree), (degree, degree)).copy_from(&iv);
+    system_matrix.view_mut((degree, 2 * degree), (degree, degree)).copy_from(&jw);
 
     if left_constraints > 0 {
-        system_matrix
-            .view_mut((3 * degree, 0), (left_constraints, degree))
-            .copy_from(&calculate_gv(left, &constraints.left));
-        system_matrix
-            .view_mut((0, 3 * degree), (degree, left_constraints))
-            .copy_from(&calculate_ipv(left, &constraints.left));
+        let gv = calculate_gv(left, &constraints.left);
+        let ipv = gv.transpose() * -0.5;
+        system_matrix.view_mut((3 * degree, 0), (left_constraints, degree)).copy_from(&gv);
+        system_matrix.view_mut((0, 3 * degree), (degree, left_constraints)).copy_from(&ipv);
     }
     if right_constraints > 0 {
-        system_matrix
-            .view_mut((3 * degree + left_constraints, degree), (right_constraints, degree))
-            .copy_from(&calculate_hw(right, &constraints.right));
-        system_matrix
-            .view_mut((degree, 3 * degree + left_constraints), (degree, right_constraints))
-            .copy_from(&calculate_jppw(right, &constraints.right));
+        let hw = calculate_hw(right, &constraints.right);
+        let jppw = hw.transpose() * -0.5;
+        system_matrix.view_mut((3 * degree + left_constraints, degree), (right_constraints, degree)).copy_from(&hw);
+        system_matrix.view_mut((degree, 3 * degree + left_constraints), (degree, right_constraints)).copy_from(&jppw);
     }
 
     system_matrix
@@ -202,68 +202,6 @@ fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
     kw
 }
 
-fn calculate_iv(curve: &Curve) -> DMatrix<f64> {
-    let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
-    let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.control_points.matrix();
-
-    let mut iv = DMatrix::zeros(degree, degree);
-
-    for i in polygon_segments - degree + 1..=polygon_segments {
-        for derivative in 0..=degree - 1 {
-            let mut sum = 0.;
-
-            for basis_index in polygon_segments - degree..=polygon_segments - derivative {
-                sum += prefactor(degree, basis_index, i, derivative, point_matrix, &knot_derivatives[0]) *
-                    basis(
-                        &knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        0,
-                        polygon_segments - derivative,
-                        knot_derivatives[0][polygon_segments + 1],
-                    );
-            }
-            iv[(i - (polygon_segments + 1 - degree), derivative)] = sum;
-        }
-    }
-    iv *= 0.5;
-
-    iv
-}
-
-fn calculate_jw(curve: &Curve) -> DMatrix<f64> {
-    let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
-    let knot_derivatives = &curve.knots.derivatives;
-    let point_matrix = curve.control_points.matrix();
-
-    let mut jw = DMatrix::zeros(degree, degree);
-
-    for j in 0..=degree - 1 {
-        for derivative in 0..=degree - 1 {
-            let mut sum = 0.;
-
-            for basis_index in 0..=degree - derivative {
-                sum += prefactor(degree, basis_index, j, derivative, point_matrix, &knot_derivatives[0]) *
-                    basis(
-                        &knot_derivatives[derivative],
-                        basis_index,
-                        degree - derivative,
-                        0,
-                        polygon_segments - derivative,
-                        knot_derivatives[0][degree],
-                    );
-            }
-            jw[(j, derivative)] = sum;
-        }
-    }
-    jw *= -0.5;
-
-    jw
-}
-
 fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
     let degree = curve.degree();
     let polygon_segments = curve.polygon_segments();
@@ -293,38 +231,6 @@ fn calculate_hw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
     }
 
     hw
-}
-
-fn calculate_ipv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
-    let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
-    let knot_values = curve.knots.vector();
-
-    let mut ipv = DMatrix::zeros(degree, parameters.len());
-
-    for i in polygon_segments - degree + 1..=polygon_segments {
-        for (g, &u) in parameters.iter().enumerate() {
-            ipv[(i - (polygon_segments + 1 - degree), g)] = basis(knot_values, i, degree, 0, polygon_segments, u);
-        }
-    }
-    ipv *= -0.5;
-    ipv
-}
-
-fn calculate_jppw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
-    let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
-    let knot_values = curve.knots.vector();
-
-    let mut jppw = DMatrix::zeros(degree, parameters.len());
-
-    for j in 0..=degree - 1 {
-        for (h, &u) in parameters.iter().enumerate() {
-            jppw[(j, h)] = basis(knot_values, j, degree, 0, polygon_segments, u);
-        }
-    }
-    jppw *= -0.5;
-    jppw
 }
 
 fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
