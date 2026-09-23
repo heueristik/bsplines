@@ -6,7 +6,10 @@
 
 use nalgebra::DVector;
 
-use crate::points::DataPoints;
+use crate::{
+    error::{Error, Result},
+    points::{DataPoints, Points},
+};
 
 pub(crate) mod methods;
 
@@ -19,17 +22,37 @@ pub struct Parameters {
 
 impl Parameters {
     /// Generates the parameters ū for the data points with the given method.
-    pub fn generate(data: &DataPoints, method: ParameterMethod) -> Self {
+    /// The data needs at least two points with finite coordinates.
+    pub fn generate(data: &DataPoints, method: ParameterMethod) -> Result<Self> {
+        let count = data.count();
+        if count < 2 {
+            return Err(Error::TooFewDataPoints { count });
+        }
+        if let Some(index) = data.matrix().column_iter().position(|point| point.iter().any(|x| !x.is_finite())) {
+            return Err(Error::NonFiniteDataPoint { index });
+        }
+
         match method {
-            ParameterMethod::EquallySpaced => methods::equally_spaced(data.polyline_segments()),
+            ParameterMethod::EquallySpaced => Ok(methods::equally_spaced(data.polyline_segments())),
             ParameterMethod::ChordLength => methods::chord_length(data),
             ParameterMethod::Centripetal => methods::centripetal(data),
         }
     }
 
-    /// Returns parameters from the given values, one per data point.
-    pub fn new(vector: DVector<f64>) -> Self {
-        Parameters { vector }
+    /// Returns parameters from the given values, one per data point. There must be at least two
+    /// values, each in [0, 1], in non-decreasing order.
+    pub fn new(vector: DVector<f64>) -> Result<Self> {
+        let count = vector.len();
+        if count < 2 {
+            return Err(Error::TooFewDataPoints { count });
+        }
+        if let Some(&u) = vector.iter().find(|u| !(0.0..=1.0).contains(*u)) {
+            return Err(Error::OutsideDomain { u, min: 0.0, max: 1.0 });
+        }
+        if let Some(index) = (1..count).find(|&index| vector[index] < vector[index - 1]) {
+            return Err(Error::DecreasingParameters { index });
+        }
+        Ok(Parameters { vector })
     }
 
     /// Returns the parameter values ū.
@@ -56,4 +79,94 @@ pub enum ParameterMethod {
     /// Distributes the parameters proportionally to the chord lengths — eq. (9.5) in `Piegl1997`.
     /// The most common choice, approximating a uniform parametrization with respect to arc length.
     ChordLength,
+}
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_relative_eq;
+    use nalgebra::{DMatrix, dmatrix, dvector};
+
+    use super::*;
+
+    #[test]
+    fn generate_errors_for_one_data_point() {
+        let data = DataPoints::new(dmatrix![1.0; 2.0]);
+        assert_eq!(
+            Parameters::generate(&data, ParameterMethod::EquallySpaced).err(),
+            Some(Error::TooFewDataPoints { count: 1 })
+        );
+    }
+
+    #[test]
+    fn generate_errors_for_a_coordinate_that_is_not_finite() {
+        let mut matrix = DMatrix::from_fn(2, 4, |row, column| (row + column) as f64);
+        let index = 2;
+        matrix[(1, index)] = f64::NAN;
+        assert_eq!(
+            Parameters::generate(&DataPoints::new(matrix), ParameterMethod::EquallySpaced).err(),
+            Some(Error::NonFiniteDataPoint { index })
+        );
+    }
+
+    #[test]
+    fn chord_length_and_centripetal_error_for_coincident_data_points() {
+        let data = DataPoints::new(DMatrix::from_element(2, 4, 1.0));
+        assert!(
+            Parameters::generate(&data, ParameterMethod::EquallySpaced).is_ok(),
+            "equally spaced parameters do not depend on the positions"
+        );
+
+        for method in [ParameterMethod::ChordLength, ParameterMethod::Centripetal] {
+            assert_eq!(Parameters::generate(&data, method).err(), Some(Error::CoincidentDataPoints));
+        }
+    }
+
+    #[test]
+    fn centripetal_accepts_closely_spaced_data_points() {
+        let spacing = 1e-18;
+        let data = DataPoints::new(DMatrix::from_fn(1, 4, |_, column| column as f64 * spacing));
+        let parameters = Parameters::generate(&data, ParameterMethod::Centripetal).unwrap();
+        assert_relative_eq!(
+            parameters.vector(),
+            &dvector![0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0],
+            epsilon = f64::EPSILON.sqrt()
+        );
+    }
+
+    #[test]
+    fn new_errors_for_one_value() {
+        assert_eq!(Parameters::new(dvector![0.5]).err(), Some(Error::TooFewDataPoints { count: 1 }));
+    }
+
+    #[test]
+    fn new_errors_for_a_value_outside_the_domain() {
+        let u = 1.5;
+        assert_eq!(Parameters::new(dvector![0.0, u]).err(), Some(Error::OutsideDomain { u, min: 0.0, max: 1.0 }));
+        assert!(matches!(Parameters::new(dvector![0.0, f64::NAN]), Err(Error::OutsideDomain { .. })));
+    }
+
+    #[test]
+    fn new_errors_for_a_decreasing_value() {
+        assert_eq!(Parameters::new(dvector![0.0, 0.6, 0.4, 1.0]).err(), Some(Error::DecreasingParameters { index: 2 }));
+    }
+
+    #[test]
+    fn new_accepts_a_repeated_value() {
+        assert!(Parameters::new(dvector![0.0, 0.5, 0.5, 1.0]).is_ok());
+    }
+
+    #[test]
+    fn chord_length_parameters_do_not_depend_on_the_scale_of_the_data() {
+        for scale in [1e200, 1.0, 1e-200] {
+            let data = DataPoints::new(dmatrix![0.0, 1.0, 3.0;] * scale);
+            let parameters = Parameters::generate(&data, ParameterMethod::ChordLength).unwrap();
+            assert_relative_eq!(parameters.vector(), &dvector![0.0, 1.0 / 3.0, 1.0], epsilon = f64::EPSILON.sqrt());
+        }
+    }
+
+    #[test]
+    fn chord_length_errors_when_a_chord_overflows() {
+        let data = DataPoints::new(dmatrix![-f64::MAX, f64::MAX;]);
+        assert_eq!(Parameters::generate(&data, ParameterMethod::ChordLength).err(), Some(Error::NonFiniteValue));
+    }
 }

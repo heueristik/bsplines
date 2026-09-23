@@ -14,7 +14,7 @@ pub fn fit(
     parameters: &Parameters,
     penalization: Option<Penalization>,
 ) -> Result<DMatrix<f64>> {
-    check_input(knots, points, parameters, &penalization)?;
+    check_input(knots, points, parameters, &penalization, knots.polygon_segments() + 1)?;
 
     let basis_matrix = calculate_basis_matrix(knots, points, parameters);
 
@@ -45,18 +45,16 @@ fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Param
 
 fn calculate_finite_difference_matrix(difference_order: usize, knots: &Knots) -> DMatrix<f64> {
     let polygon_segments = knots.polygon_segments();
-    assert!(
+    debug_assert!(
         difference_order <= polygon_segments,
-        "the difference order {} must not exceed n = {}",
-        difference_order,
-        polygon_segments
+        "the difference order must be smaller than the n + 1 control points"
     );
 
     let mut difference_matrix = DMatrix::zeros(polygon_segments + 1 - difference_order, polygon_segments + 1);
 
     for i in 0..=polygon_segments - difference_order {
         for j in 0..=polygon_segments {
-            difference_matrix[(i, j)] = difference_operator(i, j, difference_order) as f64;
+            difference_matrix[(i, j)] = difference_operator(i, j, difference_order);
         }
     }
 
@@ -79,8 +77,27 @@ mod tests {
     use crate::fit::test_data_points;
 
     #[test]
+    fn finite_difference_matrix_order_0_is_the_identity() {
+        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
+        let control_point_count = knots.polygon_segments() + 1;
+        let matrix = calculate_finite_difference_matrix(0, &knots);
+        assert_eq!(matrix, DMatrix::identity(control_point_count, control_point_count));
+    }
+
+    #[test]
+    fn finite_difference_matrix_rows_of_order_40_sum_to_zero() {
+        let difference_order = 40;
+        let knots = Knots::uniform(1, difference_order + 4).unwrap();
+        let matrix = calculate_finite_difference_matrix(difference_order, &knots);
+
+        for row in matrix.row_iter() {
+            assert_eq!(row.sum(), 0.0, "the differences of a constant vanish");
+        }
+    }
+
+    #[test]
     fn finite_difference_matrix_order_1() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]);
+        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
         let matrix = calculate_finite_difference_matrix(1, &knots);
         let expected = dmatrix![
             -1.0, 1.0, 0.0, 0.0, 0.0;
@@ -93,7 +110,7 @@ mod tests {
 
     #[test]
     fn finite_difference_matrix_order_2() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]);
+        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
         let matrix = calculate_finite_difference_matrix(2, &knots);
         let expected = dmatrix![
              1.0,-2.0, 1.0, 0.0, 0.0;
@@ -110,7 +127,7 @@ mod tests {
             1., 2., 3., 4., 5.;
         ]);
 
-        let parameters = Parameters::generate(&points, EquallySpaced);
+        let parameters = Parameters::generate(&points, EquallySpaced).unwrap();
         let knots = Knots::generate(1, points.polyline_segments(), &parameters, Uniform).unwrap();
         assert_eq!(fit(&knots, &points, &parameters, None).unwrap(), *points.matrix());
     }
@@ -122,7 +139,7 @@ mod tests {
             1., 2., 3., 4., 5.;
         ]);
 
-        let parameters = Parameters::generate(&points, ChordLength);
+        let parameters = Parameters::generate(&points, ChordLength).unwrap();
         let knots = Knots::generate(1, points.polyline_segments(), &parameters, Averaging).unwrap();
         assert_relative_eq!(
             fit(&knots, &points, &parameters, Some(Penalization { strength: 0.5, difference_order: 2 })).unwrap(),
@@ -137,7 +154,7 @@ mod tests {
         let data_points = test_data_points(10);
 
         let polygon_segments = data_points.polyline_segments();
-        let parameters = Parameters::generate(&data_points, EquallySpaced);
+        let parameters = Parameters::generate(&data_points, EquallySpaced).unwrap();
         let knots = Knots::generate(degree, polygon_segments, &parameters, Uniform).unwrap();
 
         assert_relative_eq!(
@@ -152,7 +169,7 @@ mod tests {
         let degree = 2;
         let data_points = test_data_points(10);
 
-        let parameters = Parameters::generate(&data_points, EquallySpaced);
+        let parameters = Parameters::generate(&data_points, EquallySpaced).unwrap();
         let knots = Knots::generate(degree, data_points.polyline_segments(), &parameters, Uniform).unwrap();
         let points = crate::fit::fixed::fit(
             &knots,

@@ -40,7 +40,9 @@ pub struct Curve {
 }
 
 impl Curve {
-    /// Returns a curve defined by the given knot vector and control points.
+    /// Returns a curve defined by the given knot vector and control points. The knot vector must be
+    /// clamped and normalized to [0, 1], and its n + p + 2 knots need n + 1 control points with finite
+    /// coordinates.
     ///
     /// # Examples
     /// ```
@@ -60,16 +62,26 @@ impl Curve {
     /// println!("{:?}", curve.evaluate(0.5));
     /// ```
     pub fn new(knots: Knots, control_points: ControlPoints) -> Result<Self> {
-        match (knots.degree(), control_points.polygon_segments()) {
-            (degree, polygon_segments) if polygon_segments < degree => {
-                Err(Error::TooFewPolygonSegments { degree, polygon_segments })
-            }
-            _ => {
-                let mut curve = Self { knots, control_points };
-                curve.derive();
-                Ok(curve)
-            }
+        if !knots.is_clamped() {
+            return Err(Error::UnclampedKnots);
         }
+        if !knots.is_normalized() {
+            return Err(Error::UnnormalizedKnots);
+        }
+
+        let expected = knots.polygon_segments() + 1;
+        let count = control_points.count();
+        if count != expected {
+            return Err(Error::ControlPointCountMismatch { expected, count });
+        }
+        let points = control_points.matrix();
+        if let Some(index) = points.column_iter().position(|point| point.iter().any(|x| !x.is_finite())) {
+            return Err(Error::NonFiniteControlPoint { index });
+        }
+
+        let mut curve = Self { knots, control_points };
+        curve.derive();
+        Ok(curve)
     }
 
     /// Returns a curve of the given degree with the given control points
@@ -113,9 +125,9 @@ impl Curve {
         parameter_method: ParameterMethod,
         knot_method: KnotMethod,
     ) -> Result<Self> {
-        let parameters = Parameters::generate(data, parameter_method);
+        let parameters = Parameters::generate(data, parameter_method)?;
         let knots = Knots::generate(degree, data.polyline_segments(), &parameters, knot_method)?;
-        let control_points = ControlPoints::new(interpolation::interpolate(&knots, data, &parameters));
+        let control_points = ControlPoints::new(interpolation::interpolate(&knots, data, &parameters)?);
         Self::new(knots, control_points)
     }
 
@@ -187,13 +199,17 @@ impl Curve {
         let mut value = DVector::zeros(self.control_points.dimension());
 
         if derivative <= degree {
-            let polygon_segments = self.polygon_segments();
             let span = self.knots.find_span(u, derivative);
 
-            for i in span - (degree - derivative)..=polygon_segments - derivative {
+            for i in span - (degree - derivative)..=span {
                 value += self.knots.basis_of_derivative_curve(derivative, i, u) *
                     self.control_points.matrix_derivative(derivative).column(i);
             }
+        }
+
+        // The derivative over very close knots can exceed the range of f64.
+        if value.iter().any(|coordinate| !coordinate.is_finite()) {
+            return Err(Error::NonFiniteValue);
         }
         Ok(value)
     }
@@ -343,7 +359,7 @@ impl Curve {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use nalgebra::{dmatrix, dvector};
+    use nalgebra::{DMatrix, dmatrix, dvector};
     use rstest::fixture;
 
     use crate::points::DataPoints;
@@ -365,10 +381,87 @@ mod tests {
         curve
     }
 
+    #[test]
+    fn new_errors_for_a_control_point_count_that_does_not_match_the_knots() {
+        let knots = Knots::uniform(2, 2).unwrap();
+        let expected = knots.polygon_segments() + 1;
+        let count = expected + 2;
+        assert_eq!(
+            Curve::new(knots, ControlPoints::new(DMatrix::zeros(1, count))).err(),
+            Some(Error::ControlPointCountMismatch { expected, count })
+        );
+    }
+
+    #[test]
+    fn new_errors_for_a_control_point_that_is_not_finite() {
+        let index = 1;
+        let mut points = dmatrix![0.0, 1.0, 2.0;];
+        points[(0, index)] = f64::INFINITY;
+        assert_eq!(
+            Curve::new(Knots::uniform(2, 2).unwrap(), ControlPoints::new(points)).err(),
+            Some(Error::NonFiniteControlPoint { index })
+        );
+    }
+
+    #[test]
+    fn new_errors_for_unclamped_knots() {
+        let knots = Knots::new(2, dvector![0.0, 0.1, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0]).unwrap();
+        let points = DMatrix::zeros(1, knots.polygon_segments() + 1);
+        assert_eq!(Curve::new(knots, ControlPoints::new(points)).err(), Some(Error::UnclampedKnots));
+    }
+
+    #[test]
+    fn new_errors_for_more_than_p_plus_1_equal_end_knots() {
+        let knots = Knots::new(2, dvector![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]).unwrap();
+        let points = DMatrix::zeros(1, knots.polygon_segments() + 1);
+        assert_eq!(Curve::new(knots, ControlPoints::new(points)).err(), Some(Error::UnclampedKnots));
+    }
+
+    #[test]
+    fn new_errors_for_unnormalized_knots() {
+        let knots = Knots::new(1, dvector![0.0, 0.0, 1.0, 2.0, 2.0]).unwrap();
+        let points = DMatrix::zeros(1, knots.polygon_segments() + 1);
+        assert_eq!(Curve::new(knots, ControlPoints::new(points)).err(), Some(Error::UnnormalizedKnots));
+    }
+
     mod evaluate {
         use rstest::rstest;
 
         use super::*;
+
+        #[test]
+        fn evaluate_derivative_equals_the_sum_over_all_basis_functions() {
+            let degree = 3;
+            let mut curve =
+                Curve::with_uniform_knots(ControlPoints::new(dmatrix![0., 1., 3., 2., 4., 5., 3., 6.;]), degree)
+                    .unwrap();
+            curve.insert_knot(0.4).unwrap();
+            curve.insert_knot(0.4).unwrap();
+            assert_eq!(curve.knots().multiplicity(0.4), degree, "the internal knot 0.4 repeats p times");
+
+            for derivative in 0..=degree {
+                let derivative_curve = curve.derivative_curve(derivative).unwrap();
+                let knots = derivative_curve.knots();
+                let points = derivative_curve.control_points().matrix();
+                let parameters = knots.vector().iter().copied().chain((0..=20).map(|step| f64::from(step) / 20.0));
+
+                for u in parameters {
+                    let sum = (0..points.ncols())
+                        .map(|i| knots.basis(i, u).unwrap() * points.column(i))
+                        .fold(DVector::zeros(points.nrows()), |sum, term| sum + term);
+                    assert_relative_eq!(curve.evaluate_derivative(u, derivative).unwrap(), sum, epsilon = 1e-9);
+                }
+            }
+        }
+
+        #[test]
+        fn evaluate_derivative_errors_when_the_derivative_overflows() {
+            let knots = Knots::new(2, dvector![0., 0., 0., 1e-310, 1., 1., 1.]).unwrap();
+            let curve = Curve::new(knots, ControlPoints::new(dmatrix![0., 1., 2., 3.;])).unwrap();
+
+            assert!(curve.evaluate(0.0).unwrap()[0].is_finite(), "the point exists");
+            assert_eq!(curve.evaluate_derivative(0.0, 1), Err(Error::NonFiniteValue));
+        }
 
         #[rstest]
         fn evaluate_derivative_returns_zero_above_the_degree(curve: Curve) {
@@ -476,6 +569,25 @@ mod tests {
     }
 
     #[test]
+    fn reversed_curve_has_the_derivatives_of_the_chain_rule() {
+        let degree = 3;
+        let points =
+            DMatrix::from_fn(2, 7, |row, column| if row == 0 { column as f64 } else { (column as f64 * 1.3).sin() });
+        let curve = Curve::with_uniform_knots(ControlPoints::new(points), degree).unwrap();
+        let mut reversed = curve.clone();
+        reversed.reverse();
+
+        // The parameters avoid the knots, where the derivative of order p jumps.
+        for u in (0..20).map(|step| f64::from(step) / 20.0 + 0.013) {
+            for derivative in 0..=degree {
+                let sign = if derivative % 2 == 0 { 1.0 } else { -1.0 };
+                let expected = sign * curve.evaluate_derivative(1.0 - u, derivative).unwrap();
+                assert_relative_eq!(reversed.evaluate_derivative(u, derivative).unwrap(), expected, epsilon = 1e-9);
+            }
+        }
+    }
+
+    #[test]
     fn reverse() {
         let mut curve = Curve::with_uniform_knots(
             ControlPoints::new(dmatrix![
@@ -548,6 +660,38 @@ mod tests {
         curve.append_constrained(&right, Constraints { left: vec![1.0], right: vec![] }).unwrap();
 
         assert_relative_eq!(curve.evaluate(joint).unwrap(), end, epsilon = f64::EPSILON.sqrt());
+    }
+
+    #[test]
+    fn curve_of_degree_40_starts_and_ends_at_its_end_control_points() {
+        let degree = 40;
+        let points = DMatrix::from_fn(1, degree + 5, |_, column| column as f64);
+        let last = points.ncols() - 1;
+        let curve = Curve::with_uniform_knots(ControlPoints::new(points.clone()), degree).unwrap();
+
+        assert_relative_eq!(curve.evaluate(0.0).unwrap()[0], points[0], epsilon = 1e-9);
+        assert_relative_eq!(curve.evaluate(1.0).unwrap()[0], points[last], epsilon = 1e-9);
+    }
+
+    #[test]
+    fn interpolate_with_errors_when_a_basis_function_is_zero_at_its_parameter() {
+        let data = DataPoints::new(dmatrix![
+            0.0, 0.01, 0.02, 0.03, 0.04, 10.0;
+            0.0,  0.5, -0.5,  0.5, -0.5,  0.0;
+        ]);
+        let parameters = Parameters::generate(&data, ParameterMethod::ChordLength).unwrap();
+        assert!(parameters.vector()[3] < 0.25, "the basis function 3 of the uniform knots starts at 0.25");
+
+        let result = Curve::interpolate_with(&data, 2, ParameterMethod::ChordLength, KnotMethod::Uniform);
+        assert_eq!(result.err(), Some(Error::SingularInterpolation { index: 3 }));
+
+        let result = Curve::interpolate_with(&data, 2, ParameterMethod::ChordLength, KnotMethod::Averaging);
+        assert!(result.is_ok(), "averaged knots suit the chord-length parameters");
+    }
+
+    #[test]
+    fn interpolate_errors_for_no_data_points() {
+        assert!(Curve::interpolate(&DataPoints::new(DMatrix::zeros(2, 0)), 2).is_err());
     }
 
     #[test]

@@ -47,12 +47,18 @@ pub enum KnotMethod {
 
 impl Knots {
     /// Generates a clamped knot vector with the given method from the parameters ū.
+    /// The parameters must belong to at least n + 1 data points.
     pub fn generate(
         degree: usize,
         polygon_segments: usize,
         parameters: &Parameters,
         method: KnotMethod,
     ) -> Result<Self> {
+        let polyline_segments = parameters.polyline_segments();
+        if polygon_segments > polyline_segments {
+            return Err(Error::TooFewPolylineSegments { polygon_segments, polyline_segments });
+        }
+
         match method {
             KnotMethod::Uniform => methods::uniform(degree, polygon_segments),
             KnotMethod::DeBoor => methods::de_boor(degree, polygon_segments, parameters),
@@ -67,24 +73,34 @@ impl Knots {
     }
 
     /// Returns knots for a curve of the given degree from the given knot values,
-    /// deriving the knot vectors of all derivative orders.
-    pub fn new(degree: usize, knots: DVector<f64>) -> Self {
+    /// deriving the knot vectors of all derivative orders. The degree p needs at least 2p + 2 finite
+    /// knots in non-decreasing order, and the domain from knot p to knot n + 1 must not have length zero.
+    pub fn new(degree: usize, knots: DVector<f64>) -> Result<Self> {
+        let count = knots.len();
+        if count < degree.saturating_mul(2).saturating_add(2) {
+            return Err(Error::TooFewKnots { count, degree });
+        }
+        if let Some(index) = knots.iter().position(|u| !u.is_finite()) {
+            return Err(Error::NonFiniteKnot { index });
+        }
+        if let Some(index) = (1..count).find(|&index| knots[index] < knots[index - 1]) {
+            return Err(Error::DecreasingKnots { index });
+        }
+        if knots[degree] == knots[count - degree - 1] {
+            return Err(Error::ZeroLengthDomain);
+        }
+
         let mut derivatives: Vec<DVector<f64>> = Vec::with_capacity(degree + 1);
         derivatives.push(knots);
 
         let mut knots = Knots { derivatives, degree };
         knots.derive();
-        knots
+        Ok(knots)
     }
 
     /// Returns the knot vector of the curve.
     pub fn vector(&self) -> &DVector<f64> {
         &self.derivatives[0]
-    }
-
-    /// Returns the knot vector of the `k`-th derivative curve.
-    pub(crate) fn vector_derivative(&self, derivative: usize) -> &DVector<f64> {
-        &self.derivatives[derivative]
     }
 
     /// Returns the degree p of the curve the knots parametrize.
@@ -151,21 +167,15 @@ impl Knots {
         }
     }
 
-    /// Returns the index `i` of the last domain knot on the interval
-    /// `[u_{p-k}^{(k)}, u_{n+1-k}^{(k)}]` that is less than or equal to `u`,
-    /// stopping at the first knot of a repeated run (cf. algorithm A2.1 in `Piegl1997`).
+    /// Returns the knot span of `u` on the knot vector of the `k`-th derivative curve: the index of the last
+    /// knot at or below `u`, limited to the domain from p − k to n − k, so the basis functions from the
+    /// span − (p − k) to the span are the ones that are not zero at `u` (cf. algorithm A2.1 in `Piegl1997`).
     pub(crate) fn find_span(&self, u: f64, derivative: usize) -> usize {
-        let knots = self.vector_derivative(derivative);
-        let last = self.polygon_segments() + 1 - derivative;
-        let mut span = self.degree() - derivative;
-
-        while u >= knots[span + 1] && span + 1 < last {
-            span += 1;
-            if knots[span + 1] == knots[span] {
-                break;
-            }
-        }
-        span
+        self.derivatives[derivative]
+            .as_slice()
+            .partition_point(|&knot| knot <= u)
+            .saturating_sub(1)
+            .clamp(self.degree - derivative, self.polygon_segments() - derivative)
     }
 
     /// Evaluates the `i`-th basis function of degree p at the parameter `u`
@@ -222,7 +232,7 @@ impl Knots {
             return Err(Error::DerivativeExceedsDegree { derivative, degree });
         }
 
-        Ok(Knots::new(degree - derivative, self.derivatives[derivative].clone()))
+        Knots::new(degree - derivative, self.derivatives[derivative].clone())
     }
 
     /// Evaluates the `i`-th basis function of the `k`-th derivative curve at the parameter `u`:
@@ -235,41 +245,21 @@ impl Knots {
         basis::basis(knots, index, basis_degree, derivative, self.polygon_segments(), u)
     }
 
-    /// Returns whether the first and last knot value are each repeated p + 1 times,
+    /// Returns whether exactly the first p + 1 knots are equal and exactly the last p + 1 knots are equal,
     /// so a curve starts and ends at its end control points.
     pub fn is_clamped(&self) -> bool {
         let knot_values = self.vector();
-        let clamp_size = self.degree + 1;
-
-        let is_head_clamped = knot_values.iter().take(clamp_size).all(|&u| u == 0.0);
-        let is_tail_clamped = knot_values.iter().rev().take(clamp_size).all(|&u| u == 1.0);
-
+        let (degree, last) = (self.degree, knot_values.len() - 1);
+        let is_head_clamped = knot_values[0] == knot_values[degree] && knot_values[degree] < knot_values[degree + 1];
+        let is_tail_clamped = knot_values[last - degree] == knot_values[last] &&
+            knot_values[last - degree - 1] < knot_values[last - degree];
         is_head_clamped && is_tail_clamped
     }
 
     /// Returns whether the knot values span exactly the domain [0, 1].
     pub fn is_normalized(&self) -> bool {
         let knot_values = self.vector();
-
-        let is_min_zero = knot_values.iter().min_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&0.0);
-        let is_max_unity = knot_values.iter().max_by(|a, b| a.partial_cmp(b).unwrap()) == Some(&1.0);
-
-        is_min_zero && is_max_unity
-    }
-
-    /// Returns whether the knot values are in non-decreasing order.
-    pub fn is_sorted(&self) -> bool {
-        let mut values = self.derivatives[0].iter();
-        match values.next() {
-            None => true,
-            Some(first) => values
-                .scan(first, |state, next| {
-                    let cmp = *state <= next;
-                    *state = next;
-                    Some(cmp)
-                })
-                .all(|b| b),
-        }
+        knot_values[0] == 0.0 && knot_values[knot_values.len() - 1] == 1.0
     }
 
     /// Returns whether the knot values equal the clamped, uniform knot vector
@@ -376,8 +366,20 @@ mod tests {
     }
 
     #[test]
+    fn new_errors_for_too_few_knots() {
+        let degree = 2;
+        let smallest = dvector![0., 0., 0., 1., 1., 1.];
+        assert_eq!(smallest.len(), 2 * degree + 2, "p + 1 control points need 2p + 2 knots");
+        assert!(Knots::new(degree, smallest).is_ok());
+
+        let too_short = dvector![0., 0., 0., 1., 1.];
+        let count = too_short.len();
+        assert_eq!(Knots::new(degree, too_short).err(), Some(Error::TooFewKnots { count, degree }));
+    }
+
+    #[test]
     fn multiplicity() {
-        let knots = Knots::new(2, dvector![0., 0., 0., 0.25, 0.5, 0.5, 0.75, 1., 1., 1.]);
+        let knots = Knots::new(2, dvector![0., 0., 0., 0.25, 0.5, 0.5, 0.75, 1., 1., 1.]).unwrap();
 
         assert_eq!(knots.multiplicity(0.2), 0);
         assert_eq!(knots.multiplicity(0.25), 1);
@@ -396,19 +398,19 @@ mod tests {
         let u2 = dvector![0.0, 0.0, 0.5, 1.0, 1.0];
         let u3 = dvector![0.0, 0.5, 1.0];
 
-        assert_eq!(knots.vector_derivative(0), &u0);
-        assert_eq!(knots.vector_derivative(1), &u1);
-        assert_eq!(knots.vector_derivative(2), &u2);
-        assert_eq!(knots.vector_derivative(3), &u3);
+        assert_eq!(&knots.derivatives[0], &u0);
+        assert_eq!(&knots.derivatives[1], &u1);
+        assert_eq!(&knots.derivatives[2], &u2);
+        assert_eq!(&knots.derivatives[3], &u3);
     }
 
     #[test]
     fn derivative_knots_carry_the_basis_functions_of_the_derivative_curve() {
-        let knots = Knots::new(3, dvector![0., 0., 0., 0., 0.25, 0.5, 0.5, 1., 1., 1., 1.]);
+        let knots = Knots::new(3, dvector![0., 0., 0., 0., 0.25, 0.5, 0.5, 1., 1., 1., 1.]).unwrap();
 
         for derivative in 0..=knots.degree() {
             let derivative_knots = knots.derivative_knots(derivative).unwrap();
-            assert_eq!(derivative_knots.vector(), knots.vector_derivative(derivative));
+            assert_eq!(derivative_knots.vector(), &knots.derivatives[derivative]);
 
             for index in 0..=derivative_knots.polygon_segments() {
                 for u in (0..=8).map(|eighth| f64::from(eighth) / 8.0) {
@@ -443,44 +445,86 @@ mod tests {
 
     #[test]
     fn normalize() {
-        let mut knots = Knots::new(1, dvector![1.0, 1.0, 1.5, 2.0, 2.0]);
+        let mut knots = Knots::new(1, dvector![1.0, 1.0, 1.5, 2.0, 2.0]).unwrap();
         knots.normalize();
         assert_eq!(knots.vector(), &dvector![0.0, 0.0, 0.5, 1.0, 1.0]);
     }
 
     #[test]
     fn reverse() {
-        let mut knots = Knots::new(1, dvector![0.0, 0.0, 0.6, 1.0, 1.0]);
+        let mut knots = Knots::new(1, dvector![0.0, 0.0, 0.6, 1.0, 1.0]).unwrap();
         knots.reverse();
         assert_eq!(knots.vector(), &dvector![0.0, 0.0, 0.4, 1.0, 1.0]);
     }
 
     #[test]
-    fn is_sorted_test() {
-        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_sorted());
-        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).is_sorted());
+    fn generate_errors_for_fewer_data_points_than_control_points() {
+        let parameters = Parameters::new(dvector![0.0, 0.5, 1.0]).unwrap();
+        let polyline_segments = parameters.polyline_segments();
+        let polygon_segments = polyline_segments + 1;
+        assert_eq!(
+            Knots::generate(2, polygon_segments, &parameters, KnotMethod::Averaging).err(),
+            Some(Error::TooFewPolylineSegments { polygon_segments, polyline_segments })
+        );
+    }
+
+    #[test]
+    fn new_errors_for_a_knot_that_is_not_finite() {
+        let index = 2;
+        let mut knot_values = dvector![0.0, 0.0, 0.5, 1.0, 1.0];
+        knot_values[index] = f64::NAN;
+        assert_eq!(Knots::new(1, knot_values).err(), Some(Error::NonFiniteKnot { index }));
+    }
+
+    #[test]
+    fn new_errors_for_a_decreasing_knot() {
+        assert_eq!(
+            Knots::new(1, dvector![0.0, 0.0, 0.6, 0.4, 1.0, 1.0]).err(),
+            Some(Error::DecreasingKnots { index: 3 })
+        );
+    }
+
+    #[test]
+    fn new_errors_for_a_domain_of_length_zero() {
+        let degree = 1;
+        let knot_values = dvector![0.0, 0.5, 0.5, 1.0];
+        let last_domain_knot = knot_values.len() - degree - 1;
+        assert_eq!(knot_values[degree], knot_values[last_domain_knot], "the domain starts and ends at 0.5");
+        assert_eq!(Knots::new(degree, knot_values).err(), Some(Error::ZeroLengthDomain));
     }
 
     #[test]
     fn is_clamped_test() {
-        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_clamped());
-        assert!(!Knots::new(1, dvector![0.0, 1.0, 0.5, 1.0, 1.0]).is_clamped());
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_clamped());
+        assert!(Knots::new(1, dvector![2.0, 2.0, 2.5, 3.0, 3.0]).unwrap().is_clamped());
+        assert!(!Knots::new(1, dvector![0.0, 0.25, 0.5, 1.0, 1.0]).unwrap().is_clamped());
+        assert!(
+            !Knots::new(1, dvector![0.0, 0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_clamped(),
+            "p + 2 equal first knots"
+        );
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0, 1.0]).unwrap().is_clamped(), "p + 2 equal last knots");
     }
 
     #[test]
     fn is_normalized_test() {
-        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).is_normalized());
-        assert!(!Knots::new(1, dvector![0.0, 0.0, 1.5, 1.0, 1.0]).is_normalized());
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.5, 1.0, 1.0]).unwrap().is_normalized());
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 1.0, 1.5, 1.5]).unwrap().is_normalized());
     }
 
     #[test]
     fn is_uniform_test() {
-        assert!(Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).is_uniform());
-        assert!(!Knots::new(1, dvector![0.0, 0.0, 0.25, 0.75, 1.0, 1.0]).is_uniform());
+        assert!(Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap().is_uniform());
+        assert!(!Knots::new(1, dvector![0.0, 0.0, 0.25, 0.75, 1.0, 1.0]).unwrap().is_uniform());
     }
 
     #[rstest(u, expected, case(0.24, 1), case(0.25, 2), case(0.26, 2), case(0.74, 3), case(0.75, 4), case(0.76, 4))]
     fn find_span_test(u: f64, expected: usize) {
         assert_eq!(knots_example(1).find_span(u, 0), expected);
+    }
+
+    #[rstest(u, expected, case(0.49, 2), case(0.5, 4), case(0.7, 4))]
+    fn find_span_returns_the_last_knot_of_a_repeated_run(u: f64, expected: usize) {
+        let knots = Knots::new(2, dvector![0., 0., 0., 0.5, 0.5, 1., 1., 1.]).unwrap();
+        assert_eq!(knots.find_span(u, 0), expected);
     }
 }
