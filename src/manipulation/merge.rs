@@ -137,23 +137,21 @@ fn calculate_system_matrix(left: &Curve, right: &Curve, constraints: &Constraint
 fn calculate_kv(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
     let polygon_segments = curve.polygon_segments();
-    let point_matrix = curve.control_points.matrix();
     let knot_values = curve.knots.vector();
 
     // At u = 1, the last basis function of each derivative curve is 1 and all others are 0.
     DMatrix::from_fn(degree, degree, |derivative, column| {
         let i = polygon_segments + 1 - degree + column;
-        prefactor(degree, polygon_segments - derivative, i, derivative, point_matrix, knot_values)
+        prefactor(degree, polygon_segments - derivative, i, derivative, knot_values)
     })
 }
 
 fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
-    let point_matrix = curve.control_points.matrix();
     let knot_values = curve.knots.vector();
 
     // At u = 0, the first basis function of each derivative curve is 1 and all others are 0.
-    DMatrix::from_fn(degree, degree, |derivative, j| -prefactor(degree, 0, j, derivative, point_matrix, knot_values))
+    DMatrix::from_fn(degree, degree, |derivative, j| -prefactor(degree, 0, j, derivative, knot_values))
 }
 
 fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
@@ -320,41 +318,38 @@ fn merge_control_points(
     merged_points
 }
 
-fn kronecker_delta(i: usize, j: usize) -> bool {
-    i == j
-}
-
-/// Returns the factor that ties a control point of the `k`-th derivative curve
-/// to a zero-order control point — see `Tai2003`. It evaluates the orders from 0 upward,
-/// so the time grows with k² and not with 2ᵏ.
+/// Returns the factor that ties the control point `index` of the `k`-th derivative curve to the control point
+/// `zero_order_index` of the curve — see `Tai2003`. It evaluates the orders from 0 upward, so the time grows with k²
+/// and not with 2ᵏ.
 fn prefactor(
     degree: usize,
     index: usize,
     zero_order_index: usize,
     derivative: usize,
-    points: &DMatrix<f64>,
     knot_values: &DVector<f64>,
 ) -> f64 {
-    let polygon_segments = points.ncols() - 1;
+    debug_assert!(
+        index + derivative + degree + 2 <= knot_values.len(),
+        "the derivative curve has no control point {index}"
+    );
 
     with_buffer(derivative + 1, |factors| {
         // The factors of order 0 from the index i to i + k.
         for (offset, factor) in factors.iter_mut().enumerate() {
-            let j = index + offset;
-            *factor = if j <= polygon_segments && kronecker_delta(j, zero_order_index) { 1. } else { 0. };
+            *factor = if index + offset == zero_order_index { 1. } else { 0. };
         }
 
         // Each order combines two neighbors of the order below and keeps one factor fewer.
         for order in 1..=derivative {
             for offset in 0..=derivative - order {
                 let j = index + offset;
-                factors[offset] =
-                    if j + order > polygon_segments || knot_values[j + degree + 1] == knot_values[j + order] {
-                        0.
-                    } else {
-                        (degree + 1 - order) as f64 / (knot_values[j + degree + 1] - knot_values[j + order]) *
-                            (factors[offset + 1] - factors[offset])
-                    };
+                let width = knot_values[j + degree + 1] - knot_values[j + order];
+                // Equal knots give a zero factor instead of a division by zero.
+                factors[offset] = if width == 0.0 {
+                    0.
+                } else {
+                    (degree + 1 - order) as f64 / width * (factors[offset + 1] - factors[offset])
+                };
             }
         }
         factors[0]
