@@ -69,14 +69,7 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
     let (left_shifted, right_shifted) = shift_boundary_control_points(left, right, &shifts);
 
     let left_adjusted = adjust_knots(left, right);
-    let left_points = adjust_shifted_control_points(
-        &left_shifted,
-        left.knots.vector(),
-        &left_adjusted,
-        left_degree,
-        left.polygon_segments(),
-        left.dimension(),
-    );
+    let left_points = adjust_shifted_control_points(left_shifted, &left.knots, &left_adjusted);
 
     let merged_knots = merge_knot_vectors(left, right);
     let merged_points = merge_control_points(left, right, &left_points, &right_shifted);
@@ -265,74 +258,40 @@ fn merge_knot_vectors(left: &Curve, right: &Curve) -> DVector<f64> {
     merged_knots
 }
 
-fn calculate_derivative_control_point(
-    index: usize,
-    derivative: usize,
-    points: &DMatrix<f64>,
-    knot_values: &DVector<f64>,
-    degree: usize,
-    polygon_segments: usize,
-    dimension: usize,
-) -> DVector<f64> {
-    let mut control_point = DVector::zeros(dimension);
-
-    assert!(
-        index <= polygon_segments - derivative,
-        "the index {} exceeds the last control point {} of the derivative {}",
-        index,
-        polygon_segments - derivative,
-        derivative
-    );
-    for zero_order_index in 0..=polygon_segments {
-        control_point += prefactor(degree, index, zero_order_index, derivative, points, knot_values) *
-            points.column(zero_order_index);
-    }
-    control_point
-}
-
+/// Returns the shifted control points of the left curve with the last p − 1 points recalculated for the adjusted
+/// knots ũ. The control points of all derivative curves at the index n − p + 1 stay the same, and the derivative
+/// formula of [`ControlPoints`], solved for the higher index, gives the points after it:
+///
+/// Pᵢ⁽ᵏ⁾ = Pᵢ₋₁⁽ᵏ⁾ + (ũᵢ₊ₚ − ũᵢ₊ₖ) ∕ (p − k) · Pᵢ₋₁⁽ᵏ⁺¹⁾,   i = n − p + 2, …, n,   k = 0, …, n − i
+///
+/// with the control points P, the adjusted knots ũ, the degree p, the derivative order k, and the number of polygon
+/// segments n.
 fn adjust_shifted_control_points(
-    points: &DMatrix<f64>,
-    knot_values: &DVector<f64>,
+    points: DMatrix<f64>,
+    knots: &Knots,
     adjusted_knot_values: &DVector<f64>,
-    degree: usize,
-    polygon_segments: usize,
-    dimension: usize,
 ) -> DMatrix<f64> {
-    let mut adjusted = DMatrix::zeros(dimension, polygon_segments + 1);
-    let mut derivative_points: Vec<Vec<DVector<f64>>> = vec![Vec::new(); polygon_segments + 1];
+    let degree = knots.degree();
+    let polygon_segments = points.ncols() - 1;
+    let first = polygon_segments + 1 - degree;
 
-    for (i, elem) in derivative_points.iter_mut().enumerate().take(polygon_segments + 1) {
-        elem.push(points.column(i).into());
-    }
+    let mut control_points = ControlPoints::new(points);
+    control_points.derive(knots);
+    let mut derivative_points = DMatrix::from_fn(control_points.dimension(), degree, |row, derivative| {
+        control_points.matrix_derivative(derivative)[(row, first)]
+    });
 
-    for derivative in 1..=degree - 1 {
-        let derivative_point = calculate_derivative_control_point(
-            polygon_segments - degree + 1,
-            derivative,
-            points,
-            knot_values,
-            degree,
-            polygon_segments,
-            dimension,
-        );
-        derivative_points[polygon_segments - degree + 1].push(derivative_point);
-    }
-
-    for i in polygon_segments - degree + 2..=polygon_segments {
-        derivative_points[i].resize(polygon_segments - i + 1, DVector::zeros(dimension));
-        for derivative in (0..=polygon_segments - i).rev() {
-            derivative_points[i][derivative] = ((adjusted_knot_values[i + degree] -
-                adjusted_knot_values[i + derivative]) /
-                ((degree - derivative) as f64)) *
-                &derivative_points[i - 1][derivative + 1] +
-                &derivative_points[i - 1][derivative];
+    let mut adjusted = control_points.matrix().clone();
+    for i in first + 1..=polygon_segments {
+        // The derivatives run upward, so the next higher derivative still holds its point at the index i − 1.
+        for derivative in 0..=polygon_segments - i {
+            let scale = (adjusted_knot_values[i + degree] - adjusted_knot_values[i + derivative]) /
+                (degree - derivative) as f64;
+            let (mut lower, higher) = derivative_points.columns_range_pair_mut(derivative, derivative + 1);
+            lower.axpy(scale, &higher, 1.0);
         }
+        adjusted.set_column(i, &derivative_points.column(0));
     }
-
-    for (i, elem) in derivative_points.iter_mut().enumerate().take(polygon_segments + 1) {
-        adjusted.set_column(i, &elem[0]);
-    }
-
     adjusted
 }
 
