@@ -81,7 +81,7 @@ impl<'a> FitBuilder<'a> {
     }
 }
 
-/// Checks the fit input. The free control points are the control points that the fit places.
+/// Checks the penalization of a fit. The free control points are the control points that the fit places.
 fn check_input(
     knots: &Knots,
     points: &DataPoints,
@@ -94,22 +94,23 @@ fn check_input(
         points.polyline_segments(),
         "each data point must have one parameter"
     );
+    debug_assert!(
+        knots.polygon_segments() <= points.polyline_segments(),
+        "Knots::generate requires at least one data point for each control point"
+    );
 
-    match (knots.polygon_segments(), points.polyline_segments(), knots.degree(), penalization) {
-        (polygon_segments, polyline_segments, _, _) if polygon_segments > polyline_segments => {
-            Err(Error::TooFewPolylineSegments { polygon_segments, polyline_segments })
+    if let Some(penalization) = penalization {
+        if !(0.0..f64::INFINITY).contains(&penalization.strength) {
+            return Err(Error::InvalidPenalizationStrength { strength: penalization.strength });
         }
-        (polygon_segments, _, degree, _) if polygon_segments < degree => {
-            Err(Error::TooFewPolygonSegments { degree, polygon_segments })
+        if penalization.difference_order >= free_control_points {
+            return Err(Error::DifferenceOrderTooLarge {
+                difference_order: penalization.difference_order,
+                free_control_points,
+            });
         }
-        (_, _, _, Some(penalization)) if !(0.0..f64::INFINITY).contains(&penalization.strength) => {
-            Err(Error::InvalidPenalizationStrength { strength: penalization.strength })
-        }
-        (_, _, _, Some(penalization)) if penalization.difference_order >= free_control_points => {
-            Err(Error::DifferenceOrderTooLarge { difference_order: penalization.difference_order, free_control_points })
-        }
-        _ => Ok(()),
     }
+    Ok(())
 }
 
 /// Decomposes the normal matrix of the basis matrix, with the penalty term added. The basis matrix holds one
