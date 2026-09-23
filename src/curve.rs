@@ -1,6 +1,6 @@
 //! Implements the B-spline curve.
 
-use nalgebra::DVector;
+use nalgebra::{DVector, DVectorView};
 
 use crate::{
     buffer::with_buffer,
@@ -217,18 +217,16 @@ impl Curve {
         }
 
         let degree = self.degree();
-
-        let mut value = DVector::zeros(self.control_points.dimension());
-
-        if derivative <= degree {
-            let points = self.control_points.matrix_derivative(derivative);
-            with_buffer(degree - derivative + 1, |basis_values| {
-                let first = self.knots.calculate_nonzero_basis(derivative, u, basis_values);
-                for (offset, &basis_value) in basis_values.iter().enumerate() {
-                    value.axpy(basis_value, &points.column(first + offset), 1.0);
-                }
-            });
+        if derivative > degree {
+            return Ok(DVector::zeros(self.dimension()));
         }
+
+        let points = self.control_points.matrix_derivative(derivative);
+        let value = with_buffer(degree - derivative + 1, |basis_values| {
+            let first = self.knots.calculate_nonzero_basis(derivative, u, basis_values);
+            let count = basis_values.len();
+            points.columns(first, count) * DVectorView::from_slice(basis_values, count)
+        });
 
         // The derivative over very close knots can exceed the range of f64.
         if value.iter().any(|coordinate| !coordinate.is_finite()) {

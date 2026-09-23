@@ -1,7 +1,5 @@
 //! Inserts a knot into a curve.
 
-use std::ops::AddAssign;
-
 use nalgebra::{DMatrix, DVector};
 
 use crate::{
@@ -50,25 +48,17 @@ pub(crate) fn insert_knot(
 ) -> (DVector<f64>, DMatrix<f64>) {
     let new_knots = knots.clone().insert_row(span + 1, u);
 
-    // Only the control points from `span - degree + 1` to `span` change.
-    let control_point_count = points.ncols();
-
-    let mut new_points = DMatrix::zeros(points.nrows(), control_point_count + 1);
-
-    let head_count = span - degree + 1;
-    new_points.columns_mut(0, head_count).copy_from(&points.columns(0, head_count));
-
-    let tail_count = control_point_count - span;
-    new_points
-        .columns_mut(new_points.ncols() - tail_count, tail_count)
-        .copy_from(&points.columns(points.ncols() - tail_count, tail_count));
-
-    let mut alpha: f64;
-    for i in (span - degree + 1)..=span {
-        alpha = (u - knots[i]) / (knots[i + degree] - knots[i]);
-
-        new_points.column_mut(i).add_assign((1. - alpha) * points.column(i - 1) + alpha * points.column(i));
-    }
+    // Only the control points from span − p + 1 to span change, and the points behind them move one index up.
+    let new_points = DMatrix::from_fn(points.nrows(), points.ncols() + 1, |row, i| {
+        if i + degree <= span {
+            points[(row, i)]
+        } else if i > span {
+            points[(row, i - 1)]
+        } else {
+            let alpha = (u - knots[i]) / (knots[i + degree] - knots[i]);
+            (1. - alpha) * points[(row, i - 1)] + alpha * points[(row, i)]
+        }
+    });
 
     (new_knots, new_points)
 }

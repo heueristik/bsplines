@@ -12,7 +12,6 @@ use crate::{
     knots::{Knots, normalize},
     points::{ControlPoints, Points},
     svd::decompose,
-    vector_views::VectorViews,
 };
 
 /// The parameters at which the points of two merged curves stay fixed.
@@ -157,32 +156,19 @@ fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
 
 fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
     let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
+    let first = curve.polygon_segments() + 1 - degree;
     let knot_values = curve.knots.vector();
 
-    let mut gv = DMatrix::zeros(parameters.len(), degree);
-
-    for (g, &u) in parameters.iter().enumerate() {
-        for i in polygon_segments - degree + 1..=polygon_segments {
-            gv[(g, i - (polygon_segments - degree + 1))] = basis(knot_values, i, degree, u);
-        }
-    }
-    gv
+    // The columns belong to the last p basis functions.
+    DMatrix::from_fn(parameters.len(), degree, |g, column| basis(knot_values, first + column, degree, parameters[g]))
 }
 
 fn calculate_hw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
     let degree = curve.degree();
     let knot_values = curve.knots.vector();
 
-    let mut hw = DMatrix::zeros(parameters.len(), degree);
-
-    for (h, &u) in parameters.iter().enumerate() {
-        for i in 0..=degree - 1 {
-            hw[(h, i)] = basis(knot_values, i, degree, u);
-        }
-    }
-
-    hw
+    // The columns belong to the first p basis functions.
+    DMatrix::from_fn(parameters.len(), degree, |h, i| basis(knot_values, i, degree, parameters[h]))
 }
 
 fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
@@ -223,15 +209,9 @@ fn shift_boundary_control_points(left: &Curve, right: &Curve, shifts: &DMatrix<f
 /// Returns the knots of the left curve up to the joint, followed by the internal and the end knots of the right curve
 /// moved behind the joint at 1.
 fn concatenate_knot_vectors(left: &Curve, right: &Curve) -> DVector<f64> {
-    let left_polygon_segments = left.polygon_segments();
-    let right_polygon_segments = right.polygon_segments();
-
-    let mut knots = DVector::zeros(left_polygon_segments + 2 + right_polygon_segments + 1);
-    knots.head_mut(left_polygon_segments + 2).copy_from(&left.knots.vector().head(left_polygon_segments + 2));
-    knots
-        .tail_mut(right_polygon_segments + 1)
-        .copy_from(&right.knots.vector().tail(right_polygon_segments + 1).add_scalar(1.));
-    knots
+    let left_knots = &left.knots.vector().as_slice()[..left.polygon_segments() + 2];
+    let right_knots = &right.knots.vector().as_slice()[right.degree() + 1..];
+    DVector::from_vec(left_knots.iter().copied().chain(right_knots.iter().map(|knot| knot + 1.0)).collect())
 }
 
 /// Returns the shifted control points of the left curve with the last p − 1 points recalculated for the adjusted

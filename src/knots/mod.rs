@@ -7,7 +7,6 @@ use crate::{
     buffer::with_buffer,
     error::{Error, Result},
     parameters::Parameters,
-    vector_views::VectorViews,
 };
 
 pub(crate) mod methods;
@@ -118,7 +117,7 @@ impl Knots {
 
     /// Returns a view of the internal knots.
     pub fn internal(&self) -> DVectorView<'_, f64> {
-        self.derivatives[0].segment(self.degree + 1, self.internal_count())
+        self.derivatives[0].rows(self.degree + 1, self.internal_count())
     }
 
     fn domain_count(&self) -> usize {
@@ -131,7 +130,7 @@ impl Knots {
     }
 
     fn domain_derivative(&self, derivative: usize) -> DVectorView<'_, f64> {
-        self.derivatives[derivative].segment(self.degree - derivative, self.domain_count())
+        self.derivatives[derivative].rows(self.degree - derivative, self.domain_count())
     }
 
     /// Returns how often the knot value `u` occurs in the domain.
@@ -155,15 +154,14 @@ impl Knots {
     }
 
     /// Derives the knot vectors of all derivative orders from the curve's knot vector.
-    /// The `k`-th derivative knot vector drops the first and last knot of the previous order.
+    /// The `k`-th derivative knot vector drops the first and last k knots.
     pub(crate) fn derive(&mut self) {
         self.derivatives.truncate(1);
-        for derivative in 1..=self.degree {
-            let previous = &self.derivatives[derivative - 1];
-            let trimmed = previous.segment(1, previous.len() - 2).clone_owned();
-
-            self.derivatives.push(trimmed);
-        }
+        let knots = &self.derivatives[0];
+        let derived: Vec<DVector<f64>> = (1..=self.degree)
+            .map(|derivative| knots.rows(derivative, knots.len() - 2 * derivative).into_owned())
+            .collect();
+        self.derivatives.extend(derived);
     }
 
     /// Returns the knot span of `u` on the knot vector of the `k`-th derivative curve: the index of the last
@@ -240,9 +238,9 @@ impl Knots {
     pub(crate) fn calculate_basis_matrix(&self, parameters: &DVector<f64>) -> DMatrix<f64> {
         let mut basis_matrix = DMatrix::zeros(parameters.len(), self.polygon_segments() + 1);
         with_buffer(self.degree + 1, |basis_values| {
-            for (g, &u) in parameters.iter().enumerate() {
+            for (mut row, &u) in basis_matrix.row_iter_mut().zip(parameters) {
                 let first = self.calculate_nonzero_basis(0, u, basis_values);
-                basis_matrix.view_mut((g, first), (1, basis_values.len())).copy_from_slice(basis_values);
+                row.columns_mut(first, basis_values.len()).copy_from_slice(basis_values);
             }
         });
         basis_matrix

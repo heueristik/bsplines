@@ -1,3 +1,5 @@
+use std::iter;
+
 use nalgebra::DVector;
 
 use crate::{
@@ -37,14 +39,8 @@ fn check_chord_sum(sum: f64) -> Result<()> {
 ///
 /// Not recommended for unevenly spaced data, as it can produce erratic shapes such as loops.
 pub fn equally_spaced(polyline_segments: usize) -> Parameters {
-    let mut u_bar = DVector::zeros(polyline_segments + 1);
-
-    for g in 1..polyline_segments {
-        u_bar[g] = g as f64 / polyline_segments as f64;
-    }
-    u_bar[polyline_segments] = 1f64;
-
-    Parameters { vector: u_bar }
+    debug_assert!(polyline_segments > 0, "the parameters need at least two data points");
+    Parameters { vector: DVector::from_fn(polyline_segments + 1, |g, _| g as f64 / polyline_segments as f64) }
 }
 
 /// Generates the parameters by the centripetal method — eq. (9.6) in `Piegl1997`:
@@ -80,10 +76,12 @@ fn divide_by_weights(weights: &[f64]) -> Result<Parameters> {
     check_chord_sum(sum)?;
 
     let polyline_segments = weights.len();
-    let mut u_bar = DVector::zeros(polyline_segments + 1);
-    for g in 1..polyline_segments {
-        u_bar[g] = u_bar[g - 1] + weights[g - 1] / sum;
-    }
+    let partial_sums = weights.iter().scan(0.0, |u, weight| {
+        *u += weight / sum;
+        Some(*u)
+    });
+    let mut u_bar = DVector::from_iterator(polyline_segments + 1, iter::once(0.0).chain(partial_sums));
+    // The last parameter is exactly 1, whatever the rounding of the partial sums.
     u_bar[polyline_segments] = 1.0;
 
     Ok(Parameters { vector: u_bar })
