@@ -8,7 +8,6 @@ use crate::{
     knots::{Knots, normalize},
     manipulation::insert::{check_input, insert_knot},
     points::{ControlPoints, Points},
-    vector_views::VectorViews,
 };
 
 /// Splits the curve into two independent curves at the parameter `u` and normalizes both knot vectors.
@@ -29,7 +28,7 @@ pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
 
     let left = {
         let mut left_knots = DVector::zeros(first + degree + 1);
-        left_knots.head_mut(first + degree).copy_from(&knots.head(first + degree));
+        left_knots.rows_mut(0, first + degree).copy_from(&knots.rows(0, first + degree));
         left_knots[first + degree] = u;
 
         normalize(&mut left_knots);
@@ -42,7 +41,7 @@ pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
         let tail_count = knots.len() - first;
         let mut right_knots = DVector::zeros(tail_count + 1);
         right_knots[0] = u;
-        right_knots.tail_mut(tail_count).copy_from(&knots.tail(tail_count));
+        right_knots.rows_mut(1, tail_count).copy_from(&knots.rows(first, tail_count));
 
         normalize(&mut right_knots);
         let point_count = right_knots.len() - (degree + 2) + 1;
