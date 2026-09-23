@@ -34,13 +34,15 @@ pub(crate) fn basis(
             for offset in 0..=degree - level {
                 let j = index + offset;
 
-                let summand1 = if knots[j + level] == knots[j] {
+                // A zero value adds nothing, and skipping it keeps an infinite ratio of very close knots from
+                // turning the product into NaN.
+                let summand1 = if knots[j + level] == knots[j] || values[offset] == 0.0 {
                     0.0
                 } else {
                     (u - knots[j]) / (knots[j + level] - knots[j]) * values[offset]
                 };
 
-                let summand2 = if knots[j + level + 1] == knots[j + 1] {
+                let summand2 = if knots[j + level + 1] == knots[j + 1] || values[offset + 1] == 0.0 {
                     0.0
                 } else {
                     // This form is numerically more stable than the algebraically equal
@@ -121,6 +123,15 @@ mod tests {
         assert_eq!(basis(i, 2. / 3.), 0.0);
         assert_relative_eq!(basis(i, 5. / 6.), 1. / 8., epsilon = f64::EPSILON.sqrt());
         assert_eq!(basis(i, 1.), 1.0);
+    }
+
+    #[test]
+    fn basis_functions_of_very_close_knots_sum_to_one() {
+        let knots = Knots::new(2, dvector![0., 0., 0., 1e-310, 1., 1., 1.]).unwrap();
+        assert!((1.0 / 1e-310_f64).is_infinite(), "the ratio over the closest knots overflows");
+
+        let sum: f64 = (0..=knots.polygon_segments()).map(|index| knots.basis(index, 0.5).unwrap()).sum();
+        assert_relative_eq!(sum, 1.0, epsilon = f64::EPSILON.sqrt());
     }
 
     #[test]
