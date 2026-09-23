@@ -106,7 +106,7 @@ fn calculate_system_matrix(left: &Curve, right: &Curve, constraints: &Constraint
     let dimension = 3 * degree + left_constraints + right_constraints;
     let mut system_matrix = DMatrix::zeros(dimension, dimension);
 
-    system_matrix.view_mut((0, 0), (2 * degree, 2 * degree)).copy_from(&DMatrix::identity(2 * degree, 2 * degree));
+    system_matrix.view_mut((0, 0), (2 * degree, 2 * degree)).fill_with_identity();
 
     // Each upper block is the transpose of a lower block, scaled by 1/2 or −1/2.
     let kv = calculate_kv(left);
@@ -193,24 +193,16 @@ fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
     })
 }
 
-fn calculate_constant_terms(left: &Curve, right: &Curve, total_constraints: usize) -> DMatrix<f64> {
-    let degree = left.degree();
-    let dimension = left.dimension();
-
-    let mut constant_terms = DMatrix::zeros(dimension, 3 * degree + total_constraints);
-
-    let kconst = calculate_kconst(left, right);
-    constant_terms.view_mut((0, 2 * degree), (dimension, degree)).copy_from(&kconst);
-
-    constant_terms
-}
-
 fn solve_linear_equation_system(left: &Curve, right: &Curve, constraints: &Constraints) -> Result<DMatrix<f64>> {
+    let degree = left.degree();
     let system_matrix = calculate_system_matrix(left, right, constraints);
-    let constant_terms = calculate_constant_terms(left, right, constraints.count());
+
+    // Only the rows of the continuity conditions have constant terms.
+    let mut constant_terms = DMatrix::zeros(system_matrix.nrows(), left.dimension());
+    constant_terms.rows_mut(2 * degree, degree).tr_copy_from(&calculate_kconst(left, right));
 
     Ok(decompose(system_matrix)?
-        .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
+        .solve(&constant_terms, f64::EPSILON.sqrt())
         .expect("the SVD was computed with both U and V^T")
         .transpose())
 }
