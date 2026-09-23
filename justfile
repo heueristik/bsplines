@@ -14,9 +14,10 @@ test:
 clippy:
     cargo clippy --all-targets --locked -- -D warnings
 
-# Build the documentation. Warnings are errors.
+# nalgebra declares the documentation URL of its version 0.25. Only the nightly link map of docs.rs replaces it.
+# Build the documentation with the dependency links of docs.rs. Warnings are errors.
 doc:
-    RUSTDOCFLAGS="-D warnings" cargo doc --package bsplines --features doc-images --no-deps --locked
+    RUSTDOCFLAGS="-D warnings -Z unstable-options --extern-html-root-takes-precedence" cargo +nightly doc -Zrustdoc-map --package bsplines --features doc-images --no-deps --locked
 
 # Format the Rust code.
 fmt:
