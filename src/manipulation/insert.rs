@@ -2,7 +2,7 @@
 
 use std::ops::AddAssign;
 
-use nalgebra::DMatrix;
+use nalgebra::{DMatrix, DVector};
 
 use crate::{
     Curve,
@@ -14,51 +14,63 @@ use crate::{
 /// The parameter must lie in the domain interior (0, 1), and the multiplicity of `u`
 /// must not already exceed the degree.
 pub(crate) fn insert(curve: &mut Curve, u: f64) -> Result<()> {
+    check_input(curve, u)?;
+
+    let span = curve.knots.find_span(u, 0);
+    let (knots, points) = insert_knot(curve.knots.vector(), curve.control_points.matrix(), curve.degree(), span, u);
+    curve.knots.derivatives[0] = knots;
+    curve.control_points.derivatives[0] = points;
+    curve.derive();
+    Ok(())
+}
+
+/// Checks that the parameter `u` lies in the domain interior (0, 1) and that its multiplicity does not exceed the
+/// degree. Returns the multiplicity of `u`.
+pub(crate) fn check_input(curve: &Curve, u: f64) -> Result<usize> {
     // The negated form also rejects NaN.
     if !(u > 0.0 && u < 1.0) {
         return Err(Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
     }
 
     let degree = curve.degree();
-
     let multiplicity = curve.knots.multiplicity(u);
     if multiplicity > degree {
         return Err(Error::MultiplicityExceedsDegree { u, multiplicity, degree });
     }
+    Ok(multiplicity)
+}
 
-    let dimension = curve.control_points.dimension();
-
-    let old_knots = curve.knots.vector();
-    let old_points = curve.control_points.matrix();
-
-    let span = curve.knots.find_span(u, 0);
-
-    let new_knots = old_knots.clone().insert_row(span + 1, u);
+/// Returns the knots and the control points with the knot `u` inserted once into the knot span `span`.
+pub(crate) fn insert_knot(
+    knots: &DVector<f64>,
+    points: &DMatrix<f64>,
+    degree: usize,
+    span: usize,
+    u: f64,
+) -> (DVector<f64>, DMatrix<f64>) {
+    let new_knots = knots.clone().insert_row(span + 1, u);
 
     // Only the control points from `span - degree + 1` to `span` change.
-    let control_point_count = curve.control_points.count();
+    let control_point_count = points.ncols();
 
-    let mut new_points = DMatrix::zeros(dimension, control_point_count + 1);
+    let mut new_points = DMatrix::zeros(points.nrows(), control_point_count + 1);
 
     let head_count = span - degree + 1;
-    new_points.columns_mut(0, head_count).copy_from(&old_points.columns(0, head_count));
+    new_points.columns_mut(0, head_count).copy_from(&points.columns(0, head_count));
 
     let tail_count = control_point_count - span;
     new_points
         .columns_mut(new_points.ncols() - tail_count, tail_count)
-        .copy_from(&old_points.columns(old_points.ncols() - tail_count, tail_count));
+        .copy_from(&points.columns(points.ncols() - tail_count, tail_count));
 
     let mut alpha: f64;
     for i in (span - degree + 1)..=span {
-        alpha = (u - old_knots[i]) / (old_knots[i + degree] - old_knots[i]);
+        alpha = (u - knots[i]) / (knots[i + degree] - knots[i]);
 
-        new_points.column_mut(i).add_assign((1. - alpha) * old_points.column(i - 1) + alpha * old_points.column(i));
+        new_points.column_mut(i).add_assign((1. - alpha) * points.column(i - 1) + alpha * points.column(i));
     }
 
-    curve.knots.derivatives[0] = new_knots;
-    curve.control_points.derivatives[0] = new_points;
-    curve.derive();
-    Ok(())
+    (new_knots, new_points)
 }
 
 #[cfg(test)]
