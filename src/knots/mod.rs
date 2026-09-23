@@ -2,7 +2,7 @@
 
 use std::ops::MulAssign;
 
-use nalgebra::{DVector, DVectorView};
+use nalgebra::{DMatrix, DVector, DVectorView};
 
 use crate::{
     basis,
@@ -233,6 +233,20 @@ impl Knots {
         }
 
         Knots::new(degree - derivative, self.derivatives[derivative].clone())
+    }
+
+    /// Returns the values of the basis functions at the parameters, with one row per parameter and one column per
+    /// basis function. At a parameter, only the p + 1 basis functions of its knot span are not zero, so each row
+    /// gets only these.
+    pub(crate) fn calculate_basis_matrix(&self, parameters: &DVector<f64>) -> DMatrix<f64> {
+        let mut basis_matrix = DMatrix::zeros(parameters.len(), self.polygon_segments() + 1);
+        for (g, &u) in parameters.iter().enumerate() {
+            let span = self.find_span(u, 0);
+            for i in span - self.degree..=span {
+                basis_matrix[(g, i)] = self.basis_of_derivative_curve(0, i, u);
+            }
+        }
+        basis_matrix
     }
 
     /// Evaluates the `i`-th basis function of the `k`-th derivative curve at the parameter `u`:
