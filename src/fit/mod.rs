@@ -112,11 +112,12 @@ fn check_input(
     }
 }
 
+/// Decomposes the normal matrix of the basis matrix, with the penalty term added. The basis matrix holds one
+/// column for each control point that the fit places.
 pub(crate) fn decompose_normal_matrix(
     knots: &Knots,
     basis_matrix: &DMatrix<f64>,
     penalization: &Option<Penalization>,
-    calculate_finite_difference_matrix: Box<dyn FnOnce(usize, &Knots) -> DMatrix<f64>>,
 ) -> Result<SVD<f64, Dyn, Dyn>> {
     let mut normal_matrix = basis_matrix.transpose() * basis_matrix;
 
@@ -126,12 +127,21 @@ pub(crate) fn decompose_normal_matrix(
             if !knots.is_uniform() {
                 return Err(Error::NonUniformKnots);
             }
-            let difference_matrix = calculate_finite_difference_matrix(penalization.difference_order, knots);
+            let difference_matrix =
+                calculate_finite_difference_matrix(penalization.difference_order, basis_matrix.ncols());
             normal_matrix += strength * (difference_matrix.transpose() * difference_matrix);
         }
     }
 
     decompose(normal_matrix)
+}
+
+/// Returns the finite-difference matrix of the order κ for the given number of control points, with one row for
+/// each difference of that order — see `Eilers1996`.
+fn calculate_finite_difference_matrix(difference_order: usize, control_point_count: usize) -> DMatrix<f64> {
+    DMatrix::from_fn(control_point_count - difference_order, control_point_count, |i, j| {
+        difference_operator(i, j, difference_order)
+    })
 }
 
 /// Returns one entry of the finite-difference operator matrix of the order κ — see `Eilers1996`:
@@ -171,6 +181,44 @@ mod tests {
     use crate::points::Points;
 
     use super::*;
+
+    #[test]
+    fn finite_difference_matrix_order_0_is_the_identity() {
+        let control_point_count = 5;
+        let matrix = calculate_finite_difference_matrix(0, control_point_count);
+        assert_eq!(matrix, DMatrix::identity(control_point_count, control_point_count));
+    }
+
+    #[test]
+    fn finite_difference_matrix_order_1() {
+        let expected = nalgebra::dmatrix![
+            -1.0, 1.0, 0.0, 0.0, 0.0;
+             0.0,-1.0, 1.0, 0.0, 0.0;
+             0.0, 0.0,-1.0, 1.0, 0.0;
+             0.0, 0.0, 0.0,-1.0, 1.0;
+        ];
+        assert_eq!(calculate_finite_difference_matrix(1, 5), expected);
+    }
+
+    #[test]
+    fn finite_difference_matrix_order_2() {
+        let expected = nalgebra::dmatrix![
+             1.0,-2.0, 1.0, 0.0, 0.0;
+             0.0, 1.0,-2.0, 1.0, 0.0;
+             0.0, 0.0, 1.0,-2.0, 1.0;
+        ];
+        assert_eq!(calculate_finite_difference_matrix(2, 5), expected);
+    }
+
+    #[test]
+    fn finite_difference_matrix_rows_of_order_40_sum_to_zero() {
+        let difference_order = 40;
+        let matrix = calculate_finite_difference_matrix(difference_order, difference_order + 5);
+
+        for row in matrix.row_iter() {
+            assert_eq!(row.sum(), 0.0, "the differences of a constant vanish");
+        }
+    }
 
     #[test]
     fn build_errors_for_a_penalization_strength_that_is_negative_or_not_finite() {
