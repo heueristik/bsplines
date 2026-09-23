@@ -55,26 +55,8 @@ pub fn equally_spaced(polyline_segments: usize) -> Parameters {
 ///
 /// Dampens the effect of outlier points on the parametrization.
 pub fn centripetal(points: &DataPoints) -> Result<Parameters> {
-    let polyline_segments = points.polyline_segments();
-
-    let mut sum = 0.0;
-
-    for g in 1..=polyline_segments {
-        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
-        sum += norm_without_overflow(&chord).sqrt()
-    }
-    check_chord_sum(sum)?;
-
-    let mut u_bar = DVector::zeros(polyline_segments + 1);
-
-    for g in 1..polyline_segments {
-        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
-        u_bar[g] = u_bar[g - 1] + norm_without_overflow(&chord).sqrt() / sum;
-    }
-
-    u_bar[polyline_segments] = 1.0;
-
-    Ok(Parameters { vector: u_bar })
+    let weights: Vec<f64> = chord_lengths(points).into_iter().map(f64::sqrt).collect();
+    divide_by_weights(&weights)
 }
 
 /// Generates the parameters by the chord-length method — eqs. (9.4) and (9.5) in `Piegl1997`:
@@ -83,23 +65,26 @@ pub fn centripetal(points: &DataPoints) -> Result<Parameters> {
 ///
 /// with the parameters ū, the data points Q, and the total chord length d.
 pub fn chord_length(points: &DataPoints) -> Result<Parameters> {
-    let polyline_segments = points.polyline_segments();
+    divide_by_weights(&chord_lengths(points))
+}
 
-    let mut sum = 0f64;
+/// Returns the lengths of the chords between consecutive data points.
+fn chord_lengths(points: &DataPoints) -> Vec<f64> {
+    let matrix = points.matrix();
+    (1..matrix.ncols()).map(|g| norm_without_overflow(&(matrix.column(g) - matrix.column(g - 1)))).collect()
+}
 
-    for g in 1..=polyline_segments {
-        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
-        sum += norm_without_overflow(&chord);
-    }
+/// Returns the parameters that divide [0, 1] in proportion to the weights of the chords.
+fn divide_by_weights(weights: &[f64]) -> Result<Parameters> {
+    let sum: f64 = weights.iter().sum();
     check_chord_sum(sum)?;
 
+    let polyline_segments = weights.len();
     let mut u_bar = DVector::zeros(polyline_segments + 1);
     for g in 1..polyline_segments {
-        let chord = points.matrix().column(g) - points.matrix().column(g - 1);
-        u_bar[g] = u_bar[g - 1] + norm_without_overflow(&chord) / sum;
+        u_bar[g] = u_bar[g - 1] + weights[g - 1] / sum;
     }
-
-    u_bar[polyline_segments] = 1f64;
+    u_bar[polyline_segments] = 1.0;
 
     Ok(Parameters { vector: u_bar })
 }
