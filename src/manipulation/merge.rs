@@ -73,7 +73,7 @@ pub(crate) fn merge(left: &Curve, right: &Curve, constraints: &Constraints) -> R
     let left_points = adjust_shifted_control_points(left_shifted, &left.knots, &merged_knots);
     normalize(&mut merged_knots);
 
-    let merged_points = merge_control_points(left, right, &left_points, &right_shifted);
+    let merged_points = merge_control_points(left_degree, &left_points, &right_shifted);
 
     let merged = Curve::new(Knots::new(left_degree, merged_knots)?, ControlPoints::new(merged_points))?;
     check_constraints(left, right, constraints, &merged)?;
@@ -274,26 +274,13 @@ fn adjust_shifted_control_points(
 
 /// Returns the control points of the merged curve: the adjusted left points without the last one, followed by the
 /// shifted right points from the index p − 1 on. The merged curve has p control points fewer than both curves.
-fn merge_control_points(
-    left: &Curve,
-    right: &Curve,
-    left_points: &DMatrix<f64>,
-    right_points: &DMatrix<f64>,
-) -> DMatrix<f64> {
-    let degree = left.degree();
-    let dimension = left.dimension();
-    let left_count = left.control_points.count();
-    let right_count = right.control_points.count();
+fn merge_control_points(degree: usize, left_points: &DMatrix<f64>, right_points: &DMatrix<f64>) -> DMatrix<f64> {
+    let left_count = left_points.ncols() - 1;
+    let right_count = right_points.ncols() + 1 - degree;
 
-    let mut merged_points = DMatrix::zeros(dimension, left_count + right_count - degree);
-
-    merged_points.columns_mut(0, left_count).copy_from(left_points);
-
-    let tail_count = right_count + 1 - degree;
-    merged_points
-        .columns_mut(merged_points.ncols() - tail_count, tail_count)
-        .copy_from(&right_points.columns(right_points.ncols() - tail_count, tail_count));
-
+    let mut merged_points = DMatrix::zeros(left_points.nrows(), left_count + right_count);
+    merged_points.columns_mut(0, left_count).copy_from(&left_points.columns(0, left_count));
+    merged_points.columns_mut(left_count, right_count).copy_from(&right_points.columns(degree - 1, right_count));
     merged_points
 }
 
