@@ -1,10 +1,8 @@
-use std::ops::SubAssign;
-
-use nalgebra::{DMatrix, DVector};
+use nalgebra::DMatrix;
 
 use crate::{
     error::Result,
-    fit::{Penalization, check_input, decompose_normal_matrix, difference_operator},
+    fit::{Penalization, check_input, decompose_normal_matrix},
     knots::Knots,
     parameters::Parameters,
     points::{DataPoints, Points},
@@ -30,108 +28,33 @@ pub fn fit(
         return Ok(control_points);
     }
 
-    let residuals = calculate_residuals(knots, points, parameters);
-    let constant_terms = calculate_constant_terms(knots, points, parameters, &residuals);
-    let basis_matrix = calculate_basis_matrix(knots, points, parameters);
+    let basis_matrix = knots.calculate_basis_matrix(parameters.vector());
+    // The internal parameters and the internal basis functions form the system of the internal control points.
+    let internal_basis_matrix = basis_matrix.view((1, 1), (polyline_segments - 1, polygon_segments - 1)).into_owned();
+    let constant_terms = internal_basis_matrix.transpose() * calculate_residuals(points, &basis_matrix).transpose();
 
-    let svd =
-        decompose_normal_matrix(knots, &basis_matrix, &penalization, Box::new(calculate_finite_difference_matrix))?;
-    let internal_control_points = svd
-        .solve(&constant_terms.transpose(), f64::EPSILON.sqrt())
-        .expect("the SVD was computed with both U and V^T")
-        .transpose();
-
-    for i in 1..=polygon_segments - 1 {
-        control_points.column_mut(i).copy_from(&internal_control_points.column(i - 1));
-    }
+    let svd = decompose_normal_matrix(knots, &internal_basis_matrix, &penalization)?;
+    let internal_control_points =
+        svd.solve(&constant_terms, f64::EPSILON.sqrt()).expect("the SVD was computed with both U and V^T");
+    control_points.columns_mut(1, polygon_segments - 1).tr_copy_from(&internal_control_points);
 
     Ok(control_points)
 }
 
 /// Returns the residual vectors R: the internal data points reduced by the contributions
 /// of the two fixed end control points.
-fn calculate_residuals(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
-    let polygon_segments = knots.polygon_segments();
+fn calculate_residuals(points: &DataPoints, basis_matrix: &DMatrix<f64>) -> DMatrix<f64> {
+    let polygon_segments = basis_matrix.ncols() - 1;
     let polyline_segments = points.polyline_segments();
-    let dimension = points.dimension();
+    let point_matrix = points.matrix();
 
-    let mut residuals = DMatrix::zeros(dimension, polyline_segments + 1);
+    // The basis functions of the two end control points at the internal parameters.
+    let first_basis_values = basis_matrix.view((1, 0), (polyline_segments - 1, 1));
+    let last_basis_values = basis_matrix.view((1, polygon_segments), (polyline_segments - 1, 1));
 
-    let u_bar = parameters.vector();
-
-    for g in 1..=polyline_segments - 1 {
-        residuals.column_mut(g).copy_from(&points.matrix().column(g));
-        let u = u_bar[g];
-
-        residuals.column_mut(g).sub_assign(knots.basis_of_derivative_curve(0, 0, u) * points.matrix().column(0));
-        residuals.column_mut(g).sub_assign(
-            knots.basis_of_derivative_curve(0, polygon_segments, u) * points.matrix().column(polyline_segments),
-        );
-    }
-
-    residuals
-}
-
-fn calculate_constant_terms(
-    knots: &Knots,
-    points: &DataPoints,
-    parameters: &Parameters,
-    residuals: &DMatrix<f64>,
-) -> DMatrix<f64> {
-    let polygon_segments = knots.polygon_segments();
-    let polyline_segments = points.polyline_segments();
-    let dimension = points.dimension();
-
-    let u_bar = parameters.vector();
-
-    let mut constant_terms = DMatrix::zeros(dimension, polygon_segments - 1);
-
-    let mut sum = DVector::zeros(dimension);
-    for i in 1..=polygon_segments - 1 {
-        sum *= 0.0;
-
-        for g in 1..=polyline_segments - 1 {
-            let u = u_bar[g];
-            sum += knots.basis_of_derivative_curve(0, i, u) * residuals.column(g);
-        }
-        constant_terms.column_mut(i - 1).copy_from(&sum);
-    }
-
-    constant_terms
-}
-
-fn calculate_basis_matrix(knots: &Knots, points: &DataPoints, parameters: &Parameters) -> DMatrix<f64> {
-    let polygon_segments = knots.polygon_segments();
-    let polyline_segments = points.polyline_segments();
-
-    let u_bar = parameters.vector();
-
-    let mut basis_matrix = DMatrix::zeros(polyline_segments - 1, polygon_segments - 1);
-    for g in 1..=polyline_segments - 1 {
-        let u = u_bar[g];
-        for i in 1..=polygon_segments - 1 {
-            basis_matrix[(g - 1, i - 1)] = knots.basis_of_derivative_curve(0, i, u);
-        }
-    }
-    basis_matrix
-}
-
-fn calculate_finite_difference_matrix(difference_order: usize, knots: &Knots) -> DMatrix<f64> {
-    let polygon_segments = knots.polygon_segments();
-    debug_assert!(
-        difference_order + 2 <= polygon_segments,
-        "the difference order must be smaller than the n − 1 internal control points"
-    );
-
-    let mut difference_matrix = DMatrix::zeros(polygon_segments - 1 - difference_order, polygon_segments - 1);
-
-    for i in 0..=polygon_segments - difference_order - 2 {
-        for j in 0..=polygon_segments - 2 {
-            difference_matrix[(i, j)] = difference_operator(i, j, difference_order);
-        }
-    }
-
-    difference_matrix
+    point_matrix.columns(1, polyline_segments - 1) -
+        point_matrix.column(0) * first_basis_values.transpose() -
+        point_matrix.column(polyline_segments) * last_basis_values.transpose()
 }
 
 #[cfg(test)]
@@ -148,27 +71,6 @@ mod tests {
 
     use super::*;
     use crate::fit::test_data_points;
-
-    #[test]
-    fn finite_difference_matrix_order_1() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
-        let matrix = calculate_finite_difference_matrix(1, &knots);
-        let expected = dmatrix![
-            -1.0, 1.0, 0.0;
-             0.0,-1.0, 1.0;
-        ];
-        assert_eq!(matrix, expected);
-    }
-
-    #[test]
-    fn finite_difference_matrix_order_2() {
-        let knots = Knots::new(1, dvector![0.0, 0.0, 0.25, 0.5, 0.75, 1.0, 1.0]).unwrap();
-        let matrix = calculate_finite_difference_matrix(2, &knots);
-        let expected = dmatrix![
-             1.0,-2.0, 1.0;
-        ];
-        assert_eq!(matrix, expected);
-    }
 
     #[test]
     fn unpenalized_linear() {

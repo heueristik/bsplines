@@ -4,35 +4,27 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::{
     Curve,
-    error::{Error, Result},
+    error::Result,
     knots::{Knots, normalize},
-    manipulation::insert::insert,
+    manipulation::insert::{check_input, insert_knot},
     points::{ControlPoints, Points},
     vector_views::VectorViews,
 };
 
 /// Splits the curve into two independent curves at the parameter `u` and normalizes both knot vectors.
 pub(crate) fn split(curve: &Curve, u: f64) -> Result<(Curve, Curve)> {
-    // The negated form also rejects NaN.
-    if !(u > 0.0 && u < 1.0) {
-        return Err(Error::OutsideDomainInterior { u, min: 0.0, max: 1.0 });
-    }
-
+    let multiplicity = check_input(curve, u)?;
     let degree = curve.degree();
 
-    let multiplicity = curve.knots.multiplicity(u);
-    if multiplicity > degree {
-        return Err(Error::MultiplicityExceedsDegree { u, multiplicity, degree });
-    }
-
     // With the multiplicity p, the knot u cuts the curve into two pieces that share the control point at u.
-    let mut inserted = curve.clone();
-    for _ in 0..degree - multiplicity {
-        insert(&mut inserted, u)?;
+    // Each insertion moves the knot span of u one index up.
+    let span = curve.knots.find_span(u, 0);
+    let mut knots = curve.knots.vector().clone();
+    let mut points = curve.control_points.matrix().clone();
+    for insertion in 0..degree - multiplicity {
+        (knots, points) = insert_knot(&knots, &points, degree, span + insertion, u);
     }
 
-    let knots = inserted.knots.vector();
-    let points = inserted.control_points.matrix();
     let first = knots.as_slice().partition_point(|&knot| knot < u);
 
     let left = {
@@ -68,6 +60,7 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use super::*;
+    use crate::error::Error;
 
     #[fixture]
     /// A one-dimensional, linear test curve with default degree two.
