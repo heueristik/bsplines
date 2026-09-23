@@ -160,8 +160,6 @@ fn calculate_kv(curve: &Curve) -> DMatrix<f64> {
                         &knot_derivatives[derivative],
                         basis_index,
                         degree - derivative,
-                        0,
-                        polygon_segments - derivative,
                         knot_derivatives[0][polygon_segments + 1],
                     );
             }
@@ -173,7 +171,6 @@ fn calculate_kv(curve: &Curve) -> DMatrix<f64> {
 
 fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
     let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
     let knot_derivatives = &curve.knots.derivatives;
     let point_matrix = curve.control_points.matrix();
 
@@ -189,8 +186,6 @@ fn calculate_kw(curve: &Curve) -> DMatrix<f64> {
                         &knot_derivatives[derivative],
                         basis_index,
                         degree - derivative,
-                        0,
-                        polygon_segments - derivative,
                         knot_derivatives[0][degree],
                     );
             }
@@ -211,7 +206,7 @@ fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
 
     for (g, &u) in parameters.iter().enumerate() {
         for i in polygon_segments - degree + 1..=polygon_segments {
-            gv[(g, i - (polygon_segments - degree + 1))] = basis(knot_values, i, degree, 0, polygon_segments, u);
+            gv[(g, i - (polygon_segments - degree + 1))] = basis(knot_values, i, degree, u);
         }
     }
     gv
@@ -219,14 +214,13 @@ fn calculate_gv(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
 
 fn calculate_hw(curve: &Curve, parameters: &[f64]) -> DMatrix<f64> {
     let degree = curve.degree();
-    let polygon_segments = curve.polygon_segments();
     let knot_values = curve.knots.vector();
 
     let mut hw = DMatrix::zeros(parameters.len(), degree);
 
     for (h, &u) in parameters.iter().enumerate() {
         for i in 0..=degree - 1 {
-            hw[(h, i)] = basis(knot_values, i, degree, 0, polygon_segments, u);
+            hw[(h, i)] = basis(knot_values, i, degree, u);
         }
     }
 
@@ -241,7 +235,6 @@ fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
     let mut sum = DVector::zeros(dimension);
 
     let left_polygon_segments = left.polygon_segments();
-    let right_polygon_segments = right.polygon_segments();
 
     let left_knot_derivatives = &left.knots.derivatives;
     let right_knot_derivatives = &right.knots.derivatives;
@@ -259,8 +252,6 @@ fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
                         &left_knot_derivatives[derivative],
                         basis_index,
                         degree - derivative,
-                        0,
-                        left_polygon_segments - derivative,
                         left_knot_derivatives[0][left_polygon_segments + 1],
                     ) *
                     left_points.column(i);
@@ -274,8 +265,6 @@ fn calculate_kconst(left: &Curve, right: &Curve) -> DMatrix<f64> {
                         &right_knot_derivatives[derivative],
                         basis_index,
                         degree - derivative,
-                        0,
-                        right_polygon_segments - derivative,
                         right_knot_derivatives[0][degree],
                     ) *
                     right_points.column(j);
