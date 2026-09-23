@@ -73,6 +73,7 @@ doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulatio
 //! | Tai2003    | Tai, C.-L., Hu, S.-M., Huang, Q.-X., Approximate merging of B-spline curves via knot adjustment and constrained optimization, Comput. Des., 35(10) (2003) 893–899. |
 
 mod basis;
+mod buffer;
 mod curve;
 mod error;
 mod fit;
@@ -81,6 +82,7 @@ mod knots;
 mod manipulation;
 mod parameters;
 mod points;
+mod svd;
 mod vector_views;
 
 pub use curve::Curve;
