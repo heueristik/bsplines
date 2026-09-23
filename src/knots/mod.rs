@@ -281,12 +281,6 @@ pub(crate) fn reverse(knots: &mut DVector<f64>) {
     knots.mul_assign(-1.0);
 }
 
-pub(crate) fn reversed(knots: &DVector<f64>) -> DVector<f64> {
-    let mut copy = knots.clone();
-    reverse(&mut copy);
-    copy
-}
-
 /// Normalizes the knot values to the domain [0, 1] in place.
 pub(crate) fn normalize(knots: &mut DVector<f64>) {
     let old_lim = (knots.min(), knots.max());
