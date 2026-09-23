@@ -1,7 +1,5 @@
 //! Implements the knot vector.
 
-use std::ops::MulAssign;
-
 use nalgebra::{DMatrix, DVector, DVectorView};
 
 use crate::{
@@ -283,31 +281,17 @@ impl Knots {
     }
 }
 
+/// Reverses the order of the knot values of the domain [0, 1] and maps each knot u to 1 − u.
 pub(crate) fn reverse(knots: &mut DVector<f64>) {
-    let nrows = knots.nrows();
-    let half_nrows = knots.len() / 2;
-
-    for i in 0..half_nrows {
-        knots.swap_rows(i, nrows - 1 - i);
-    }
-
-    knots.add_scalar_mut(-1.0);
-    knots.mul_assign(-1.0);
+    knots.as_mut_slice().reverse();
+    knots.apply(|u| *u = 1.0 - *u);
 }
 
 /// Normalizes the knot values to the domain [0, 1] in place.
 pub(crate) fn normalize(knots: &mut DVector<f64>) {
-    let old_lim = (knots.min(), knots.max());
-
-    rescale(knots, old_lim, (0.0, 1.0))
-}
-
-fn rescale(knots: &mut DVector<f64>, old_lim: (f64, f64), new_lim: (f64, f64)) {
-    let len = knots.len();
-    *knots -= DVector::repeat(len, old_lim.0);
-    *knots /= old_lim.1 - old_lim.0;
-    *knots *= new_lim.1 - new_lim.0;
-    *knots += DVector::repeat(len, new_lim.0);
+    let (min, max) = (knots.min(), knots.max());
+    knots.add_scalar_mut(-min);
+    *knots /= max - min;
 }
 
 #[cfg(test)]
