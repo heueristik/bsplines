@@ -12,6 +12,8 @@ use bsplines::{ControlPoints, Curve, DataPoints, Points};
 use crate::PLOTS_DIR;
 
 const IMG_SIZE: (u32, u32) = (400, 400);
+/// The plot background. On the dark theme of docs.rs, it matches the font color.
+const BACKGROUND: RGBAColor = RGBAColor(255, 255, 255, 0.81);
 const NUM_POINTS: usize = 200;
 
 /// The distance in pixels from the middle of an axis to its name.
@@ -196,7 +198,7 @@ pub fn generate_2d_plot(filename: &str, splines: Vec<(&Curve, RGBAColor)>, limit
     let mut path = String::from(PLOTS_DIR);
     path.push_str(filename);
     let area = SVGBackend::new(&path, IMG_SIZE).into_drawing_area();
-    area.fill(&RGBAColor(255, 255, 255, 0.81)).unwrap(); // Matches the font color in docs.rs dark mode
+    area.fill(&BACKGROUND).unwrap();
 
     let mut chart_builder = ChartBuilder::on(&area);
     chart_builder.margin(10).set_left_and_bottom_label_area_size(20);
@@ -229,7 +231,7 @@ pub fn generate_3d_plot(filename: &str, splines: Vec<(&Curve, RGBAColor)>, limit
     let mut path = String::from(PLOTS_DIR);
     path.push_str(filename);
     let area = SVGBackend::new(&path, IMG_SIZE).into_drawing_area();
-    area.fill(&RGBAColor(255, 255, 255, 0.81)).unwrap(); // Matches the font color in docs.rs dark mode
+    area.fill(&BACKGROUND).unwrap();
 
     let mut chart_builder = ChartBuilder::on(&area);
     // The wide left margin leaves space for the name of the z axis.
@@ -277,6 +279,7 @@ pub fn generate_1d_plot(filename: &str, splines: Vec<(&Curve, RGBAColor)>, limit
     let mut path = String::from(PLOTS_DIR);
     path.push_str(filename);
     let area = SVGBackend::new(&path, IMG_SIZE).into_drawing_area();
+    area.fill(&BACKGROUND).unwrap();
 
     let mut chart_builder = ChartBuilder::on(&area);
     chart_builder.margin(10).set_left_and_bottom_label_area_size(20);
