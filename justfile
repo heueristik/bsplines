@@ -10,6 +10,10 @@ build:
 test:
     cargo test --locked
 
+# Run the benchmarks. The report in target/criterion/report/index.html plots the times.
+bench:
+    cargo bench --locked
+
 # Lint all targets. Warnings are errors.
 clippy:
     cargo clippy --all-targets --locked -- -D warnings
