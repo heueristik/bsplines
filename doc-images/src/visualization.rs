@@ -167,7 +167,7 @@ pub fn draw_data_points<CT: CoordTranslate<From: Coordinate>>(
 }
 
 /// Writes the axis names outside the tick labels. In the view of `generate_3d_plot`, plotters writes the tick
-/// labels of x and y below the front edges of the floor, and the tick labels of z beside the left edge.
+/// labels of x and y below the front edges of the floor, and the tick labels of z beside the right edge.
 fn draw_axis_names(
     area: &DrawingArea<SVGBackend, Shift>,
     chart_context: &ChartContext<SVGBackend, Cartesian3d<RangedCoordf64, RangedCoordf64, RangedCoordf64>>,
@@ -181,7 +181,7 @@ fn draw_axis_names(
         TextStyle::from(("sans-serif", 16, FontStyle::Italic).into_font()).pos(Pos::new(HPos::Center, VPos::Center));
 
     for (name, axis_middle) in
-        [("x", [middle(0), max[1], min[2]]), ("y", [max[0], middle(1), min[2]]), ("z", [max[0], min[1], middle(2)])]
+        [("x", [middle(0), min[1], min[2]]), ("y", [max[0], middle(1), min[2]]), ("z", [max[0], max[1], middle(2)])]
     {
         let (x, y) = pixel(axis_middle);
         let (dx, dy) = ((x - center.0) as f64, (y - center.1) as f64);
@@ -234,14 +234,15 @@ pub fn generate_3d_plot(filename: &str, splines: Vec<(&Curve, RGBAColor)>, limit
     area.fill(&BACKGROUND).unwrap();
 
     let mut chart_builder = ChartBuilder::on(&area);
-    // The wide left margin leaves space for the name of the z axis.
-    chart_builder.margin(10).margin_left(30);
+    // The wide right margin leaves space for the name of the z axis.
+    chart_builder.margin(10).margin_right(30);
 
     let (min, max) = (<(f64, f64, f64)>::from_point(&limits.min), <(f64, f64, f64)>::from_point(&limits.max));
     let mut chart_context = chart_builder.build_cartesian_3d(min.0..max.0, min.1..max.1, min.2..max.2).unwrap();
-    // The axis names need this view. With a larger yaw or pitch, plotters can move the tick labels to other edges.
+    // The yaw of -45° shows x and y symmetrically. The axis names need this view: in other views, plotters can
+    // write the tick labels on other edges.
     chart_context.with_projection(|mut projection| {
-        projection.yaw = 0.7;
+        projection.yaw = -std::f64::consts::FRAC_PI_4;
         projection.pitch = 0.5;
         projection.scale = 0.75;
         projection.into_matrix()
