@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 #![cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("img-curve", "doc-images/plots/manipulation/insert-before.svg"))]
+#![cfg_attr(feature = "doc-images", doc = ::embed_doc_image::embed_image!("img-fit-3d", "doc-images/plots/generation/fit-loose-penalized-3d.svg"))]
 //! **bsplines** is a library for vectorized, N-dimensional B-spline curves and their derivatives based on
 //! [nalgebra].
 //!
@@ -23,10 +24,12 @@
 //! use nalgebra::dmatrix;
 //!
 //! # fn main() -> bsplines::Result<()> {
-//! // Five 2D data points, one column per point.
+//! // Thirteen noisy 3D data points, one column per point.
+//! // They run along -y, then +z, then -x.
 //! let data = DataPoints::new(dmatrix![
-//!     -2.0,-1.0, 0.0, 1.0, 2.0; // x
-//!      0.5,-0.5, 1.5,-1.5, 0.5; // y
+//!      1.9, 2.1, 2.1, 1.9, 2.1, 2.2, 2.2, 1.8, 1.9, 1.0,-0.2,-1.1,-2.0; // x
+//!      1.9, 0.8,-0.2,-0.8,-1.9,-2.0,-1.8,-1.9,-2.0,-2.0,-2.1,-1.9,-2.1; // y
+//!     -2.0,-1.9,-2.1,-1.9,-2.1,-0.9, 0.1, 0.9, 2.1, 2.2, 2.2, 1.8, 1.9; // z
 //! ]);
 //!
 //! // Interpolate the data with a cubic curve and evaluate it.
@@ -39,6 +42,11 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! The fitted curve (red) follows the three straight legs of the data (black) and rounds only the two corners.
+//! The plot also shows its control polygon.
+//!
+//! ![The penalized fit of the 3D data points.][img-fit-3d]
 //!
 //! ## What are B-Splines?
 //!
