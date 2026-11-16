@@ -1,0 +1,16 @@
+# The configuration of `cargo deny check`.
+
+[advisories]
+# Unmaintained crates fail the check only where the library depends on them directly. plotters, which only the
+# examples and benchmarks use, depends on the unmaintained ttf-parser.
+unmaintained = "workspace"
+
+[licenses]
+allow = ["Apache-2.0", "MIT", "Unicode-3.0"]
+
+[bans]
+multiple-versions = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

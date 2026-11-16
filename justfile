@@ -43,5 +43,9 @@ taplo:
 taplo-check:
     taplo fmt --check --diff
 
+# Check the dependencies for advisories, licenses, and sources.
+deny:
+    cargo deny --locked check
+
 # Run all checks that CI runs.
 ci: build test msrv clippy doc fmt-check taplo-check
