@@ -47,5 +47,9 @@ taplo-check:
 deny:
     cargo deny --locked check
 
+# Check the public API against the latest release on crates.io for changes that the new version does not allow.
+semver:
+    cargo semver-checks
+
 # Run all checks that CI runs.
 ci: build test msrv clippy doc fmt-check taplo-check
