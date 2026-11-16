@@ -1,0 +1,6 @@
+# The resolver takes only crate versions that crates.io published at least 3 days ago, unless the lockfile already has
+# them. A compromised release then has time to be found and yanked. To take a newer version, for example for a security
+# fix, run `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update <crate> --precise <version>`. Cargo 1.100 and
+# newer respect this key.
+[registry]
+global-min-publish-age = "3 days"
