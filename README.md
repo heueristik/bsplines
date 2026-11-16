@@ -49,13 +49,13 @@ fit grows linearly.
 
 Mean times on an Apple M5 Pro with 64 GB of memory (Rust 1.100.0, release profile):
 
-| Operation | Data points | 1D | 10D | 100D |
-|:--|--:|--:|--:|--:|
-| Interpolation | 10 | 4.7 µs | 5.4 µs | 13 µs |
-|  | 100 | 0.95 ms | 0.99 ms | 1.2 ms |
-|  | 1,000 | 0.92 s | 0.93 s | 0.96 s |
-| Fit with 10 control points | 10 | 4.8 µs | 5.6 µs | 12 µs |
-|  | 100 | 8.3 µs | 10 µs | 30 µs |
-|  | 1,000 | 36 µs | 51 µs | 0.20 ms |
-|  | 10,000 | 0.31 ms | 0.48 ms | 2.2 ms |
-|  | 100,000 | 3.1 ms | 4.8 ms | 30 ms |
+| Operation                  | Data points |      1D |     10D |    100D |
+| :------------------------- | ----------: | ------: | ------: | ------: |
+| Interpolation              |          10 |  4.7 µs |  5.4 µs |   13 µs |
+|                            |         100 | 0.95 ms | 0.99 ms |  1.2 ms |
+|                            |       1,000 |  0.92 s |  0.93 s |  0.96 s |
+| Fit with 10 control points |          10 |  4.8 µs |  5.6 µs |   12 µs |
+|                            |         100 |  8.3 µs |   10 µs |   30 µs |
+|                            |       1,000 |   36 µs |   51 µs | 0.20 ms |
+|                            |      10,000 | 0.31 ms | 0.48 ms |  2.2 ms |
+|                            |     100,000 |  3.1 ms |  4.8 ms |   30 ms |
