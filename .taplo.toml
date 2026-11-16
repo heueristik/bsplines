@@ -1,0 +1,2 @@
+# Cargo writes copies of the manifest to target/, which taplo must not check.
+exclude = ["target/**"]
