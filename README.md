@@ -39,8 +39,3 @@ Curves can also be built directly from control points (`Curve::with_uniform_knot
 `Curve::new`) and manipulated afterwards: knot insertion, splitting, merging with
 derivative continuity, and reversal. See the [documentation](https://docs.rs/bsplines)
 for the full API.
-
-## 🚧 This Library is Under Construction 🚧
-
-- [ ] Use iterators and simplify loops
-- [ ] Add benchmarks and improve performance
