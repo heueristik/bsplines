@@ -74,3 +74,28 @@ jobs:
 
       - name: Check the TOML formatting
         run: just taplo-check
+
+  msrv:
+    name: Minimum supported Rust version
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      # The version must agree with `rust-version` in Cargo.toml.
+      - name: Install Rust 1.89
+        uses: dtolnay/rust-toolchain@1.89
+
+      - name: Check the library
+        run: just msrv
