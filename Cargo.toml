@@ -22,10 +22,16 @@ doc-images = []
 [lib]
 name = "bsplines"
 path = "src/lib.rs"
+# cargo bench runs only the criterion benchmarks. The test harness of the library rejects their options.
+bench = false
 
 [[example]]
 name = "doc-images"
 path = "doc-images/src/main.rs"
+
+[[bench]]
+name = "generation"
+harness = false
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -44,3 +50,4 @@ rstest = "0.28.0"
 approx = "0.5.1"
 plotters = "0.3.7"
 plotters-arrows = "0.1.0"
+criterion = { version = "0.8.2", features = ["html_reports"] }
