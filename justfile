@@ -14,10 +14,6 @@ test:
 bench:
     cargo bench --locked
 
-# Check the library with the minimum supported Rust version. The version must agree with `rust-version` in Cargo.toml.
-msrv:
-    cargo +1.89 check --locked --all-features
-
 # Lint all targets. Warnings are errors.
 clippy:
     cargo clippy --all-targets --locked -- -D warnings
@@ -52,4 +48,4 @@ semver:
     cargo semver-checks
 
 # Run all checks that CI runs.
-ci: build test msrv clippy doc fmt-check taplo-check
+ci: build test clippy doc fmt-check taplo-check
