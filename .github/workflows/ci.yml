@@ -2,21 +2,36 @@ name: CI
 
 on:
   push:
-    branches: [ main, next ]
+    branches: [main, next]
   pull_request:
   workflow_dispatch:
 
+# Each job states the permissions that it needs.
+permissions: {}
+
+# A new push to a pull request cancels the run of the previous push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  checks:
-    name: Checks
+  crate:
+    name: Build, test, lint, format
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
-      - name: Install just
-        uses: extractions/setup-just@v3
+      - name: Install just and taplo
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just,taplo
 
       - name: Install Rust nightly for rustfmt and rustdoc
         uses: dtolnay/rust-toolchain@nightly
@@ -31,11 +46,15 @@ jobs:
       - name: Show Rust version
         run: rustc --version
 
+      # plotters draws the documentation images and needs fontconfig.
       - name: Install fontconfig
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
 
+      # Pull requests restore the cache of the branch that they merge into and save no cache of their own.
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Build
         run: just build
@@ -49,13 +68,9 @@ jobs:
       - name: Build docs
         run: just doc
 
+      # Build and test errors fail before formatting errors.
       - name: Run rustfmt
         run: just fmt-check
 
-      - name: Install taplo
-        uses: taiki-e/install-action@v2
-        with:
-          tool: taplo
-
-      - name: Run taplo
+      - name: Check the TOML formatting
         run: just taplo-check
