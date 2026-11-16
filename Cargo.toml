@@ -1,7 +1,7 @@
 [package]
 name = "bsplines"
 license = "Apache-2.0"
-version = "1.0.0-rc.0"
+version = "1.0.0"
 authors = ["Michael A. Heuer <decentralised.systems@gmail.com>"]
 edition = "2024"
 rust-version = "1.89"
@@ -17,15 +17,21 @@ documentation = "https://docs.rs/bsplines"
 features = ["doc-images"]
 
 [features]
-doc-images = []
+doc-images = ["dep:embed-doc-image"]
 
 [lib]
 name = "bsplines"
 path = "src/lib.rs"
+# cargo bench runs only the criterion benchmarks. The test harness of the library rejects their options.
+bench = false
 
 [[example]]
 name = "doc-images"
 path = "doc-images/src/main.rs"
+
+[[bench]]
+name = "generation"
+harness = false
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -35,12 +41,13 @@ enum_glob_use = "deny"
 type_complexity = "allow"
 
 [dependencies]
-embed-doc-image = "0.1.4"
+embed-doc-image = { version = "0.1.4", optional = true }
 nalgebra = "0.35.0"
 thiserror = "2.0.20"
 
 [dev-dependencies]
-rstest = "0.27.0"
+rstest = "0.28.0"
 approx = "0.5.1"
 plotters = "0.3.7"
 plotters-arrows = "0.1.0"
+criterion = { version = "0.8.2", features = ["html_reports"] }

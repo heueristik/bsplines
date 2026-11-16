@@ -10,6 +10,10 @@ build:
 test:
     cargo test --locked
 
+# Run the benchmarks. The report in target/criterion/report/index.html plots the times.
+bench:
+    cargo bench --locked
+
 # Lint all targets. Warnings are errors.
 clippy:
     cargo clippy --all-targets --locked -- -D warnings
@@ -34,6 +38,14 @@ taplo:
 # Check the TOML formatting.
 taplo-check:
     taplo fmt --check --diff
+
+# Check the dependencies for advisories, licenses, and sources.
+deny:
+    cargo deny --locked check
+
+# Check the public API against the latest release on crates.io for changes that the new version does not allow.
+semver:
+    cargo semver-checks
 
 # Run all checks that CI runs.
 ci: build test clippy doc fmt-check taplo-check
